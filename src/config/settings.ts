@@ -1,0 +1,229 @@
+import { z } from 'zod';
+import type { Db } from '../db/sqlite.ts';
+import { validation } from '../core/errors.ts';
+
+const effort = z.enum(['low', 'medium', 'high', 'xhigh', 'max']);
+
+export const ListingRulesSchema = z.object({
+  titleMin: z.number().int().min(1).default(10),
+  titleMax: z.number().int().min(10),
+  descriptionMin: z.number().int().min(0).default(150),
+  descriptionMax: z.number().int().min(100).default(10000),
+  tagsMin: z.number().int().min(0).default(0),
+  tagsMax: z.number().int().min(0),
+  tagMaxLen: z.number().int().min(1),
+  imagesMin: z.number().int().min(0),
+  imagesMax: z.number().int().min(1),
+  filesMax: z.number().int().min(1),
+  fileMaxBytes: z.number().int().min(1),
+  priceMinCents: z.number().int().min(0),
+  unverifiedRules: z.array(z.string()).default([]),
+});
+export type ListingRules = z.infer<typeof ListingRulesSchema>;
+
+const MB = 1024 * 1024;
+
+const DEFAULT_PRICES: Record<string, number> = {
+  'monthly-calendar': 499, 'weekly-planner': 599, 'daily-planner': 499, 'habit-tracker': 349,
+  'todo-checklist': 299, 'cleaning-schedule': 349, 'home-inventory': 399, 'budget-planner': 599,
+  'invoice-template': 499, 'guided-journal': 599, 'goal-planner': 449, 'mandala-coloring': 399,
+  'maze-activity': 349, 'word-search': 349, 'illustrated-coloring': 449, bundle: 1299,
+};
+
+const DEFAULT_BLOCKED_TERMS = [
+  'disney', 'marvel', 'pixar', 'pokemon', 'pokémon', 'harry potter', 'hogwarts', 'star wars', 'barbie',
+  'hello kitty', 'sanrio', 'taylor swift', 'nfl', 'nba', 'mlb', 'nhl', 'nike', 'adidas', 'coca-cola', 'lego',
+  'minecraft', 'fortnite', 'roblox', 'peppa pig', 'bluey', 'paw patrol', 'sesame street', 'super mario',
+  'nintendo', 'snoopy', 'hello-kitty', 'cricut', 'stanley cup', 'sanrio', 'olympic', 'super bowl',
+];
+
+const LICENSE_PERSONAL = `PERSONAL USE LICENSE
+
+Thank you for your purchase from {{shopName}}.
+
+You may: print this product as many times as you like for your own personal, non-commercial use.
+You may not: resell, share, redistribute, or claim this product (or any modified version of it) as your own;
+sell printed copies; or use it in products for sale.
+
+All designs are copyright {{year}} {{shopName}}. Fonts are licensed under the SIL Open Font License.`;
+
+export const SettingsSchema = z.object({
+  general: z.object({
+    shopName: z.string().min(1).max(80).default('My Printables Shop'),
+    timezone: z.string().default(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'),
+    currency: z.string().length(3).default('USD'),
+  }).prefault({}),
+  generation: z.object({
+    textProvider: z.enum(['anthropic', 'deterministic']).default('anthropic'),
+    imageProvider: z.enum(['openai', 'none']).default('openai'),
+    unconfiguredPolicy: z.enum(['deterministic', 'fail']).default('deterministic'),
+    invalidOutputRetries: z.number().int().min(0).max(5).default(2),
+    anthropic: z.object({
+      model: z.string().min(1).default('claude-opus-5-5'),
+      effort: effort.default('medium'),
+      maxTokens: z.number().int().min(256).max(64000).default(16000),
+      timeoutMs: z.number().int().min(5000).max(600000).default(180000),
+      maxRetries: z.number().int().min(0).max(6).default(2),
+      baseUrl: z.url().default('https://api.anthropic.com'),
+      serverFallbacks: z.boolean().default(true),
+    }).prefault({}),
+    openai: z.object({
+      imageModel: z.string().min(1).default('gpt-image-1'),
+      baseUrl: z.url().default('https://api.openai.com/v1'),
+      timeoutMs: z.number().int().min(5000).max(600000).default(240000),
+      maxRetries: z.number().int().min(0).max(6).default(2),
+      quality: z.enum(['low', 'medium', 'high']).default('high'),
+    }).prefault({}),
+    textPrices: z.record(z.string(), z.object({ inputPerMTok: z.number().min(0), outputPerMTok: z.number().min(0) })).default({
+      'claude-opus-5-5': { inputPerMTok: 4, outputPerMTok: 20 },
+      'claude-sonnet-5-5': { inputPerMTok: 2, outputPerMTok: 10 },
+      'claude-haiku-5-5': { inputPerMTok: 0.1, outputPerMTok: 0.5 },
+    }),
+    imagePricePerImageUsd: z.record(z.string(), z.number().min(0)).default({}),
+  }).prefault({}),
+  rendering: z.object({
+    chromePath: z.string().default('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'),
+    concurrency: z.number().int().min(1).max(6).default(2),
+    previewDpi: z.number().int().min(48).max(200).default(96),
+    previewPages: z.number().int().min(1).max(20).default(4),
+    pageTimeoutMs: z.number().int().min(5000).max(300000).default(90000),
+  }).prefault({}),
+  qa: z.object({
+    nearDuplicateWarn: z.number().min(0).max(1).default(0.8),
+    nearDuplicateFail: z.number().min(0).max(1).default(0.97),
+    spellingEnabled: z.boolean().default(true),
+    spellingAllowlist: z.array(z.string()).default([]),
+    minImageDpi: z.number().int().min(72).max(600).default(200),
+    lineArtMaxMidtoneRatio: z.number().min(0).max(1).default(0.15),
+    marginToleranceMm: z.number().min(0).max(10).default(1),
+  }).prefault({}),
+  scoring: z.object({
+    weights: z.object({
+      demand: z.number().min(0).default(0.2),
+      competition: z.number().min(0).default(0.15),
+      differentiation: z.number().min(0).default(0.15),
+      commercial: z.number().min(0).default(0.15),
+      productionCost: z.number().min(0).default(0.1),
+      bundlePotential: z.number().min(0).default(0.05),
+      seasonality: z.number().min(0).default(0.1),
+      risk: z.number().min(0).default(0.1),
+    }).prefault({}),
+    minScore: z.number().min(0).max(100).default(60),
+    minConfidence: z.number().min(0).max(1).default(0.35),
+  }).prefault({}),
+  compliance: z.object({
+    blockedTerms: z.array(z.string()).default(DEFAULT_BLOCKED_TERMS),
+  }).prefault({}),
+  scheduler: z.object({
+    enabled: z.boolean().default(true),
+    tickSeconds: z.number().int().min(5).max(3600).default(30),
+    catchUpWindowHours: z.number().int().min(0).max(24 * 14).default(36),
+    jobMaxAttempts: z.number().int().min(1).max(10).default(3),
+    retryBaseSeconds: z.number().int().min(1).max(3600).default(15),
+    leaseSeconds: z.number().int().min(30).max(3600).default(300),
+    concurrency: z.object({
+      ai: z.number().int().min(1).max(8).default(2),
+      render: z.number().int().min(1).max(6).default(2),
+      default: z.number().int().min(1).max(16).default(4),
+    }).prefault({}),
+  }).prefault({}),
+  marketplaces: z.object({
+    etsy: z.object({
+      enabled: z.boolean().default(true),
+      rules: ListingRulesSchema.default({
+        titleMin: 10, titleMax: 140, descriptionMin: 150, descriptionMax: 10000, tagsMin: 1, tagsMax: 13, tagMaxLen: 20,
+        imagesMin: 1, imagesMax: 10, filesMax: 5, fileMaxBytes: 20 * MB, priceMinCents: 20,
+        unverifiedRules: ['imagesMax', 'filesMax', 'fileMaxBytes', 'priceMinCents'],
+      }),
+    }).prefault({}),
+    gumroad: z.object({
+      enabled: z.boolean().default(true),
+      rules: ListingRulesSchema.default({
+        titleMin: 5, titleMax: 255, descriptionMin: 150, descriptionMax: 20000, tagsMin: 0, tagsMax: 20, tagMaxLen: 40,
+        imagesMin: 1, imagesMax: 10, filesMax: 20, fileMaxBytes: 250 * MB, priceMinCents: 0,
+        unverifiedRules: ['titleMax', 'tagsMax', 'tagMaxLen', 'imagesMax', 'filesMax', 'fileMaxBytes', 'priceMinCents'],
+      }),
+    }).prefault({}),
+    generic: z.object({
+      enabled: z.boolean().default(true),
+      rules: ListingRulesSchema.default({
+        titleMin: 5, titleMax: 200, descriptionMin: 50, descriptionMax: 50000, tagsMin: 0, tagsMax: 30, tagMaxLen: 50,
+        imagesMin: 0, imagesMax: 30, filesMax: 50, fileMaxBytes: 1024 * MB, priceMinCents: 0, unverifiedRules: [],
+      }),
+    }).prefault({}),
+    defaultPriceCents: z.record(z.string(), z.number().int().min(0)).default(DEFAULT_PRICES),
+  }).prefault({}),
+  licensing: z.object({
+    licenseText: z.string().min(20).default(LICENSE_PERSONAL),
+  }).prefault({}),
+  analytics: z.object({
+    minListingsPerCategory: z.number().int().min(1).default(3),
+    minOrdersForSignal: z.number().int().min(1).default(5),
+    retireAfterDays: z.number().int().min(7).default(90),
+    retireMaxViews: z.number().int().min(0).default(25),
+    qaFailureRateAlert: z.number().min(0).max(1).default(0.3),
+    rejectionRateAlert: z.number().min(0).max(1).default(0.4),
+  }).prefault({}),
+});
+
+export type Settings = z.infer<typeof SettingsSchema>;
+export type SettingsKey = keyof Settings;
+export const SETTINGS_KEYS = Object.keys(SettingsSchema.shape) as SettingsKey[];
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+function deepMerge(base: unknown, patch: unknown): unknown {
+  if (!isPlainObject(base) || !isPlainObject(patch)) return patch;
+  const out: Record<string, unknown> = { ...base };
+  for (const [k, v] of Object.entries(patch)) out[k] = k in base ? deepMerge(base[k], v) : v;
+  return out;
+}
+
+export class SettingsService {
+  private db: Db;
+  private cached: Settings | null = null;
+
+  constructor(db: Db) {
+    this.db = db;
+  }
+
+  all(): Settings {
+    if (this.cached) return this.cached;
+    const raw: Record<string, unknown> = {};
+    for (const row of this.db.all<{ key: string; value: string }>('SELECT key, value FROM settings')) {
+      try {
+        raw[row.key] = JSON.parse(row.value);
+      } catch {
+        // A corrupted value falls back to defaults rather than blocking startup.
+      }
+    }
+    const parsed = SettingsSchema.safeParse(raw);
+    this.cached = parsed.success ? parsed.data : SettingsSchema.parse({});
+    return this.cached;
+  }
+
+  get<K extends SettingsKey>(key: K): Settings[K] {
+    return this.all()[key];
+  }
+
+  update<K extends SettingsKey>(key: K, patch: unknown): Settings[K] {
+    if (!SETTINGS_KEYS.includes(key)) throw validation(`Unknown settings section: ${String(key)}`);
+    const merged = deepMerge(this.get(key), patch);
+    const result = SettingsSchema.shape[key].safeParse(merged);
+    if (!result.success) throw validation(`Invalid ${String(key)} settings`, result.error.issues);
+    this.db.run(
+      'INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at',
+      key, JSON.stringify(result.data), new Date().toISOString(),
+    );
+    this.cached = null;
+    return result.data as Settings[K];
+  }
+
+  reset<K extends SettingsKey>(key: K): Settings[K] {
+    this.db.run('DELETE FROM settings WHERE key = ?', key);
+    this.cached = null;
+    return this.get(key);
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "name": "digital-asset-factory",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-first digital product manufacturing and publishing application",
+  "type": "module",
+  "engines": {
+    "node": ">=26.0.0"
+  },
+  "imports": {
+    "#src/*": "./src/*"
+  },
+  "scripts": {
+    "start": "npm run build:web && node src/main.ts",
+    "serve": "node src/main.ts",
+    "dev": "node --watch-path=src src/main.ts",
+    "dev:web": "vite --config web/vite.config.ts",
+    "build:web": "vite build --config web/vite.config.ts",
+    "app": "node scripts/launch-app.ts",
+    "typecheck": "tsc -p tsconfig.json && tsc -p web/tsconfig.json",
+    "test": "node --test --test-concurrency=1 tests/",
+    "migrate": "node scripts/migrate.ts",
+    "backup": "node scripts/backup.ts",
+    "restore": "node scripts/restore.ts",
+    "samples": "node scripts/generate-samples.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "1.1.0",
+    "@fastify/static": "10.1.7",
+    "@fontsource/inter": "5.3.0",
+    "@fontsource/lora": "5.3.0",
+    "@fontsource/nunito": "5.3.0",
+    "@fontsource/patrick-hand": "5.3.0",
+    "@fontsource/playfair-display": "5.3.0",
+    "exceljs": "4.4.0",
+    "fastify": "5.12.7",
+    "fflate": "0.8.3",
+    "pdf-lib": "1.17.1",
+    "puppeteer-core": "25.15.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "react-router": "8.5.0",
+    "typescript": "7.0.2",
+    "vite": "8.3.5"
+  }
+}
