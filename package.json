@@ -11,36 +11,49 @@
     "#src/*": "./src/*"
   },
   "scripts": {
-    "start": "npm run build:web && node src/main.ts",
-    "serve": "node src/main.ts",
-    "dev": "node --watch-path=src src/main.ts",
+    "start": "npm run build:web && node --env-file-if-exists=.env src/main.ts",
+    "serve": "node --env-file-if-exists=.env src/main.ts",
+    "dev": "node --env-file-if-exists=.env --watch-path=src src/main.ts",
     "dev:web": "vite --config web/vite.config.ts",
     "build:web": "vite build --config web/vite.config.ts",
-    "app": "node scripts/launch-app.ts",
+    "app": "node --env-file-if-exists=.env scripts/launch-app.ts",
     "typecheck": "tsc -p tsconfig.json && tsc -p web/tsconfig.json",
     "test": "node --test --test-concurrency=1 tests/",
-    "migrate": "node scripts/migrate.ts",
-    "backup": "node scripts/backup.ts",
-    "restore": "node scripts/restore.ts",
+    "migrate": "node --env-file-if-exists=.env scripts/migrate.ts",
+    "backup": "node --env-file-if-exists=.env scripts/backup.ts",
+    "restore": "node --env-file-if-exists=.env scripts/restore.ts",
     "samples": "node scripts/generate-samples.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.1.0",
     "@fastify/static": "10.1.7",
+    "@fontsource/amatic-sc": "5.3.0",
+    "@fontsource/caveat": "5.3.0",
+    "@fontsource/dancing-script": "5.3.0",
+    "@fontsource/fredoka": "5.3.0",
     "@fontsource/inter": "5.3.0",
     "@fontsource/lora": "5.3.0",
+    "@fontsource/merriweather": "5.3.0",
+    "@fontsource/montserrat": "5.3.0",
     "@fontsource/nunito": "5.3.0",
     "@fontsource/patrick-hand": "5.3.0",
     "@fontsource/playfair-display": "5.3.0",
+    "@fontsource/poppins": "5.3.0",
+    "@fontsource/quicksand": "5.3.0",
+    "@fontsource/roboto-slab": "5.3.0",
     "exceljs": "4.4.0",
     "fastify": "5.12.7",
     "fflate": "0.8.3",
+    "nodemailer": "10.0.16",
     "pdf-lib": "1.17.1",
     "puppeteer-core": "25.15.0",
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@fontsource/cinzel": "5.3.0",
+    "@fontsource/press-start-2p": "5.3.0",
     "@types/node": "26.6.5",
+    "@types/nodemailer": "8.0.2",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.1.2",
@@ -49,5 +62,8 @@
     "react-router": "8.5.0",
     "typescript": "7.0.2",
     "vite": "8.3.5"
+  },
+  "overrides": {
+    "uuid": "11.1.1"
   }
 }

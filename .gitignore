@@ -7,3 +7,5 @@ desktop/node_modules/
 !.env.example
 *.log
 .DS_Store
+verification-output/
+.claude/

@@ -54,7 +54,11 @@ export const SettingsSchema = z.object({
     currency: z.string().length(3).default('USD'),
   }).prefault({}),
   generation: z.object({
-    textProvider: z.enum(['anthropic', 'deterministic']).default('anthropic'),
+    textProvider: z.enum(['anthropic', 'openrouter', 'groq', 'nvidia', 'cerebras', 'together', 'deterministic']).default('groq'),
+    // Backup providers. Every AI call tries textProvider first, then these in order, moving on
+    // when one is rate-limited, down, or has no key — so one capped free tier doesn't stop
+    // production. Free-tier providers first; Anthropic last since it's pay-per-use.
+    fallbackOrder: z.array(z.enum(['anthropic', 'openrouter', 'groq', 'nvidia', 'cerebras', 'together'])).default(['groq', 'openrouter', 'cerebras', 'together', 'nvidia', 'anthropic']),
     imageProvider: z.enum(['openai', 'none']).default('openai'),
     unconfiguredPolicy: z.enum(['deterministic', 'fail']).default('deterministic'),
     invalidOutputRetries: z.number().int().min(0).max(5).default(2),
@@ -67,6 +71,39 @@ export const SettingsSchema = z.object({
       baseUrl: z.url().default('https://api.anthropic.com'),
       serverFallbacks: z.boolean().default(true),
     }).prefault({}),
+    // These five all speak the same OpenAI-compatible /chat/completions API. Each has had a
+    // free tier at some point; check the provider's own pricing page, since that can change.
+    // The model name is just a setting — swap it for any model the provider serves.
+    openrouter: z.object({
+      model: z.string().min(1).default('meta-llama/llama-3.3-70b-instruct:free'),
+      baseUrl: z.url().default('https://openrouter.ai/api/v1'),
+      timeoutMs: z.number().int().min(5000).max(600000).default(180000),
+      maxRetries: z.number().int().min(0).max(6).default(2),
+    }).prefault({}),
+    groq: z.object({
+      model: z.string().min(1).default('llama-3.3-70b-versatile'),
+      baseUrl: z.url().default('https://api.groq.com/openai/v1'),
+      timeoutMs: z.number().int().min(5000).max(600000).default(120000),
+      maxRetries: z.number().int().min(0).max(6).default(2),
+    }).prefault({}),
+    nvidia: z.object({
+      model: z.string().min(1).default('meta/llama-3.1-70b-instruct'),
+      baseUrl: z.url().default('https://integrate.api.nvidia.com/v1'),
+      timeoutMs: z.number().int().min(5000).max(600000).default(180000),
+      maxRetries: z.number().int().min(0).max(6).default(2),
+    }).prefault({}),
+    cerebras: z.object({
+      model: z.string().min(1).default('llama-3.3-70b'),
+      baseUrl: z.url().default('https://api.cerebras.ai/v1'),
+      timeoutMs: z.number().int().min(5000).max(600000).default(120000),
+      maxRetries: z.number().int().min(0).max(6).default(2),
+    }).prefault({}),
+    together: z.object({
+      model: z.string().min(1).default('meta-llama/Llama-3.3-70B-Instruct-Turbo-Free'),
+      baseUrl: z.url().default('https://api.together.xyz/v1'),
+      timeoutMs: z.number().int().min(5000).max(600000).default(180000),
+      maxRetries: z.number().int().min(0).max(6).default(2),
+    }).prefault({}),
     openai: z.object({
       imageModel: z.string().min(1).default('gpt-image-1'),
       baseUrl: z.url().default('https://api.openai.com/v1'),
@@ -78,13 +115,17 @@ export const SettingsSchema = z.object({
       'claude-opus-5-5': { inputPerMTok: 4, outputPerMTok: 20 },
       'claude-sonnet-5-5': { inputPerMTok: 2, outputPerMTok: 10 },
       'claude-haiku-5-5': { inputPerMTok: 0.1, outputPerMTok: 0.5 },
+      'meta-llama/llama-3.3-70b-instruct:free': { inputPerMTok: 0, outputPerMTok: 0 },
+      'llama-3.3-70b-versatile': { inputPerMTok: 0, outputPerMTok: 0 },
+      'llama-3.3-70b': { inputPerMTok: 0, outputPerMTok: 0 },
+      'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free': { inputPerMTok: 0, outputPerMTok: 0 },
     }),
     imagePricePerImageUsd: z.record(z.string(), z.number().min(0)).default({}),
   }).prefault({}),
   rendering: z.object({
     chromePath: z.string().default('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'),
     concurrency: z.number().int().min(1).max(6).default(2),
-    previewDpi: z.number().int().min(48).max(200).default(96),
+    previewDpi: z.number().int().min(48).max(200).default(150),
     previewPages: z.number().int().min(1).max(20).default(4),
     pageTimeoutMs: z.number().int().min(5000).max(300000).default(90000),
   }).prefault({}),
@@ -138,6 +179,14 @@ export const SettingsSchema = z.object({
     }).prefault({}),
     gumroad: z.object({
       enabled: z.boolean().default(true),
+      // Off by default: posting creates real, public products in your Gumroad account.
+      autoPublishEnabled: z.boolean().default(false),
+      // When on (and autoPublishEnabled is on), approving a batch item posts its Gumroad listing right away.
+      autoPublishOnApproval: z.boolean().default(false),
+      // Off: products are created as unpublished drafts you switch on yourself in Gumroad.
+      publishLive: z.boolean().default(true),
+      apiBaseUrl: z.url().default('https://api.gumroad.com/v2'),
+      timeoutMs: z.number().int().min(5000).max(600000).default(120000),
       rules: ListingRulesSchema.default({
         titleMin: 5, titleMax: 255, descriptionMin: 150, descriptionMax: 20000, tagsMin: 0, tagsMax: 20, tagMaxLen: 40,
         imagesMin: 1, imagesMax: 10, filesMax: 20, fileMaxBytes: 250 * MB, priceMinCents: 0,
@@ -163,6 +212,35 @@ export const SettingsSchema = z.object({
     retireMaxViews: z.number().int().min(0).default(25),
     qaFailureRateAlert: z.number().min(0).max(1).default(0.3),
     rejectionRateAlert: z.number().min(0).max(1).default(0.4),
+    // How often recommendations are recomputed and Gumroad sales pulled in (takes effect on restart).
+    refreshHours: z.number().int().min(1).max(48).default(6),
+  }).prefault({}),
+  research: z.object({
+    digest: z.object({
+      enabled: z.boolean().default(false),
+      recipientEmail: z.email().default('daddyritz702@gmail.com'),
+      intervalDays: z.number().int().min(1).max(30).default(2),
+      // Advanced only after a digest email is confirmed sent, so a crash or the app being off just means the next check catches up.
+      lastSentAt: z.string().nullable().default(null),
+      platforms: z.array(z.string().min(2).max(40)).max(15).default(['etsy', 'gumroad', 'creative market', 'teachers pay teachers', 'payhip']),
+      // What you like and want more of; the idea-vetting pass scores ideas against this.
+      tastePreferences: z.string().max(4000).default(''),
+      candidateIdeaCount: z.number().int().min(2).max(12).default(8),
+      // Web search providers, tried in order; the next one is used when one is out of credit or down.
+      // Tavily and Exa have free monthly credit without a card; Brave's free credit needs a card on file.
+      searchOrder: z.array(z.enum(['tavily', 'exa', 'brave'])).default(['tavily', 'exa', 'brave']),
+      // Hard cap on web searches per calendar month across all providers, to stay inside the free credit.
+      monthlySearchBudget: z.number().int().min(10).max(100000).default(900),
+      searchesPerPlatform: z.number().int().min(1).max(10).default(3),
+    }).prefault({}),
+    competitorShops: z.array(z.object({ platform: z.string().min(1).max(40), shopUrl: z.url(), label: z.string().max(80).optional() })).max(30).default([]),
+  }).prefault({}),
+  email: z.object({
+    // Gmail's SMTP relay: the Gmail address you send from goes here; its app password is the smtp_password secret.
+    smtpUser: z.string().max(200).default(''),
+    smtpHost: z.string().min(1).default('smtp.gmail.com'),
+    smtpPort: z.number().int().min(1).max(65535).default(465),
+    fromName: z.string().min(1).max(80).default('Digital Asset Factory'),
   }).prefault({}),
 });
 

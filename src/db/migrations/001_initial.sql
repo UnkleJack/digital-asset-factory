@@ -178,6 +178,8 @@ CREATE TABLE product_versions (
   content_provenance TEXT,
   deliverable_hash TEXT,
   qa_status TEXT NOT NULL DEFAULT 'pending' CHECK (qa_status IN ('pending','passed','passed_with_warnings','failed')),
+  content_signature TEXT,
+  render_diagnostics TEXT,
   error TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
@@ -252,6 +254,7 @@ CREATE TABLE bundle_items (
 CREATE TABLE qa_runs (
   id TEXT PRIMARY KEY,
   version_id TEXT NOT NULL REFERENCES product_versions(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL DEFAULT 'deliverable' CHECK (kind IN ('deliverable','release')),
   status TEXT NOT NULL CHECK (status IN ('running','passed','passed_with_warnings','failed','error')),
   hard_failures INTEGER NOT NULL DEFAULT 0,
   warnings INTEGER NOT NULL DEFAULT 0,

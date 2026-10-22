@@ -103,6 +103,16 @@ interface ImageProvider { id; isConfigured(): Promise<boolean>;
 
 Errors are normalised to `ProviderError { kind: 'unconfigured' | 'auth' | 'rate_limit' | 'timeout' | 'invalid_output' | 'refusal' | 'server' | 'bad_request', retryable }`.
 
+Text has one concrete `TextProvider` per backend (Anthropic's own SDK, plus a single
+`OpenAICompatibleTextProvider` class reused for OpenRouter/Groq/NVIDIA NIM/Cerebras/Together AI —
+they all speak the same `/chat/completions` shape, with structured output requested via
+`response_format: json_object` and the target JSON Schema spelled into the system prompt, since
+strict `json_schema` mode isn't assumed to be supported everywhere). A `RoutedTextProvider`
+wraps all of them behind the single `TextProvider` interface and dispatches on
+`settings.generation.textProvider` at call time, so the rest of the app (the job pipeline,
+`structuredCall`, the Settings "test connection" button) never needs to know which backend is active;
+switching providers in Settings takes effect on the next call.
+
 ### Marketplace adapter
 
 ```ts
