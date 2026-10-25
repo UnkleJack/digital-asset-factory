@@ -20,7 +20,7 @@ let app: App;
 let worker: Worker;
 
 before(() => {
-  app = bootstrap({ dataDir: tempDir(), secrets: new MemorySecretStore(), logConsole: false });
+  app = bootstrap({ dataDir: tempDir(), secrets: new MemorySecretStore(), logConsole: false, pacing: false });
   app.settings.update('scheduler', { retryBaseSeconds: 1 });
   worker = createWorker(app);
   worker.start();

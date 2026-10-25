@@ -6,12 +6,13 @@ import { AI_PROVIDER_LABELS, bytes, fmtDate, label, providerLabel } from '../for
 
 const TABS = [
   { id: 'general', label: 'General' }, { id: 'ai', label: 'AI providers' }, { id: 'integrations', label: 'Integrations' }, { id: 'generation', label: 'Generation' }, { id: 'rendering', label: 'Rendering' },
-  { id: 'qa', label: 'QA' }, { id: 'scoring', label: 'Scoring' }, { id: 'marketplaces', label: 'Marketplaces' }, { id: 'scheduler', label: 'Scheduler' },
+  { id: 'qa', label: 'QA' }, { id: 'scoring', label: 'Scoring' }, { id: 'marketplaces', label: 'Marketplaces' }, { id: 'scheduler', label: 'Scheduler' }, { id: 'packing', label: 'Packing' },
   { id: 'licensing', label: 'License text' }, { id: 'compliance', label: 'Compliance' }, { id: 'analytics', label: 'Analytics' }, { id: 'backups', label: 'Backups' },
   { id: 'logs', label: 'Logs & audit' }, { id: 'system', label: 'System' },
 ];
 
 const HELP: Record<string, string> = {
+  packing: 'How the Factory floor sorts finished products into packs: how many carts are open at once (default 6), pack size, how closely tags must match to join a cart (the backlog pass uses the relaxed value), how many carts and packs one product may be in, and the cooldown before a product goes into another pack with mostly the same tags.',
   general: 'Shop name appears on every product footer and in the license. The timezone controls when production plans run.',
   generation: 'Which text and image providers to use. Text can be Anthropic, one of five OpenAI-compatible free-tier providers (OpenRouter, Groq, NVIDIA NIM, Cerebras, Together AI), or turned off ("deterministic"). "unconfiguredPolicy" decides what happens when AI is selected but no key is set: use the built-in content library, or fail.',
   rendering: 'Chrome is used to render PDFs and previews. Changing these restarts the renderer.',
@@ -30,13 +31,13 @@ export function Settings() {
   const st = useApi<any>('/settings');
   return (
     <div className="page">
-      <PageHead title="Settings & integrations" sub="Everything is stored locally. API keys are kept in the macOS Keychain and are never shown again after you save them." />
+      <PageHead title="Settings & integrations" sub="Everything is stored locally. API keys are kept in your computer’s secure storage (the macOS Keychain, or encrypted for your Windows account) and are never shown again after you save them." />
       <Tabs tabs={TABS} value={tab} onChange={(t) => setSp({ tab: t })} />
       {tab === 'ai' && <AiProviders onChanged={st.reload} />}
       {tab === 'integrations' && <Integrations onChanged={st.reload} />}
       {tab === 'backups' && <Backups />}
       {tab === 'logs' && <Logs />}
-      {tab === 'system' && <System />}
+      {tab === 'system' && <><System /><div style={{ marginTop: 14 }}><RemoteAccess /></div></>}
       {!['ai', 'integrations', 'backups', 'logs', 'system'].includes(tab) && <Async state={st}>{(d) => <SectionEditor key={tab} section={tab} value={d.settings[tab]} onSaved={st.reload} />}</Async>}
     </div>
   );
@@ -80,7 +81,7 @@ function ObjectFields({ value, onChange, path }: { value: any; onChange: (v: any
 }
 
 const SELECT_OPTIONS: Record<string, string[]> = {
-  textProvider: ['groq', 'openrouter', 'cerebras', 'together', 'nvidia', 'anthropic', 'deterministic'],
+  textProvider: ['groq', 'gemini', 'openrouter', 'cerebras', 'mistral', 'github', 'huggingface', 'together', 'nvidia', 'anthropic', 'deterministic'],
   imageProvider: ['openai', 'none'],
   unconfiguredPolicy: ['deterministic', 'fail'],
   effort: ['low', 'medium', 'high', 'xhigh', 'max'],
@@ -107,11 +108,15 @@ function JsonField({ name, value, onChange }: { name: string; value: any; onChan
 
 const AI_KEYS: Record<string, string> = {
   groq_api_key: 'Groq (text, free tier)',
+  gemini_api_key: 'Google Gemini (text, free tier on Flash models)',
   openrouter_api_key: 'OpenRouter (text, free models)',
   cerebras_api_key: 'Cerebras (text, free credit — may ask for a card)',
   together_api_key: 'Together AI (text, may need a small credit purchase)',
   nvidia_api_key: 'NVIDIA NIM (text, free trial credits)',
-  anthropic_api_key: 'Anthropic (text, paid — used last as a backup)',
+  mistral_api_key: 'Mistral (text, free tier — terms have been changing)',
+  github_models_token: 'GitHub Models (text, free daily allowance; a token with "Models: read")',
+  huggingface_token: 'Hugging Face (text, small free monthly credit)',
+  anthropic_api_key: 'Anthropic (text, paid — a backup only if "allow paid fallback" is on)',
   openai_api_key: 'OpenAI (illustrated coloring pictures, paid)',
 };
 
@@ -133,7 +138,7 @@ function SecretList({ names, onChanged }: { names: Record<string, string>; onCha
   return (
     <Async state={st}>{(d) => (
       <div className="stack">
-        <p className="small muted" style={{ margin: 0 }}>Stored in: <b>{d.store === 'keychain' ? 'macOS Keychain' : d.store === 'environment' ? 'environment variables (read-only)' : d.store}</b>. Saved keys are never displayed again.</p>
+        <p className="small muted" style={{ margin: 0 }}>Stored in: <b>{d.store === 'keychain' ? 'macOS Keychain' : d.store === 'dpapi' ? 'Windows (encrypted for your Windows account)' : d.store === 'environment' ? 'environment variables (read-only)' : d.store}</b>. Saved keys are never displayed again.</p>
         {Object.keys(names).map((name) => d.secrets.find((x: any) => x.name === name)).filter(Boolean).map((s: any) => (
           <div key={s.name} className="stack" style={{ gap: 4 }}>
             <div className="spread"><span className="small"><b>{names[s.name]}</b>{s.keyUrl && <> · <a href={s.keyUrl} target="_blank" rel="noopener noreferrer">{s.name === 'smtp_password' ? 'Create one' : s.keyIsFree ? 'Get a free key' : 'Get a key (paid)'} ↗</a></>}</span>{s.configured ? <Pill value="ready" text={`Saved (${s.source})`} /> : <Pill value="pending" text="Not set" />}</div>
@@ -259,6 +264,29 @@ function Logs() {
         <Async state={audit}>{(list) => list.length ? <div style={{ maxHeight: 600, overflow: 'auto' }}><table className="t"><tbody>{list.map((a) => <tr key={a.id}><td className="small muted">{fmtDate(a.at)}</td><td><b>{a.action}</b><div className="small muted">{a.actor} · {a.entity_type} {a.entity_id}</div></td></tr>)}</tbody></table></div> : <Empty title="No audit events yet" />}</Async>
       </Card>
     </div>
+  );
+}
+
+function RemoteAccess() {
+  const st = useApi<any>('/remote');
+  const toast = useToast();
+  const [token, setToken] = useState<string | null>(null);
+  return (
+    <Card title="Use from another computer">
+      <Async state={st}>{(d) => (
+        <div className="stack">
+          <p className="small" style={{ margin: 0 }}>Turn this on to open the app from your other laptop's browser — for example, review and pack on Windows while this computer makes products. Both computers must be on the same Wi-Fi, or both on <a href="https://tailscale.com/download" target="_blank" rel="noreferrer">Tailscale</a> (free; works from anywhere and encrypts the connection — recommended).</p>
+          <label className="check"><input type="checkbox" checked={d.enabled} onChange={async (e) => { await api('/settings/remote', { method: 'PATCH', body: { enabled: e.target.checked } }); toast('Saved. Quit and restart the app for this to take effect.'); st.reload(); }} />Allow other computers (with the access token)</label>
+          <div className="row">
+            <ActionButton onClick={async () => { const r = await api('/remote/token', { body: {} }); setToken(r.token); st.reload(); }} confirm={d.hasToken ? 'Make a new token? The old one stops working and other computers must sign in again.' : undefined}>{d.hasToken ? 'Make a new access token' : 'Make an access token'}</ActionButton>
+            <span className="small muted">{d.hasToken ? 'A token exists.' : 'No token yet — remote access stays off until you make one.'}</span>
+          </div>
+          {token && <div className="token-box"><div className="small">Copy this now; it is not shown again:</div><code className="mono">{token}</code></div>}
+          <div className="kv small"><span>Open on the other computer</span><span>{d.addresses.length ? d.addresses.map((a: string) => <div key={a} className="mono">http://{a}:{d.port}</div>) : 'No network address found'}</span></div>
+          <p className="small muted" style={{ margin: 0 }}>Addresses starting with 100. are Tailscale. Windows or macOS may ask whether to allow incoming connections the first time; allow it on private networks only. Keep the products, database and production on this one computer — don't copy the data folder into Dropbox or iCloud while the app runs.</p>
+        </div>
+      )}</Async>
+    </Card>
   );
 }
 

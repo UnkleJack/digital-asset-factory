@@ -7,8 +7,9 @@ import { Logger } from '../src/logging/logger.ts';
 import { BUILTIN_DESIGN_SYSTEMS, BUILTIN_AUDIENCES, BUILTIN_THEMES, applyAudienceAndPaper, type Paper } from '../src/engine/templates/library.ts';
 import type { ProductTypeDefinition, TypeContext } from '../src/engine/producttypes/types.ts';
 import { seededRandom } from '../src/core/hash.ts';
+import { resolveChromePath } from '../src/config/chrome.ts';
 
-export const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+export const CHROME = resolveChromePath('');
 export const FONTS_DIR = fileURLToPath(new URL('../node_modules/@fontsource', import.meta.url));
 
 export function tempDir(prefix = 'daf-test-'): string {

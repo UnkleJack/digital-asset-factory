@@ -14,6 +14,8 @@ import { registerPublishingRoutes } from './routes/publishing.ts';
 import { registerSettingsRoutes } from './routes/settings.ts';
 import { registerAnalyticsRoutes } from './routes/analytics.ts';
 import { registerDigestRoutes } from './routes/digest.ts';
+import { registerPackingRoutes } from './routes/packing.ts';
+import { RemoteGate, registerRemoteRoutes, isLoopback } from './remote.ts';
 
 export interface ServerDeps {
   app: App;
@@ -43,17 +45,30 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   const allowedHosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
   const allowedOrigins = new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`, ...(deps.devOrigins ?? [])]);
 
+  const gate = new RemoteGate(app);
+  await gate.load();
+
   server.addHook('onRequest', async (req: FastifyRequest, reply: FastifyReply) => {
     const host = String(req.headers.host ?? '');
-    if (!allowedHosts.has(host) && !(deps.devOrigins?.length && /^(127\.0\.0\.1|localhost):\d+$/.test(host))) {
+    // From another computer (hub mode) the Host is this machine's network name; the access token protects it instead.
+    const remote = !isLoopback(req);
+    if (remote) {
+      if (!gate.check(req, reply)) return reply;
+    } else if (!allowedHosts.has(host) && !(deps.devOrigins?.length && /^(127\.0\.0\.1|localhost):\d+$/.test(host))) {
       return reply.code(421).send({ error: { code: 'bad_host', message: 'Requests must be addressed to the local app.' } });
     }
     if (req.url.startsWith('/api/') && MUTATING.has(req.method)) {
-      if (req.headers['x-daf-client'] !== '1') return reply.code(403).send({ error: { code: 'csrf', message: 'Missing client header.' } });
       const origin = req.headers.origin;
-      if (origin && !allowedOrigins.has(origin)) return reply.code(403).send({ error: { code: 'bad_origin', message: 'Cross-origin requests are not allowed.' } });
+      const sameOrigin = (o: string) => allowedOrigins.has(o) || (remote && o === `http://${host}`);
+      if (req.url.split('?')[0] === '/api/login') {
+        if (origin && !sameOrigin(origin)) return reply.code(403).send({ error: { code: 'bad_origin', message: 'Cross-origin requests are not allowed.' } });
+        return;
+      }
+      if (req.headers['x-daf-client'] !== '1') return reply.code(403).send({ error: { code: 'csrf', message: 'Missing client header.' } });
+      if (origin && !sameOrigin(origin)) return reply.code(403).send({ error: { code: 'bad_origin', message: 'Cross-origin requests are not allowed.' } });
     }
   });
+  registerRemoteRoutes(server, app, gate);
 
   server.addHook('onSend', async (req, reply, payload) => {
     reply.header('X-Content-Type-Options', 'nosniff');
@@ -91,6 +106,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   registerSettingsRoutes(server, deps);
   registerAnalyticsRoutes(server, deps);
   registerDigestRoutes(server, deps);
+  registerPackingRoutes(server, deps);
 
   server.all('/api/*', async (_req, reply) => reply.code(404).send({ error: { code: 'not_found', message: 'Unknown API endpoint' } }));
 

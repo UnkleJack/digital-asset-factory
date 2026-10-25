@@ -23,7 +23,7 @@ let dataDir: string;
 
 before(async () => {
   dataDir = tempDir();
-  app = bootstrap({ dataDir, secrets: new MemorySecretStore(), logConsole: false });
+  app = bootstrap({ dataDir, secrets: new MemorySecretStore(), logConsole: false, pacing: false });
   worker = createWorker(app, { run_production_plan: runProductionPlanJob });
   worker.start();
   server = await buildServer({ app, worker, scheduler: null, port: PORT, startedAt: new Date() });
@@ -126,4 +126,37 @@ test('backup via API and offline restore round-trip', async () => {
   assert.ok(existsSync(join(paths.assetsDir, sample.rel_path)), 'restored files exist');
   db.close();
   assert.throws(() => restoreBackup(paths, '../../etc'), /Unsafe path/);
+});
+
+test('hub mode: other computers need the access token; this computer does not; tokens are made locally only', async () => {
+  const LAN = { host: `192.168.1.20:${PORT}`, 'x-daf-client': '1', 'content-type': 'application/json' };
+  const fromLaptop = (method: string, url: string, headers: Record<string, string> = LAN, payload?: string) => server.inject({ method: method as 'GET', url, headers, payload, remoteAddress: '192.168.1.44' });
+  assert.equal((await fromLaptop('GET', '/api/health')).statusCode, 403, 'remote access is off by default');
+
+  const made = await call('POST', '/api/remote/token', {});
+  assert.equal(made.statusCode, 200);
+  const token = made.json().token as string;
+  assert.ok(token.length >= 30);
+  assert.equal((await call('PUT', '/api/secrets/remote_access_token', { value: 'x'.repeat(20) })).statusCode, 422, 'not settable through the generic secrets route');
+  await call('PATCH', '/api/settings/remote', { enabled: true });
+
+  assert.equal((await fromLaptop('GET', '/api/products')).statusCode, 401);
+  const page = await fromLaptop('GET', '/library');
+  assert.equal(page.statusCode, 303);
+  assert.equal(page.headers.location, '/login');
+  assert.equal((await fromLaptop('GET', '/login')).statusCode, 200);
+  const bad = await fromLaptop('POST', '/api/login', { host: LAN.host, 'content-type': 'application/x-www-form-urlencoded' }, 'token=wrong');
+  assert.equal(bad.statusCode, 401);
+  const good = await fromLaptop('POST', '/api/login', { host: LAN.host, 'content-type': 'application/x-www-form-urlencoded', origin: `http://${LAN.host}` }, `token=${encodeURIComponent(token)}`);
+  assert.equal(good.statusCode, 303);
+  const cookie = String(good.headers['set-cookie']).split(';')[0];
+  assert.match(String(good.headers['set-cookie']), /HttpOnly; SameSite=Strict/);
+  const withCookie = { ...LAN, cookie };
+  assert.equal((await fromLaptop('GET', '/api/products', withCookie)).statusCode, 200, 'signed in');
+  assert.equal((await fromLaptop('POST', '/api/packing/break', { ...withCookie, origin: `http://${LAN.host}` }, '{}')).statusCode, 200, 'same-origin writes work');
+  assert.equal((await fromLaptop('POST', '/api/packing/break', { ...withCookie, origin: 'http://evil.example' }, '{}')).statusCode, 403, 'cross-origin writes are refused');
+  assert.equal((await fromLaptop('POST', '/api/remote/token', withCookie, '{}')).statusCode, 403, 'a new token can only be made on the hub itself');
+  for (let i = 0; i < 10; i++) await fromLaptop('POST', '/api/login', { host: LAN.host, 'content-type': 'application/x-www-form-urlencoded' }, 'token=nope');
+  assert.equal((await fromLaptop('POST', '/api/login', { host: LAN.host, 'content-type': 'application/x-www-form-urlencoded' }, `token=${token}`)).statusCode, 429, 'brute-force brake');
+  await call('PATCH', '/api/settings/remote', { enabled: false });
 });

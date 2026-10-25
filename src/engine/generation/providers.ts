@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { ProviderError } from '../../core/errors.ts';
 import type { Settings } from '../../config/settings.ts';
 import type { SecretName } from '../../config/secrets.ts';
+import type { Pacer } from './pacing.ts';
 
 export interface Usage {
   inputTokens: number | null;
@@ -31,6 +32,8 @@ export interface TextProvider {
   readonly id: string;
   isConfigured(): Promise<boolean>;
   model(): string;
+  /** Every model a call might be served by (a routed provider's backups included). Defaults to model(). */
+  candidateModels?(): Promise<string[]>;
   generateStructured<T>(req: StructuredRequest<T>): Promise<StructuredResult<T>>;
 }
 
@@ -124,15 +127,19 @@ export function mapAnthropicError(err: unknown): ProviderError {
  * can change on the provider's side, so the model is just a setting, editable in
  * Settings → Generation.
  */
-export const TEXT_PROVIDER_IDS = ['anthropic', 'openrouter', 'groq', 'nvidia', 'cerebras', 'together'] as const;
+export const TEXT_PROVIDER_IDS = ['anthropic', 'openrouter', 'groq', 'nvidia', 'cerebras', 'together', 'gemini', 'mistral', 'github', 'huggingface'] as const;
 export type AiTextProviderId = (typeof TEXT_PROVIDER_IDS)[number];
 
-export const TEXT_PROVIDER_META: Record<Exclude<AiTextProviderId, 'anthropic'>, { label: string; secretName: 'openrouter_api_key' | 'groq_api_key' | 'nvidia_api_key' | 'cerebras_api_key' | 'together_api_key'; keysUrl: string }> = {
+export const TEXT_PROVIDER_META: Record<Exclude<AiTextProviderId, 'anthropic'>, { label: string; secretName: 'openrouter_api_key' | 'groq_api_key' | 'nvidia_api_key' | 'cerebras_api_key' | 'together_api_key' | 'gemini_api_key' | 'mistral_api_key' | 'github_models_token' | 'huggingface_token'; keysUrl: string }> = {
   openrouter: { label: 'OpenRouter', secretName: 'openrouter_api_key', keysUrl: 'https://openrouter.ai/keys' },
   groq: { label: 'Groq', secretName: 'groq_api_key', keysUrl: 'https://console.groq.com/keys' },
   nvidia: { label: 'NVIDIA NIM', secretName: 'nvidia_api_key', keysUrl: 'https://build.nvidia.com' },
   cerebras: { label: 'Cerebras', secretName: 'cerebras_api_key', keysUrl: 'https://cloud.cerebras.ai' },
   together: { label: 'Together AI', secretName: 'together_api_key', keysUrl: 'https://api.together.ai/settings/api-keys' },
+  gemini: { label: 'Google Gemini', secretName: 'gemini_api_key', keysUrl: 'https://aistudio.google.com/apikey' },
+  mistral: { label: 'Mistral', secretName: 'mistral_api_key', keysUrl: 'https://console.mistral.ai/api-keys' },
+  github: { label: 'GitHub Models', secretName: 'github_models_token', keysUrl: 'https://github.com/settings/personal-access-tokens/new' },
+  huggingface: { label: 'Hugging Face', secretName: 'huggingface_token', keysUrl: 'https://huggingface.co/settings/tokens' },
 };
 
 /** Where to create each API key, shown next to the key field in Settings → AI providers. `free` marks providers with a free tier. */
@@ -284,22 +291,38 @@ function stripCodeFence(s: string): string {
  * provider again with the validation error, which fixes most of those.
  * The result says which provider actually answered, so provenance and cost records stay honest.
  */
+/** Providers billed per call with no free tier. They are never an automatic backup unless allowed. */
+export const PAID_TEXT_PROVIDERS: readonly AiTextProviderId[] = ['anthropic'];
+
 export class RoutedTextProvider implements TextProvider {
   private providers: Partial<Record<AiTextProviderId, TextProvider>>;
   private activeId: () => AiTextProviderId;
   private fallbackOrder: () => readonly AiTextProviderId[];
   private onFallback: (from: string, err: unknown) => void;
+  private allowPaidFallback: () => boolean;
+  readonly pacer: Pacer | null;
 
   constructor(
     providers: Partial<Record<AiTextProviderId, TextProvider>>,
     activeId: () => AiTextProviderId,
     fallbackOrder: () => readonly AiTextProviderId[] = () => [],
     onFallback: (from: string, err: unknown) => void = () => {},
+    allowPaidFallback: () => boolean = () => false,
+    pacer: Pacer | null = null,
   ) {
+    this.pacer = pacer;
     this.providers = providers;
     this.activeId = activeId;
     this.fallbackOrder = fallbackOrder;
     this.onFallback = onFallback;
+    this.allowPaidFallback = allowPaidFallback;
+  }
+
+  /** Models of every configured provider a call could land on, for worst-case cost checks. */
+  async candidateModels(): Promise<string[]> {
+    const out: string[] = [];
+    for (const p of this.chain()) if (await p.isConfigured()) out.push(p.model());
+    return out;
   }
 
   get id(): string {
@@ -321,11 +344,19 @@ export class RoutedTextProvider implements TextProvider {
     for (const p of this.chain()) {
       if (!(await p.isConfigured())) continue;
       tried++;
+      const held = this.pacer?.blocked(p.id);
+      if (held) {
+        lastErr = new ProviderError(p.id, 'rate_limit', `skipped: ${held}`);
+        this.onFallback(p.id, lastErr);
+        continue;
+      }
       try {
+        await this.pacer?.wait(p.id);
         const res = await p.generateStructured(req);
         return { ...res, provider: res.provider ?? p.id, servedByFallback: res.servedByFallback || p !== this.active() };
       } catch (err) {
         if (err instanceof ProviderError && err.kind === 'invalid_output') throw err;
+        if (err instanceof ProviderError && err.kind === 'rate_limit') this.pacer?.rateLimited(p.id);
         lastErr = err;
         this.onFallback(p.id, err);
       }
@@ -336,7 +367,9 @@ export class RoutedTextProvider implements TextProvider {
 
   /** The selected provider, then the backups, each once. */
   chain(): TextProvider[] {
-    const ids = [this.activeId(), ...this.fallbackOrder()];
+    const active = this.activeId();
+    const paidOk = this.allowPaidFallback();
+    const ids = [active, ...this.fallbackOrder().filter((id) => paidOk || !PAID_TEXT_PROVIDERS.includes(id))];
     const out: TextProvider[] = [];
     for (const id of ids) {
       const p = this.providers[id];
