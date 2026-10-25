@@ -1,0 +1,9 @@
+{
+    "viraTheme.showBorders": true,
+    "viraTheme.useTopTabIndicator": true,
+    "viraTheme.useOutlinedIcons": true,
+    "viraTheme.solidLineHighlight": true,
+    "viraTheme.contrastedTabs": true,
+    "viraTheme.accent": "Orange",
+    "claudeCode.disableLoginPrompt": true
+}
