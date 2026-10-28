@@ -9,6 +9,7 @@ import { qaReport } from '../qa/service.ts';
 import { newId } from '../../core/ids.ts';
 import { conflict, notFound, validation } from '../../core/errors.ts';
 import { audit, type AuditActor } from '../../logging/logger.ts';
+import { onProductFinished } from '../packing/service.ts';
 
 export type Decision = 'approved' | 'rejected' | 'revision_requested' | 'regenerate_requested';
 
@@ -91,6 +92,7 @@ export function decide(app: AppContext, itemId: string, input: { decision: Decis
       audit(app.db, actor, 'approval.approved', 'version', version.id, { listings: listings.map((l) => l.id), marketplaces: listings.map((l) => l.marketplace), notes });
     });
     refreshBatch(app, item.batch_id);
+    onProductFinished(app, version.id, 'approved');
     return { decisionIds: ids };
   }
 

@@ -7,7 +7,7 @@ import { createWorker } from '../src/jobs/handlers.ts';
 import { enqueue, claim, recoverInterrupted, getJob } from '../src/jobs/queue.ts';
 import { createProduct } from '../src/engine/specification/service.ts';
 import { startPipeline } from '../src/jobs/pipeline.ts';
-import { createPlan, tick, dueSlots, zonedToUtc, runProductionPlanJob, runPlanNow } from '../src/scheduler/scheduler.ts';
+import { createPlan, tick, dueSlots, zonedToUtc, runProductionPlanJob, runPlanNow, jitterFor, nextSlot, updatePlan } from '../src/scheduler/scheduler.ts';
 import { createOpportunity, addObservation, importObservationsCsv } from '../src/engine/research/service.ts';
 import { scoreOpportunity } from '../src/engine/scoring/service.ts';
 import { importPerformanceCsv, metrics, generateRecommendations, addPerformance } from '../src/engine/analytics/service.ts';
@@ -29,7 +29,8 @@ let app: App;
 let worker: Worker;
 
 before(() => {
-  app = bootstrap({ dataDir: tempDir(), secrets: new MemorySecretStore(), logConsole: false, clock });
+  app = bootstrap({ dataDir: tempDir(), secrets: new MemorySecretStore(), logConsole: false, pacing: false, clock });
+  app.settings.update('generation', { textProvider: 'anthropic', fallbackOrder: [] }); // these tests stand in for Anthropic
   app.settings.update('general', { timezone: 'America/New_York' });
   app.settings.update('scheduler', { retryBaseSeconds: 1 });
   worker = createWorker(app, { run_production_plan: runProductionPlanJob });
@@ -71,6 +72,24 @@ test('scheduler: one run per slot, missed slots recorded, latest caught up, catc
   app.settings.reset('scheduler');
   app.settings.update('scheduler', { retryBaseSeconds: 1 });
   app.db.run('UPDATE production_plans SET enabled = 0');
+});
+
+test('plans start at a stable random offset each day, and a plan pinned to another computer does not run here', () => {
+  const p = { id: 'pln_fixed', run_at: '06:00', days_of_week: [0, 1, 2, 3, 4, 5, 6], jitter_minutes: 40 };
+  const offs = [20, 21, 22, 23, 24, 25, 26].map((d) => jitterFor(p, 2026, 10, d));
+  assert.ok(offs.every((o) => o >= 0 && o <= 40));
+  assert.ok(new Set(offs).size > 1, 'the offset changes from day to day');
+  assert.equal(jitterFor(p, 2026, 10, 20), offs[0], 'and is the same every time for the same day');
+  const next = nextSlot(p, new Date('2026-10-20T08:00:00Z'), 'America/New_York')!;
+  assert.equal(next.getTime(), Date.parse('2026-10-20T10:00:00Z') + offs[0] * 60_000);
+
+  now = new Date('2026-10-20T09:00:00Z');
+  const away = createPlan(app, { name: 'Other laptop', enabled: true, runAt: '06:00', quota: 1, maxCostUsd: 1, runOn: 'some-other-computer' });
+  now = new Date('2026-10-20T10:00:30Z');
+  assert.equal(app.db.value('SELECT count(*) FROM plan_runs WHERE plan_id = ?', away.id), 0);
+  tick(app);
+  assert.equal(app.db.value('SELECT count(*) FROM plan_runs WHERE plan_id = ?', away.id), 0, 'pinned elsewhere: never started here');
+  updatePlan(app, away.id, { enabled: false });
 });
 
 test('scoring separates evidence kinds, excludes unknowns and blocks trademark terms', () => {

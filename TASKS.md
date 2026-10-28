@@ -62,3 +62,10 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done and verified (evidence not
 | F12 | Settings → Integrations tab, Digest page, "Forge" visual theme, nav icons + hints | [x] | headless-browser screenshots |
 | F13 | docs/GETTING_STARTED.md beginner walkthrough + marketplace roadmap | [x] | — |
 | F14 | Learning loop (approve/reject reasons shape future generation) | [ ] | reasons already feed the digest idea passes; generation itself not yet |
+| F15 | Cost guard prices the dearest reachable provider; paid providers are never an automatic backup unless "allow paid fallback" is on | [x] | `tests/openai-compat.test.ts` |
+| F16 | Factory floor: tags (many per product), up to 6 carts building packs, backlog re-sorted at breaks, variety pack, auto-build, remix winners, reuse limit + cooldown; tag editor + AI tag suggestions | [x] | `tests/packing.test.ts`; headless-browser check |
+| F17 | Pacing: per-provider spacing, daily call limits, cool-down after rate limits; plans get a stable daily start offset and can be pinned to a computer | [x] | `tests/openai-compat.test.ts`, `tests/operations.test.ts` |
+| F18 | Windows 11: Chrome/Edge auto-detect, DPAPI-encrypted key storage, start.bat/start.ps1, docs/WINDOWS.md | [~] | `tests/platform.test.ts` (Mac); **first run on a real Windows laptop not done** |
+| F19 | Hub mode: other computers use the app over LAN/Tailscale with an access token (login page, HttpOnly cookie, brute-force brake, local-only token creation) | [~] | `tests/server.test.ts`; **live check from a second computer not done** |
+| F20 | More free text providers: Gemini, Mistral, GitHub Models, Hugging Face (in the fallback chain) | [~] | config + key links; **no real key tested** |
+| F21 | Satellite: a second computer's finished products sent to the hub automatically | [ ] | planned after F19 is proven live |
