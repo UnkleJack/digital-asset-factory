@@ -83,7 +83,7 @@ export function bootstrap(opts: BootstrapOptions = {}): App {
       const openAiImage = new OpenAIImageProvider(() => secrets.get('openai_api_key'), () => settings.get('generation').openai);
       const replicateImage = new ReplicateImageProvider(() => secrets.get('replicate_api_key'), () => settings.get('generation').replicate);
       const falImage = new FalImageProvider(() => secrets.get('fal_api_key'), () => settings.get('generation').fal);
-      const geminiImage = new GeminiImageProvider(() => secrets.get('gemini_api_key'), () => settings.get('generation').gemini);
+      const geminiImage = new GeminiImageProvider(() => secrets.get('gemini_api_key'), () => settings.get('generation').geminiImage);
       const grokImage = new GrokImageProvider(() => secrets.get('grok_api_key'), () => settings.get('generation').grok);
       const togetherImage = new TogetherImageProvider(() => secrets.get('together_api_key'), () => settings.get('generation').togetherImage);
       const hfImage = new HuggingFaceImageProvider(() => secrets.get('huggingface_token'), () => settings.get('generation').huggingfaceImage);

@@ -161,7 +161,7 @@ export const SettingsSchema = z.object({
       maxRetries: z.number().int().min(0).max(6).default(2),
       extraInput: z.record(z.string(), z.unknown()).optional(),
     }).prefault({}),
-    gemini: z.object({
+    geminiImage: z.object({
       model: z.string().min(1).default('gemini-3-pro-image'),
       baseUrl: z.url().default('https://generativelanguage.googleapis.com/v1beta'),
       timeoutMs: z.number().int().min(5000).max(600000).default(180000),

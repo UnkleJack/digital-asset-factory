@@ -706,10 +706,10 @@ const GEMINI_SIZES = { portrait: '1024x1536', square: '1024x1024', landscape: '1
 export class GeminiImageProvider implements ImageProvider {
   readonly id = 'gemini';
   private getKey: () => Promise<string | null>;
-  private cfg: () => Settings['generation']['gemini'];
+  private cfg: () => Settings['generation']['geminiImage'];
   private sleep: (ms: number) => Promise<void>;
 
-  constructor(getKey: () => Promise<string | null>, cfg: () => Settings['generation']['gemini'], sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))) {
+  constructor(getKey: () => Promise<string | null>, cfg: () => Settings['generation']['geminiImage'], sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))) {
     this.getKey = getKey;
     this.cfg = cfg;
     this.sleep = sleep;
@@ -740,7 +740,7 @@ export class GeminiImageProvider implements ImageProvider {
     throw lastErr!;
   }
 
-  private async once(key: string, cfg: Settings['generation']['gemini'], req: { prompt: string; size: keyof typeof GEMINI_SIZES }): Promise<ImageResult> {
+  private async once(key: string, cfg: Settings['generation']['geminiImage'], req: { prompt: string; size: keyof typeof GEMINI_SIZES }): Promise<ImageResult> {
     const modelUrl = `https://generativelanguage.googleapis.com/v1beta/models/${cfg.model}:generateContent?key=${key}`;
     let res: Response;
     try {
