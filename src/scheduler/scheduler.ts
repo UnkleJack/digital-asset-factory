@@ -12,6 +12,8 @@ import { scoreOpportunity, latestScore } from '../engine/scoring/service.ts';
 import { hasProductType, productType } from '../engine/producttypes/registry.ts';
 import { addPlanRunNote, refreshPlanRun } from './runs.ts';
 import { MARKETPLACES } from '../engine/listing/service.ts';
+import { sha256 } from '../core/hash.ts';
+import { machineName } from '../config/machine.ts';
 
 const PlanInput = z.object({
   name: z.string().trim().min(2).max(80),
@@ -26,6 +28,10 @@ const PlanInput = z.object({
   maxCostUsd: z.number().min(0).max(1000).default(2),
   minScore: z.number().min(0).max(100).default(60),
   minConfidence: z.number().min(0).max(1).default(0.35),
+  // Start up to this many minutes after runAt, a different but stable amount each day, so runs don't hit providers on the exact minute.
+  jitterMinutes: z.number().int().min(0).max(180).default(0),
+  // Which computer runs this plan (Settings → General → machine name); empty = any computer running the app.
+  runOn: z.string().trim().max(60).default(''),
 });
 
 export interface PlanRow {
@@ -43,6 +49,8 @@ export interface PlanRow {
   min_score: number;
   min_confidence: number;
   rotation_cursor: number;
+  jitter_minutes: number;
+  run_on: string;
   created_at: string;
   updated_at: string;
 }
@@ -83,6 +91,8 @@ function planRow(d: Partial<z.infer<typeof PlanInput>>): Record<string, unknown>
   if (d.maxCostUsd !== undefined) r.max_cost_usd = d.maxCostUsd;
   if (d.minScore !== undefined) r.min_score = d.minScore;
   if (d.minConfidence !== undefined) r.min_confidence = d.minConfidence;
+  if (d.jitterMinutes !== undefined) r.jitter_minutes = d.jitterMinutes;
+  if (d.runOn !== undefined) r.run_on = d.runOn;
   return r;
 }
 
@@ -131,26 +141,35 @@ export function zonedToUtc(y: number, m: number, d: number, hh: number, mm: numb
   return new Date(guess);
 }
 
-export function dueSlots(plan: Pick<PlanRow, 'run_at' | 'days_of_week'>, now: Date, tz: string, lookbackDays = 14): Date[] {
+/** Stable per plan and day: the same plan on the same date always gets the same offset. */
+export function jitterFor(plan: { id?: string; jitter_minutes?: number }, y: number, m: number, d: number): number {
+  const max = plan.jitter_minutes ?? 0;
+  if (!max || !plan.id) return 0;
+  return parseInt(sha256(`${plan.id}:${y}-${m}-${d}`).slice(0, 8), 16) % (max + 1);
+}
+
+type SlotPlan = Pick<PlanRow, 'run_at' | 'days_of_week'> & { id?: string; jitter_minutes?: number };
+
+export function dueSlots(plan: SlotPlan, now: Date, tz: string, lookbackDays = 14): Date[] {
   const [hh, mm] = plan.run_at.split(':').map(Number);
   const out: Date[] = [];
   for (let back = lookbackDays; back >= 0; back--) {
     const p = tzParts(new Date(now.getTime() - back * 86_400_000), tz);
     const dow = new Date(Date.UTC(p.y, p.m - 1, p.d)).getUTCDay();
     if (!plan.days_of_week.includes(dow)) continue;
-    const slot = zonedToUtc(p.y, p.m, p.d, hh, mm, tz);
+    const slot = new Date(zonedToUtc(p.y, p.m, p.d, hh, mm, tz).getTime() + jitterFor(plan, p.y, p.m, p.d) * 60_000);
     if (slot <= now && !out.some((s) => s.getTime() === slot.getTime())) out.push(slot);
   }
   return out;
 }
 
-export function nextSlot(plan: Pick<PlanRow, 'run_at' | 'days_of_week'>, now: Date, tz: string): Date | null {
+export function nextSlot(plan: SlotPlan, now: Date, tz: string): Date | null {
   const [hh, mm] = plan.run_at.split(':').map(Number);
   for (let fwd = 0; fwd <= 8; fwd++) {
     const p = tzParts(new Date(now.getTime() + fwd * 86_400_000), tz);
     const dow = new Date(Date.UTC(p.y, p.m - 1, p.d)).getUTCDay();
     if (!plan.days_of_week.includes(dow)) continue;
-    const slot = zonedToUtc(p.y, p.m, p.d, hh, mm, tz);
+    const slot = new Date(zonedToUtc(p.y, p.m, p.d, hh, mm, tz).getTime() + jitterFor(plan, p.y, p.m, p.d) * 60_000);
     if (slot > now) return slot;
   }
   return null;
@@ -165,7 +184,8 @@ export function tick(app: AppContext): { started: string[]; missed: number } {
   const tz = s.general.timezone;
   const started: string[] = [];
   let missed = 0;
-  for (const plan of listPlans(app).filter((p) => p.enabled)) {
+  const me = machineName(app);
+  for (const plan of listPlans(app).filter((p) => p.enabled && (!p.run_on || p.run_on.toLowerCase() === me.toLowerCase()))) {
     const createdMs = new Date(plan.created_at).getTime() - 60_000;
     const eligible = dueSlots(plan, now, tz).filter((sl) => sl.getTime() >= createdMs);
     if (!eligible.length) continue;

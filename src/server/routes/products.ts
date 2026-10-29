@@ -47,6 +47,7 @@ export function registerProductRoutes(s: FastifyInstance, { app }: ServerDeps): 
     if (q.status) { where.push('p.status = ?'); args.push(q.status); }
     if (q.versionStatus) { where.push('v.status = ?'); args.push(q.versionStatus); }
     if (q.category) { where.push('p.category_id = ?'); args.push(q.category); }
+    if (q.tag) { where.push('EXISTS (SELECT 1 FROM product_tags t WHERE t.product_id = p.id AND t.tag = ?)'); args.push(q.tag); }
     if (q.q) { where.push('(p.title LIKE ? OR p.slug LIKE ?)'); args.push(`%${q.q}%`, `%${q.q}%`); }
     const sql = `FROM products p LEFT JOIN product_versions v ON v.id = p.current_version_id LEFT JOIN categories c ON c.id = p.category_id ${where.length ? 'WHERE ' + where.join(' AND ') : ''}`;
     const total = app.db.value<number>(`SELECT count(*) ${sql}`, ...args) ?? 0;

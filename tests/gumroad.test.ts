@@ -40,7 +40,7 @@ before(async () => {
   base = srv.url;
   const secrets = new MemorySecretStore();
   await secrets.set('gumroad_token', TOKEN);
-  app = bootstrap({ dataDir: tempDir(), secrets, logConsole: false });
+  app = bootstrap({ dataDir: tempDir(), secrets, logConsole: false, pacing: false });
   app.settings.update('marketplaces', { gumroad: { apiBaseUrl: srv.url } });
   worker = createWorker(app);
   worker.start();

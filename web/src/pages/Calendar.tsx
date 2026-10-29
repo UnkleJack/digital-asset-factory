@@ -94,7 +94,9 @@ function PlanEditor({ plan, onClose, onSaved }: { plan: any; onClose: () => void
     name: plan.name ?? 'Daily production', enabled: plan.enabled ? true : false, runAt: plan.run_at ?? '06:00', daysOfWeek: plan.days_of_week ?? [0, 1, 2, 3, 4, 5, 6],
     quota: plan.quota ?? 5, perCategoryMax: plan.per_category_max ?? 2, categoryRotation: plan.category_rotation ?? [], productTypes: plan.product_types ?? [],
     marketplaces: plan.marketplaces ?? ['etsy'], maxCostUsd: plan.max_cost_usd ?? 2, minScore: plan.min_score ?? 60, minConfidence: plan.min_confidence ?? 0.35,
+    jitterMinutes: plan.jitter_minutes ?? 15, runOn: plan.run_on ?? '',
   });
+  const settings = useApi<any>('/settings');
   const set = (k: string, v: unknown) => setF((x) => ({ ...x, [k]: v }));
   const toggle = (k: 'daysOfWeek' | 'productTypes' | 'marketplaces' | 'categoryRotation', v: any) => set(k, (f[k] as any[]).includes(v) ? (f[k] as any[]).filter((x) => x !== v) : [...(f[k] as any[]), v]);
   const save = async () => {
@@ -112,6 +114,8 @@ function PlanEditor({ plan, onClose, onSaved }: { plan: any; onClose: () => void
       <div className="form">
         <label className="f">Name<input value={f.name} onChange={(e) => set('name', e.target.value)} /></label>
         <label className="f">Run at (local time)<input type="time" value={f.runAt} onChange={(e) => set('runAt', e.target.value)} /></label>
+        <label className="f">Spread the start (minutes)<input type="number" min={0} max={180} value={f.jitterMinutes} onChange={(e) => set('jitterMinutes', Number(e.target.value))} /><span className="field-help">Starts up to this long after the set time, a different amount each day, so runs don't hit AI providers on the exact minute.</span></label>
+        <label className="f">Run on computer<input value={f.runOn} placeholder="Any computer" onChange={(e) => set('runOn', e.target.value)} /><span className="field-help">Leave empty to run on whichever computer has the app open. This one is called “{settings.data?.machine ?? '…'}”.</span></label>
         <label className="f">Products per run<input type="number" min={1} max={50} value={f.quota} onChange={(e) => set('quota', Number(e.target.value))} /></label>
         <label className="f">Max per category per run<input type="number" min={1} max={50} value={f.perCategoryMax} onChange={(e) => set('perCategoryMax', Number(e.target.value))} /></label>
         <label className="f">Cost limit per run (USD, estimated)<input type="number" min={0} step={0.1} value={f.maxCostUsd} onChange={(e) => set('maxCostUsd', Number(e.target.value))} /><span className="field-help">AI calls stop once the estimate would exceed this.</span></label>

@@ -52,13 +52,25 @@ export const SettingsSchema = z.object({
     shopName: z.string().min(1).max(80).default('My Printables Shop'),
     timezone: z.string().default(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'),
     currency: z.string().length(3).default('USD'),
+    // This computer's name when several share the work (production plans can be pinned to one). Empty = the computer's own name.
+    machineName: z.string().trim().max(60).default(''),
   }).prefault({}),
   generation: z.object({
-    textProvider: z.enum(['anthropic', 'openrouter', 'groq', 'nvidia', 'cerebras', 'together', 'deterministic']).default('groq'),
+    textProvider: z.enum(['anthropic', 'openrouter', 'groq', 'nvidia', 'cerebras', 'together', 'gemini', 'mistral', 'github', 'huggingface', 'deterministic']).default('groq'),
     // Backup providers. Every AI call tries textProvider first, then these in order, moving on
     // when one is rate-limited, down, or has no key — so one capped free tier doesn't stop
     // production. Free-tier providers first; Anthropic last since it's pay-per-use.
-    fallbackOrder: z.array(z.enum(['anthropic', 'openrouter', 'groq', 'nvidia', 'cerebras', 'together'])).default(['groq', 'openrouter', 'cerebras', 'together', 'nvidia', 'anthropic']),
+    fallbackOrder: z.array(z.enum(['anthropic', 'openrouter', 'groq', 'nvidia', 'cerebras', 'together', 'gemini', 'mistral', 'github', 'huggingface'])).default(['groq', 'gemini', 'openrouter', 'cerebras', 'mistral', 'github', 'huggingface', 'together', 'nvidia', 'anthropic']),
+    // Off: a pay-per-use provider (Anthropic) is only used when it is the selected text provider,
+    // never as an automatic backup, so a free setup can't start spending when free tiers are capped.
+    allowPaidFallback: z.boolean().default(false),
+    // Spreads calls out to stay inside free-tier limits. dailyCallLimits: per provider, 0 or absent = no app limit.
+    // Defaults sit just under what the free tiers allowed when checked (Groq ~1,000/day per model, OpenRouter free models ~50/day without credit).
+    pacing: z.object({
+      minSecondsBetweenCalls: z.number().min(0).max(600).default(2),
+      dailyCallLimits: z.record(z.string(), z.number().int().min(0).max(1_000_000)).default({ groq: 900, openrouter: 45, gemini: 200, github: 140 }),
+      cooldownMinutes: z.number().min(0).max(1440).default(15),
+    }).prefault({}),
     imageProvider: z.enum(['openai', 'none']).default('openai'),
     unconfiguredPolicy: z.enum(['deterministic', 'fail']).default('deterministic'),
     invalidOutputRetries: z.number().int().min(0).max(5).default(2),
@@ -104,6 +116,31 @@ export const SettingsSchema = z.object({
       timeoutMs: z.number().int().min(5000).max(600000).default(180000),
       maxRetries: z.number().int().min(0).max(6).default(2),
     }).prefault({}),
+    // Added later; endpoints from each provider's docs, models are editable. Unverified until a real key is tested.
+    gemini: z.object({
+      model: z.string().min(1).default('gemini-2.5-flash'),
+      baseUrl: z.url().default('https://generativelanguage.googleapis.com/v1beta/openai'),
+      timeoutMs: z.number().int().min(5000).max(600000).default(180000),
+      maxRetries: z.number().int().min(0).max(6).default(2),
+    }).prefault({}),
+    mistral: z.object({
+      model: z.string().min(1).default('mistral-small-latest'),
+      baseUrl: z.url().default('https://api.mistral.ai/v1'),
+      timeoutMs: z.number().int().min(5000).max(600000).default(180000),
+      maxRetries: z.number().int().min(0).max(6).default(2),
+    }).prefault({}),
+    github: z.object({
+      model: z.string().min(1).default('openai/gpt-4.1-mini'),
+      baseUrl: z.url().default('https://models.github.ai/inference'),
+      timeoutMs: z.number().int().min(5000).max(600000).default(180000),
+      maxRetries: z.number().int().min(0).max(6).default(2),
+    }).prefault({}),
+    huggingface: z.object({
+      model: z.string().min(1).default('meta-llama/Llama-3.3-70B-Instruct'),
+      baseUrl: z.url().default('https://router.huggingface.co/v1'),
+      timeoutMs: z.number().int().min(5000).max(600000).default(180000),
+      maxRetries: z.number().int().min(0).max(6).default(2),
+    }).prefault({}),
     openai: z.object({
       imageModel: z.string().min(1).default('gpt-image-1'),
       baseUrl: z.url().default('https://api.openai.com/v1'),
@@ -123,7 +160,8 @@ export const SettingsSchema = z.object({
     imagePricePerImageUsd: z.record(z.string(), z.number().min(0)).default({}),
   }).prefault({}),
   rendering: z.object({
-    chromePath: z.string().default('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'),
+    // Empty: find Chrome (or Edge) automatically on macOS, Windows or Linux.
+    chromePath: z.string().default(''),
     concurrency: z.number().int().min(1).max(6).default(2),
     previewDpi: z.number().int().min(48).max(200).default(150),
     previewPages: z.number().int().min(1).max(20).default(4),
@@ -234,6 +272,32 @@ export const SettingsSchema = z.object({
       searchesPerPlatform: z.number().int().min(1).max(10).default(3),
     }).prefault({}),
     competitorShops: z.array(z.object({ platform: z.string().min(1).max(40), shopUrl: z.url(), label: z.string().max(80).optional() })).max(30).default([]),
+  }).prefault({}),
+  packing: z.object({
+    // Finished products go to the packer automatically: when they pass QA, or only once you approve them.
+    autoFeed: z.boolean().default(true),
+    feedOn: z.enum(['qa_passed', 'approved']).default('qa_passed'),
+    maxOpenCarts: z.number().int().min(1).max(12).default(6),
+    targetSize: z.number().int().min(2).max(20).default(8),
+    minSize: z.number().int().min(2).max(20).default(4),
+    // How well a product's tags must match a cart's tags (0–1) to join it; the backlog pass uses the relaxed value.
+    joinThreshold: z.number().min(0).max(1).default(0.6),
+    relaxedThreshold: z.number().min(0).max(1).default(0.35),
+    maxCartsPerProduct: z.number().int().min(1).max(6).default(3),
+    maxPacksPerProduct: z.number().int().min(1).max(20).default(4),
+    maxSameTypePerCart: z.number().int().min(1).max(20).default(3),
+    // A product waits this long before going into another pack with mostly the same tags.
+    cooldownDays: z.number().int().min(0).max(365).default(30),
+    // At a break, carts open longer than this are packed if big enough, or emptied back to the backlog.
+    staleHours: z.number().int().min(1).max(24 * 30).default(72),
+    // When a cart fills up, build the pack straight away (it still goes through QA and your review).
+    autoBuild: z.boolean().default(true),
+    marketplaces: z.array(z.enum(['etsy', 'gumroad', 'generic'])).min(1).default(['etsy', 'gumroad']),
+  }).prefault({}),
+  remote: z.object({
+    // Hub mode: other computers on your network (or Tailscale) can open this app with the access token. Restart to apply.
+    enabled: z.boolean().default(false),
+    bindAddress: z.string().trim().min(2).max(60).default('0.0.0.0'),
   }).prefault({}),
   email: z.object({
     // Gmail's SMTP relay: the Gmail address you send from goes here; its app password is the smtp_password secret.

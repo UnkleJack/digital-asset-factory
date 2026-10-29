@@ -40,7 +40,7 @@ export function pct(v?: number | null): string {
   return v === null || v === undefined ? '—' : `${Math.round(v * 100)}%`;
 }
 
-export const AI_PROVIDER_LABELS: Record<string, string> = { anthropic: 'Anthropic', openrouter: 'OpenRouter', groq: 'Groq', nvidia: 'NVIDIA NIM', cerebras: 'Cerebras', together: 'Together AI' };
+export const AI_PROVIDER_LABELS: Record<string, string> = { anthropic: 'Anthropic', openrouter: 'OpenRouter', groq: 'Groq', nvidia: 'NVIDIA NIM', cerebras: 'Cerebras', together: 'Together AI', gemini: 'Google Gemini', mistral: 'Mistral', github: 'GitHub Models', huggingface: 'Hugging Face' };
 
 export function providerLabel(id: string): string {
   return AI_PROVIDER_LABELS[id] ?? label(id);

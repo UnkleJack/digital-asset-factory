@@ -12,9 +12,11 @@ import { errorMessage } from '../../core/errors.ts';
 import { audit, type Level } from '../../logging/logger.ts';
 import { pngSize, SECRET_KEY_LINKS } from '../../engine/generation/providers.ts';
 import { int, parse, type Q, type P } from './util.ts';
+import { machineName } from '../../config/machine.ts';
+import { resolveChromePath } from '../../config/chrome.ts';
 
 export function registerSettingsRoutes(s: FastifyInstance, { app }: ServerDeps): void {
-  s.get('/api/settings', async () => ({ settings: app.settings.all(), sections: SETTINGS_KEYS }));
+  s.get('/api/settings', async () => ({ settings: app.settings.all(), sections: SETTINGS_KEYS, machine: machineName(app) }));
   s.patch('/api/settings/:section', async (req) => {
     const section = (req.params as P).section as SettingsKey;
     if (!SETTINGS_KEYS.includes(section)) throw validation(`Unknown settings section ${section}`);
@@ -39,6 +41,7 @@ export function registerSettingsRoutes(s: FastifyInstance, { app }: ServerDeps):
   s.put('/api/secrets/:name', async (req) => {
     const name = (req.params as P).name;
     assertSecretName(name);
+    if (name === 'remote_access_token') throw validation('Make a remote access token in Settings → System on the computer running the app.');
     const { value } = parse(z.object({ value: z.string().trim().min(8).max(4096) }), req.body, 'secret');
     // Google shows app passwords in four groups of four letters; the spaces aren't part of it.
     await app.secrets.set(name, name === 'smtp_password' ? value.replace(/\s+/g, '') : value);
@@ -48,6 +51,7 @@ export function registerSettingsRoutes(s: FastifyInstance, { app }: ServerDeps):
   s.delete('/api/secrets/:name', async (req) => {
     const name = (req.params as P).name;
     assertSecretName(name);
+    if (name === 'remote_access_token') throw validation('Turn remote access off in Settings → System instead.');
     await app.secrets.delete(name);
     audit(app.db, 'user', 'secret.deleted', 'secret', name, {});
     return { name, configured: false };
@@ -101,7 +105,7 @@ export function registerSettingsRoutes(s: FastifyInstance, { app }: ServerDeps):
     dataDir: app.paths.dataDir,
     secretStore: app.secrets.kind,
     secretNames: SECRET_NAMES,
-    chrome: { path: app.settings.get('rendering').chromePath, available: app.renderer.available() },
+    chrome: { path: resolveChromePath(app.settings.get('rendering').chromePath), auto: !app.settings.get('rendering').chromePath, available: app.renderer.available() },
     schema: app.db.all('SELECT version, name, applied_at FROM schema_migrations ORDER BY version'),
     counts: { products: app.db.value('SELECT count(*) FROM products'), assets: app.db.value('SELECT count(*) FROM assets'), jobs: app.db.value('SELECT count(*) FROM jobs') },
   }));

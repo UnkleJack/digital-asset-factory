@@ -63,7 +63,7 @@ async function setup(opts: { tavily: 'ok' | 'out_of_credit'; exa?: boolean } = {
   await secrets.set('groq_api_key', 'groq-test-key-123456');
   await secrets.set('tavily_api_key', 'tvly-test-key-123456');
   if (opts.exa) await secrets.set('exa_api_key', 'exa-test-key-123456');
-  const app = bootstrap({ dataDir: tempDir(), secrets, logConsole: false });
+  const app = bootstrap({ dataDir: tempDir(), secrets, logConsole: false, pacing: false });
   app.settings.update('generation', { textProvider: 'groq', fallbackOrder: [], groq: { baseUrl: ai.url, maxRetries: 0 } });
   app.settings.update('research', { digest: { platforms: ['etsy'], searchesPerPlatform: 2, enabled: true } });
   const sent: MailMessage[] = [];

@@ -106,7 +106,7 @@ export class Renderer {
     if (this.browser?.connected) return this.browser;
     if (this.launching) return this.launching;
     if (!this.available()) {
-      throw new AppError('chrome_not_found', `Google Chrome was not found at "${this.chromePath}". Install Chrome or set Settings → Rendering → Chrome path.`, { httpStatus: 424 });
+      throw new AppError('chrome_not_found', `Google Chrome or Microsoft Edge was not found at "${this.chromePath}". Install Chrome, or set Settings → Rendering → Chrome path.`, { httpStatus: 424 });
     }
     this.launching = puppeteer
       .launch({
