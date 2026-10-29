@@ -30,6 +30,7 @@ let worker: Worker;
 
 before(() => {
   app = bootstrap({ dataDir: tempDir(), secrets: new MemorySecretStore(), logConsole: false, clock });
+  app.settings.update('generation', { textProvider: 'anthropic', fallbackOrder: [] });
   app.settings.update('general', { timezone: 'America/New_York' });
   app.settings.update('scheduler', { retryBaseSeconds: 1 });
   worker = createWorker(app, { run_production_plan: runProductionPlanJob });
