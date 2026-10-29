@@ -3,30 +3,77 @@ import { z } from 'zod';
 const hex = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Expected a #rrggbb color');
 
 export const FONT_IDS = [
+  // ── Readable body & UI ────────────────────────────────────────────────────
   'inter', 'lora', 'playfair-display', 'nunito', 'patrick-hand',
-  'montserrat', 'poppins', 'merriweather', 'roboto-slab', 'quicksand', 'fredoka', 'caveat', 'dancing-script', 'amatic-sc',
+  'montserrat', 'poppins', 'merriweather', 'roboto-slab', 'quicksand',
+  // ── Friendly / rounded ────────────────────────────────────────────────────
+  'fredoka', 'comfortaa',
+  // ── Handwritten & script ──────────────────────────────────────────────────
+  'caveat', 'dancing-script', 'amatic-sc', 'pacifico', 'lobster',
+  // ── Bold display — thick strokes, great for coloring-in titles ───────────
+  'abril-fatface', 'titan-one', 'lilita-one', 'passion-one', 'concert-one',
+  'ultra', 'alfa-slab-one', 'sigmar', 'calistoga',
+  // ── Blocky / condensed / impact ───────────────────────────────────────────
+  'bangers', 'russo-one', 'black-han-sans', 'righteous',
+  // ── Hollow / inline / outline — letters designed to be colored in ─────────
+  'bungee', 'bungee-outline', 'bungee-inline', 'bungee-shade',
+  // ── Decorative & specialty ────────────────────────────────────────────────
+  'cinzel', 'press-start-2p',
 ] as const;
 export type FontId = (typeof FONT_IDS)[number];
 
-export const FONTS: Record<FontId, { family: string; weights: number[]; italic: boolean; license: string; fallback: string }> = {
-  inter: { family: 'Inter', weights: [400, 600, 700], italic: true, license: 'SIL OFL 1.1', fallback: 'sans-serif' },
-  lora: { family: 'Lora', weights: [400, 600, 700], italic: true, license: 'SIL OFL 1.1', fallback: 'serif' },
-  'playfair-display': { family: 'Playfair Display', weights: [400, 600, 700], italic: true, license: 'SIL OFL 1.1', fallback: 'serif' },
-  nunito: { family: 'Nunito', weights: [400, 600, 700], italic: true, license: 'SIL OFL 1.1', fallback: 'sans-serif' },
-  'patrick-hand': { family: 'Patrick Hand', weights: [400], italic: false, license: 'SIL OFL 1.1', fallback: 'cursive' },
-  montserrat: { family: 'Montserrat', weights: [400, 600, 700], italic: true, license: 'SIL OFL 1.1', fallback: 'sans-serif' },
-  poppins: { family: 'Poppins', weights: [400, 600, 700], italic: true, license: 'SIL OFL 1.1', fallback: 'sans-serif' },
-  merriweather: { family: 'Merriweather', weights: [400, 600, 700], italic: true, license: 'SIL OFL 1.1', fallback: 'serif' },
-  'roboto-slab': { family: 'Roboto Slab', weights: [400, 600, 700], italic: false, license: 'Apache 2.0', fallback: 'serif' },
-  quicksand: { family: 'Quicksand', weights: [400, 600, 700], italic: false, license: 'SIL OFL 1.1', fallback: 'sans-serif' },
-  fredoka: { family: 'Fredoka', weights: [400, 600, 700], italic: false, license: 'SIL OFL 1.1', fallback: 'sans-serif' },
-  caveat: { family: 'Caveat', weights: [400, 700], italic: false, license: 'SIL OFL 1.1', fallback: 'cursive' },
-  'dancing-script': { family: 'Dancing Script', weights: [400, 700], italic: false, license: 'SIL OFL 1.1', fallback: 'cursive' },
-  'amatic-sc': { family: 'Amatic SC', weights: [400, 700], italic: false, license: 'SIL OFL 1.1', fallback: 'cursive' },
+/** Per-font metadata. `colorable` marks fonts whose strokes are thick or
+ *  hollow enough that the letter bodies work as coloring-book fill areas. */
+export const FONTS: Record<FontId, { family: string; weights: number[]; italic: boolean; license: string; fallback: string; category: string; colorable?: true }> = {
+  // ── Readable body & UI ────────────────────────────────────────────────────
+  inter: { family: 'Inter', weights: [400, 600, 700], italic: true, license: 'SIL OFL 1.1', fallback: 'sans-serif', category: 'body' },
+  lora: { family: 'Lora', weights: [400, 600, 700], italic: true, license: 'SIL OFL 1.1', fallback: 'serif', category: 'body' },
+  'playfair-display': { family: 'Playfair Display', weights: [400, 600, 700], italic: true, license: 'SIL OFL 1.1', fallback: 'serif', category: 'body' },
+  nunito: { family: 'Nunito', weights: [400, 600, 700], italic: true, license: 'SIL OFL 1.1', fallback: 'sans-serif', category: 'body' },
+  'patrick-hand': { family: 'Patrick Hand', weights: [400], italic: false, license: 'SIL OFL 1.1', fallback: 'cursive', category: 'body' },
+  montserrat: { family: 'Montserrat', weights: [400, 600, 700], italic: true, license: 'SIL OFL 1.1', fallback: 'sans-serif', category: 'body' },
+  poppins: { family: 'Poppins', weights: [400, 600, 700], italic: true, license: 'SIL OFL 1.1', fallback: 'sans-serif', category: 'body' },
+  merriweather: { family: 'Merriweather', weights: [400, 600, 700], italic: true, license: 'SIL OFL 1.1', fallback: 'serif', category: 'body' },
+  'roboto-slab': { family: 'Roboto Slab', weights: [400, 600, 700], italic: false, license: 'Apache 2.0', fallback: 'serif', category: 'body' },
+  quicksand: { family: 'Quicksand', weights: [400, 600, 700], italic: false, license: 'SIL OFL 1.1', fallback: 'sans-serif', category: 'body' },
+  // ── Friendly / rounded ────────────────────────────────────────────────────
+  fredoka: { family: 'Fredoka', weights: [400, 600, 700], italic: false, license: 'SIL OFL 1.1', fallback: 'sans-serif', category: 'friendly' },
+  comfortaa: { family: 'Comfortaa', weights: [400, 600, 700], italic: false, license: 'SIL OFL 1.1', fallback: 'sans-serif', category: 'friendly' },
+  // ── Handwritten & script ──────────────────────────────────────────────────
+  caveat: { family: 'Caveat', weights: [400, 700], italic: false, license: 'SIL OFL 1.1', fallback: 'cursive', category: 'handwritten' },
+  'dancing-script': { family: 'Dancing Script', weights: [400, 700], italic: false, license: 'SIL OFL 1.1', fallback: 'cursive', category: 'handwritten' },
+  'amatic-sc': { family: 'Amatic SC', weights: [400, 700], italic: false, license: 'SIL OFL 1.1', fallback: 'cursive', category: 'handwritten' },
+  pacifico: { family: 'Pacifico', weights: [400], italic: false, license: 'SIL OFL 1.1', fallback: 'cursive', category: 'handwritten', colorable: true },
+  lobster: { family: 'Lobster', weights: [400], italic: false, license: 'SIL OFL 1.1', fallback: 'cursive', category: 'handwritten', colorable: true },
+  // ── Bold display — thick strokes, great for coloring-in titles ───────────
+  'abril-fatface': { family: 'Abril Fatface', weights: [400], italic: false, license: 'SIL OFL 1.1', fallback: 'serif', category: 'display-bold', colorable: true },
+  'titan-one': { family: 'Titan One', weights: [400], italic: false, license: 'SIL OFL 1.1', fallback: 'sans-serif', category: 'display-bold', colorable: true },
+  'lilita-one': { family: 'Lilita One', weights: [400], italic: false, license: 'SIL OFL 1.1', fallback: 'sans-serif', category: 'display-bold', colorable: true },
+  'passion-one': { family: 'Passion One', weights: [400, 700, 900], italic: false, license: 'SIL OFL 1.1', fallback: 'sans-serif', category: 'display-bold', colorable: true },
+  'concert-one': { family: 'Concert One', weights: [400], italic: false, license: 'SIL OFL 1.1', fallback: 'sans-serif', category: 'display-bold', colorable: true },
+  ultra: { family: 'Ultra', weights: [400], italic: false, license: 'SIL OFL 1.1', fallback: 'serif', category: 'display-bold', colorable: true },
+  'alfa-slab-one': { family: 'Alfa Slab One', weights: [400], italic: false, license: 'SIL OFL 1.1', fallback: 'serif', category: 'display-bold', colorable: true },
+  sigmar: { family: 'Sigmar', weights: [400], italic: false, license: 'SIL OFL 1.1', fallback: 'sans-serif', category: 'display-bold', colorable: true },
+  calistoga: { family: 'Calistoga', weights: [400], italic: false, license: 'SIL OFL 1.1', fallback: 'sans-serif', category: 'display-bold', colorable: true },
+  // ── Blocky / condensed / impact ───────────────────────────────────────────
+  bangers: { family: 'Bangers', weights: [400], italic: false, license: 'SIL OFL 1.1', fallback: 'sans-serif', category: 'blocky', colorable: true },
+  'russo-one': { family: 'Russo One', weights: [400], italic: false, license: 'SIL OFL 1.1', fallback: 'sans-serif', category: 'blocky', colorable: true },
+  'black-han-sans': { family: 'Black Han Sans', weights: [400], italic: false, license: 'SIL OFL 1.1', fallback: 'sans-serif', category: 'blocky', colorable: true },
+  righteous: { family: 'Righteous', weights: [400], italic: false, license: 'SIL OFL 1.1', fallback: 'sans-serif', category: 'blocky', colorable: true },
+  // ── Hollow / inline / outline — letters designed to be colored in ─────────
+  bungee: { family: 'Bungee', weights: [400], italic: false, license: 'SIL OFL 1.1', fallback: 'sans-serif', category: 'hollow', colorable: true },
+  'bungee-outline': { family: 'Bungee Outline', weights: [400], italic: false, license: 'SIL OFL 1.1', fallback: 'sans-serif', category: 'hollow', colorable: true },
+  'bungee-inline': { family: 'Bungee Inline', weights: [400], italic: false, license: 'SIL OFL 1.1', fallback: 'sans-serif', category: 'hollow', colorable: true },
+  'bungee-shade': { family: 'Bungee Shade', weights: [400], italic: false, license: 'SIL OFL 1.1', fallback: 'sans-serif', category: 'hollow', colorable: true },
+  // ── Decorative & specialty ────────────────────────────────────────────────
+  cinzel: { family: 'Cinzel', weights: [400, 600, 700], italic: false, license: 'SIL OFL 1.1', fallback: 'serif', category: 'decorative', colorable: true },
+  'press-start-2p': { family: 'Press Start 2P', weights: [400], italic: false, license: 'SIL OFL 1.1', fallback: 'monospace', category: 'decorative', colorable: true },
 };
 
-/** Ready-made heading/body/accent combinations offered when creating a product. */
-export const FONT_PAIRINGS: { id: string; name: string; mood: string; fonts: { heading: FontId; body: FontId; accent: FontId } }[] = [
+/** Ready-made heading/body/accent combinations offered when creating a product.
+ *  `colorable` marks pairings whose heading font is suited for letter coloring-in. */
+export const FONT_PAIRINGS: { id: string; name: string; mood: string; colorable?: true; fonts: { heading: FontId; body: FontId; accent: FontId } }[] = [
+  // ── Everyday readable ─────────────────────────────────────────────────────
   { id: 'clean-modern', name: 'Clean modern', mood: 'Neutral and very readable', fonts: { heading: 'montserrat', body: 'inter', accent: 'montserrat' } },
   { id: 'classic-serif', name: 'Classic serif', mood: 'Elegant, editorial', fonts: { heading: 'playfair-display', body: 'lora', accent: 'lora' } },
   { id: 'bookish', name: 'Bookish', mood: 'Calm, journal-like', fonts: { heading: 'merriweather', body: 'merriweather', accent: 'lora' } },
@@ -37,6 +84,25 @@ export const FONT_PAIRINGS: { id: string; name: string; mood: string; fonts: { h
   { id: 'script-romance', name: 'Romantic script', mood: 'Weddings, gifts, self-care', fonts: { heading: 'dancing-script', body: 'lora', accent: 'dancing-script' } },
   { id: 'kids-play', name: 'Kids playful', mood: 'Big, bubbly, fun', fonts: { heading: 'fredoka', body: 'nunito', accent: 'patrick-hand' } },
   { id: 'chalkboard', name: 'Chalkboard', mood: 'Tall, hand-lettered headings', fonts: { heading: 'amatic-sc', body: 'quicksand', accent: 'amatic-sc' } },
+  { id: 'bubble-round', name: 'Bubble round', mood: 'Super-soft rounded, great for stickers', fonts: { heading: 'comfortaa', body: 'comfortaa', accent: 'pacifico' } },
+  // ── Bold display — thick strokes for color-in titles ─────────────────────
+  { id: 'fat-serif', name: 'Fat serif', mood: 'Chunky slab headings, easy to color in', colorable: true, fonts: { heading: 'abril-fatface', body: 'lora', accent: 'abril-fatface' } },
+  { id: 'titan-body', name: 'Titan', mood: 'Massive rounded sans, fills a page', colorable: true, fonts: { heading: 'titan-one', body: 'nunito', accent: 'concert-one' } },
+  { id: 'passion-bold', name: 'Passion bold', mood: 'Condensed bold impact poster look', colorable: true, fonts: { heading: 'passion-one', body: 'inter', accent: 'passion-one' } },
+  { id: 'ultra-slab', name: 'Ultra slab', mood: 'Heavy serif with real presence', colorable: true, fonts: { heading: 'ultra', body: 'merriweather', accent: 'alfa-slab-one' } },
+  { id: 'sigmar-accent', name: 'Sigmar accent', mood: 'Bold display + clean body, retro feel', colorable: true, fonts: { heading: 'sigmar', body: 'inter', accent: 'sigmar' } },
+  { id: 'warm-calistoga', name: 'Warm display', mood: 'Wide, chunky, almost brush-like', colorable: true, fonts: { heading: 'calistoga', body: 'nunito', accent: 'lobster' } },
+  // ── Blocky / impact ───────────────────────────────────────────────────────
+  { id: 'comic-impact', name: 'Comic impact', mood: 'Comic-book style, wide letters', colorable: true, fonts: { heading: 'bangers', body: 'nunito', accent: 'concert-one' } },
+  { id: 'bold-block', name: 'Bold block', mood: 'Solid, no-frills, high impact', colorable: true, fonts: { heading: 'black-han-sans', body: 'inter', accent: 'russo-one' } },
+  { id: 'retro-block', name: 'Retro block', mood: 'Geometric 70s-style bold', colorable: true, fonts: { heading: 'righteous', body: 'poppins', accent: 'righteous' } },
+  // ── Hollow / outline — letters are coloring frames ─────────────────────
+  { id: 'bungee-fill', name: 'Bungee fill', mood: 'Solid condensed Bungee + readable body', colorable: true, fonts: { heading: 'bungee', body: 'inter', accent: 'bungee' } },
+  { id: 'outline-letters', name: 'Outline letters', mood: 'Hollow outlined letters — color-in ready', colorable: true, fonts: { heading: 'bungee-outline', body: 'nunito', accent: 'bungee' } },
+  { id: 'inline-pop', name: 'Inline pop', mood: 'Striped letter fill, art-deco vibe', colorable: true, fonts: { heading: 'bungee-inline', body: 'inter', accent: 'bungee-shade' } },
+  // ── Decorative ────────────────────────────────────────────────────────────
+  { id: 'roman-elegance', name: 'Roman elegance', mood: 'All-caps classical, regal coloring pages', colorable: true, fonts: { heading: 'cinzel', body: 'lora', accent: 'cinzel' } },
+  { id: 'pixel-retro', name: 'Pixel retro', mood: 'Blocky pixel game letters, great for kids', colorable: true, fonts: { heading: 'press-start-2p', body: 'nunito', accent: 'press-start-2p' } },
 ];
 
 export const DesignTokensSchema = z.object({

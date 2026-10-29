@@ -151,7 +151,7 @@ export function registerProductRoutes(s: FastifyInstance, { app }: ServerDeps): 
   s.get('/api/product-types', async () => productTypes().map(describeType));
 
   s.get('/api/fonts', async () => ({
-    fonts: FONT_IDS.map((id) => ({ id, family: FONTS[id].family, fallback: FONTS[id].fallback, license: FONTS[id].license })),
+    fonts: FONT_IDS.map((id) => ({ id, family: FONTS[id].family, fallback: FONTS[id].fallback, license: FONTS[id].license, category: FONTS[id].category, colorable: FONTS[id].colorable ?? false })),
     pairings: FONT_PAIRINGS,
   }));
 

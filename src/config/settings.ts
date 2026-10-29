@@ -59,7 +59,9 @@ export const SettingsSchema = z.object({
     // when one is rate-limited, down, or has no key — so one capped free tier doesn't stop
     // production. Free-tier providers first; Anthropic last since it's pay-per-use.
     fallbackOrder: z.array(z.enum(['anthropic', 'openrouter', 'groq', 'nvidia', 'cerebras', 'together'])).default(['groq', 'openrouter', 'cerebras', 'together', 'nvidia', 'anthropic']),
-    imageProvider: z.enum(['openai', 'none']).default('openai'),
+    imageProvider: z.enum(['openai', 'gemini', 'together', 'huggingface', 'pollinations', 'replicate', 'fal', 'grok', 'none']).default('openai'),
+    imageFallbackOrder: z.array(z.enum(['openai', 'gemini', 'together', 'huggingface', 'pollinations', 'replicate', 'fal', 'grok'])).default(['gemini', 'together', 'huggingface', 'pollinations', 'openai', 'replicate', 'fal', 'grok']),
+    allowPaidFallback: z.boolean().default(false),
     unconfiguredPolicy: z.enum(['deterministic', 'fail']).default('deterministic'),
     invalidOutputRetries: z.number().int().min(0).max(5).default(2),
     anthropic: z.object({
@@ -111,6 +113,52 @@ export const SettingsSchema = z.object({
       maxRetries: z.number().int().min(0).max(6).default(2),
       quality: z.enum(['low', 'medium', 'high']).default('high'),
     }).prefault({}),
+    replicate: z.object({
+      model: z.string().min(1).default('black-forest-labs/flux-1.1-pro'),
+      baseUrl: z.url().default('https://api.replicate.com/v1'),
+      timeoutMs: z.number().int().min(5000).max(600000).default(300000),
+      maxRetries: z.number().int().min(0).max(6).default(2),
+      extraInput: z.record(z.string(), z.unknown()).optional(),
+    }).prefault({}),
+    fal: z.object({
+      model: z.string().min(1).default('flux-pro/v1.1'),
+      baseUrl: z.url().default('https://fal.run/fal-ai'),
+      timeoutMs: z.number().int().min(5000).max(600000).default(180000),
+      maxRetries: z.number().int().min(0).max(6).default(2),
+      extraInput: z.record(z.string(), z.unknown()).optional(),
+    }).prefault({}),
+    gemini: z.object({
+      model: z.string().min(1).default('gemini-3-pro-image'),
+      baseUrl: z.url().default('https://generativelanguage.googleapis.com/v1beta'),
+      timeoutMs: z.number().int().min(5000).max(600000).default(180000),
+      maxRetries: z.number().int().min(0).max(6).default(2),
+      temperature: z.number().min(0).max(2).default(0.7),
+      maxTokens: z.number().int().min(256).max(8192).default(8192),
+    }).prefault({}),
+    grok: z.object({
+      model: z.string().min(1).default('grok-imagine'),
+      baseUrl: z.url().default('https://api.x.ai/v1'),
+      timeoutMs: z.number().int().min(5000).max(600000).default(180000),
+      maxRetries: z.number().int().min(0).max(6).default(2),
+    }).prefault({}),
+    togetherImage: z.object({
+      model: z.string().min(1).default('black-forest-labs/FLUX.1-schnell-Free'),
+      baseUrl: z.url().default('https://api.together.xyz/v1'),
+      timeoutMs: z.number().int().min(5000).max(600000).default(180000),
+      maxRetries: z.number().int().min(0).max(6).default(2),
+    }).prefault({}),
+    huggingfaceImage: z.object({
+      model: z.string().min(1).default('black-forest-labs/FLUX.1-schnell'),
+      baseUrl: z.url().default('https://api-inference.huggingface.co/models'),
+      timeoutMs: z.number().int().min(5000).max(600000).default(180000),
+      maxRetries: z.number().int().min(0).max(6).default(2),
+    }).prefault({}),
+    pollinations: z.object({
+      model: z.string().min(1).default('flux'),
+      baseUrl: z.url().default('https://image.pollinations.ai'),
+      timeoutMs: z.number().int().min(5000).max(600000).default(180000),
+      maxRetries: z.number().int().min(0).max(6).default(2),
+    }).prefault({}),
     textPrices: z.record(z.string(), z.object({ inputPerMTok: z.number().min(0), outputPerMTok: z.number().min(0) })).default({
       'claude-opus-5-5': { inputPerMTok: 4, outputPerMTok: 20 },
       'claude-sonnet-5-5': { inputPerMTok: 2, outputPerMTok: 10 },
@@ -120,7 +168,17 @@ export const SettingsSchema = z.object({
       'llama-3.3-70b': { inputPerMTok: 0, outputPerMTok: 0 },
       'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free': { inputPerMTok: 0, outputPerMTok: 0 },
     }),
-    imagePricePerImageUsd: z.record(z.string(), z.number().min(0)).default({}),
+    imagePricePerImageUsd: z.record(z.string(), z.number().min(0)).default({
+      'gpt-image-1': 0.05,
+      'black-forest-labs/flux-1.1-pro': 0.02,
+      'flux-pro/v1.1': 0.02,
+      'gemini-3-pro-image': 0.13,
+      'grok-imagine': 0.02,
+      'black-forest-labs/FLUX.1-schnell-Free': 0,
+      'black-forest-labs/FLUX.1-schnell': 0,
+      'stabilityai/stable-diffusion-xl-base-1.0': 0,
+      'flux': 0,
+    }),
   }).prefault({}),
   rendering: z.object({
     chromePath: z.string().default('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'),

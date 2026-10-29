@@ -65,9 +65,11 @@ export function registerSettingsRoutes(s: FastifyInstance, { app }: ServerDeps):
         audit(app.db, 'user', 'provider.tested', 'provider', servedBy, { ok: true, selected });
         return { ok: true, provider: servedBy, model: r.provenance.model, ...(servedBy !== selected && { warning: `${selected} did not answer; the backup provider ${servedBy} did. Check the ${selected} key or its limits.` }), ms: Date.now() - started, note: 'A real API call was made and its structured output validated.' };
       }
+      const selected = app.settings.get('generation').imageProvider;
       const img = await app.providers.image.generateImage({ prompt: 'A simple black outline of a circle on a white background, coloring book line art.', size: 'square' });
-      audit(app.db, 'user', 'provider.tested', 'provider', 'openai', { ok: true });
-      return { ok: true, provider: 'openai', model: img.model, ms: Date.now() - started, dims: pngSize(img.png), note: 'A real image was generated and validated as PNG.' };
+      const servedBy = img.provider ?? app.providers.image.id;
+      audit(app.db, 'user', 'provider.tested', 'provider', servedBy, { ok: true, selected });
+      return { ok: true, provider: servedBy, model: img.model, ms: Date.now() - started, dims: pngSize(img.png), ...(servedBy !== selected && { warning: `${selected} did not answer; the backup provider ${servedBy} did.` }), note: 'A real image was generated and validated.' };
     } catch (err) {
       audit(app.db, 'user', 'provider.tested', 'provider', provider, { ok: false });
       return { ok: false, provider, ms: Date.now() - started, error: errorMessage(err) };

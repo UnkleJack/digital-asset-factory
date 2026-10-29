@@ -41,7 +41,7 @@ export function registerOperationsRoutes(s: FastifyInstance, deps: ServerDeps): 
       batches: app.db.all("SELECT id, name, status, created_at, (SELECT count(*) FROM approval_items i WHERE i.batch_id = b.id) AS items FROM approval_batches b WHERE status = 'ready_for_review' ORDER BY created_at DESC LIMIT 5"),
       providers: {
         text: { provider: g.textProvider, model: g.anthropic.model, mode: tm.mode, reason: 'reason' in tm ? tm.reason : null },
-        image: { provider: g.imageProvider, configured: g.imageProvider === 'none' ? false : await app.providers.image.isConfigured(), model: g.openai.imageModel },
+        image: { provider: g.imageProvider, configured: g.imageProvider === 'none' ? false : await app.providers.image.isConfigured(), model: app.providers.image.model() },
         chrome: app.renderer.available(),
       },
       marketplaces: adapters().map((a) => ({ id: a.id, name: a.displayName, verification: a.verification, directPublishing: a.capabilities.publish && a.verification === 'verified' })),

@@ -6,6 +6,7 @@ import { registerSecretForRedaction } from '../logging/logger.ts';
 export const SECRET_NAMES = [
   'anthropic_api_key', 'openai_api_key',
   'openrouter_api_key', 'groq_api_key', 'nvidia_api_key', 'cerebras_api_key', 'together_api_key',
+  'replicate_api_key', 'fal_api_key', 'gemini_api_key', 'grok_api_key', 'huggingface_token',
   'etsy_api_key', 'etsy_oauth', 'gumroad_token',
   'tavily_api_key', 'exa_api_key', 'brave_search_api_key', 'smtp_password',
 ] as const;

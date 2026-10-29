@@ -6,7 +6,7 @@ export interface MockReply {
   status?: number;
   headers?: Record<string, string>;
   json?: unknown;
-  raw?: string;
+  raw?: string | Buffer;
   delayMs?: number;
 }
 
@@ -33,7 +33,11 @@ export async function mockServer(handler: (body: any, callIndex: number, path: s
       if (reply.delayMs) await new Promise((r) => setTimeout(r, reply.delayMs));
       if (res.destroyed) return;
       res.writeHead(reply.status ?? 200, { 'content-type': 'application/json', ...(reply.headers ?? {}) });
-      res.end(reply.raw ?? JSON.stringify(reply.json ?? {}));
+      if (reply.raw !== undefined) {
+        res.end(Buffer.isBuffer(reply.raw) ? reply.raw : Buffer.from(reply.raw, 'binary'));
+      } else {
+        res.end(JSON.stringify(reply.json ?? {}));
+      }
     });
   });
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));

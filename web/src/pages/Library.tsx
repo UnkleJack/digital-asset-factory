@@ -187,8 +187,45 @@ function NewProductModal({ onClose }: { onClose: () => void }) {
               <div className="form">
                 <label className="f">Title (optional)<input value={f.title} placeholder="Generated from the settings if left blank" onChange={(e) => setF({ ...f, title: e.target.value })} /></label>
                 <label className="f">Design system<select value={f.designSystemId} onChange={(e) => setF({ ...f, designSystemId: e.target.value })}><option value="">Template default</option>{designs.data?.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select><span className="field-help"><Link to="/templates?tab=designs">Make your own design system</Link></span></label>
-                <label className="f">Fonts<select value={pairing} onChange={(e) => setPairing(e.target.value)}><option value="">Design system default</option>{pairings.map((p) => <option key={p.id} value={p.id}>{p.name} — {p.mood}</option>)}<option value="custom">Pick fonts myself…</option></select></label>
-                {pairing === 'custom' && (['heading', 'body', 'accent'] as const).map((k) => <label key={k} className="f">{label(k)} font<select value={custom[k]} onChange={(e) => setCustom({ ...custom, [k]: e.target.value })}>{fontList.map((x) => <option key={x.id} value={x.id}>{x.family}</option>)}</select></label>)}
+                <label className="f">Fonts<select value={pairing} onChange={(e) => setPairing(e.target.value)}>
+                    <option value="">Design system default</option>
+                    <optgroup label="── Everyday readable ───────────────">
+                      {pairings.filter((p: any) => !p.colorable && !['bungee-fill','outline-letters','inline-pop','roman-elegance','pixel-retro'].includes(p.id)).map((p: any) => <option key={p.id} value={p.id}>{p.name} — {p.mood}</option>)}
+                    </optgroup>
+                    <optgroup label="── Bold display (color-in friendly) ─">
+                      {pairings.filter((p: any) => p.colorable && !['bungee-fill','outline-letters','inline-pop','roman-elegance','pixel-retro'].includes(p.id)).map((p: any) => <option key={p.id} value={p.id}>🎨 {p.name} — {p.mood}</option>)}
+                    </optgroup>
+                    <optgroup label="── Hollow / outline (letter coloring) ─">
+                      {pairings.filter((p: any) => ['bungee-fill','outline-letters','inline-pop'].includes(p.id)).map((p: any) => <option key={p.id} value={p.id}>⬜ {p.name} — {p.mood}</option>)}
+                    </optgroup>
+                    <optgroup label="── Decorative & specialty ────────────">
+                      {pairings.filter((p: any) => ['roman-elegance','pixel-retro'].includes(p.id)).map((p: any) => <option key={p.id} value={p.id}>✦ {p.name} — {p.mood}</option>)}
+                    </optgroup>
+                    <option value="custom">Pick fonts myself…</option>
+                  </select></label>
+                {pairing === 'custom' && (['heading', 'body', 'accent'] as const).map((k) => <label key={k} className="f">{label(k)} font<select value={custom[k]} onChange={(e) => setCustom({ ...custom, [k]: e.target.value })}>
+                    <optgroup label="Body &amp; UI">
+                      {fontList.filter((x: any) => x.category === 'body').map((x: any) => <option key={x.id} value={x.id}>{x.family}</option>)}
+                    </optgroup>
+                    <optgroup label="Friendly / Rounded">
+                      {fontList.filter((x: any) => x.category === 'friendly').map((x: any) => <option key={x.id} value={x.id}>{x.family}</option>)}
+                    </optgroup>
+                    <optgroup label="Handwritten &amp; Script">
+                      {fontList.filter((x: any) => x.category === 'handwritten').map((x: any) => <option key={x.id} value={x.id}>{x.family}</option>)}
+                    </optgroup>
+                    <optgroup label="🎨 Bold Display (color-in)">
+                      {fontList.filter((x: any) => x.category === 'display-bold').map((x: any) => <option key={x.id} value={x.id}>{x.family}</option>)}
+                    </optgroup>
+                    <optgroup label="🎨 Blocky / Impact (color-in)">
+                      {fontList.filter((x: any) => x.category === 'blocky').map((x: any) => <option key={x.id} value={x.id}>{x.family}</option>)}
+                    </optgroup>
+                    <optgroup label="⬜ Hollow / Outline (letter coloring)">
+                      {fontList.filter((x: any) => x.category === 'hollow').map((x: any) => <option key={x.id} value={x.id}>{x.family}</option>)}
+                    </optgroup>
+                    <optgroup label="✦ Decorative &amp; Specialty">
+                      {fontList.filter((x: any) => x.category === 'decorative').map((x: any) => <option key={x.id} value={x.id}>{x.family}</option>)}
+                    </optgroup>
+                  </select></label>)}
                 <label className="f">Audience<select value={f.audienceId} onChange={(e) => setF({ ...f, audienceId: e.target.value })}><option value="">General</option>{audiences.data?.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
                 <label className="f">Theme<select value={f.themeId} onChange={(e) => setF({ ...f, themeId: e.target.value })}><option value="">None</option>{themes.data?.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
                 <label className="f">Paper size<select value={f.size} onChange={(e) => setF({ ...f, size: e.target.value })}>{['letter', 'a4', 'a5', 'half-letter', 'legal'].map((s) => <option key={s} value={s}>{label(s)}</option>)}</select></label>
@@ -199,6 +236,7 @@ function NewProductModal({ onClose }: { onClose: () => void }) {
                 <div style={{ ...fontPreview(shownFonts.heading, 'serif'), fontSize: 26 }}>{f.title || type.name}</div>
                 <div style={{ ...fontPreview(shownFonts.body), fontSize: 14 }}>Body text looks like this. Plan your week, track habits, and stay on budget.</div>
                 <div style={{ ...fontPreview(shownFonts.accent, 'cursive'), fontSize: 16 }}>Accent: notes & labels</div>
+                {pairings.find((p: any) => p.id === pairing)?.colorable && <div className="small" style={{ color: 'var(--accent)', marginTop: 4 }}>🎨 Heading font has thick / hollow strokes — great for letter coloring-in art</div>}
                 {!fonts && <div className="small muted">These are the fonts of {baseDesign?.name ?? 'the template default design system'}.</div>}
               </div>}
               <h3>4. Settings for {type.name}</h3>

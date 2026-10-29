@@ -121,8 +121,9 @@ export async function imageGeneratorFor(app: AppContext, trace: CallTrace): Prom
     try {
       const res = await provider.generateImage({ prompt, size: opts.size });
       trace.budget?.record(est.usd);
-      const runId = recordRun(app, { trace, purpose: 'artwork', provider: provider.id, model: res.model, promptHash, settings: { size: opts.size, quality: g.openai.quality }, usage: res.usage, costUsd: est.usd, costBasis: est.basis, status: 'succeeded', startedAt });
-      return { png: res.png, widthPx: res.widthPx, heightPx: res.heightPx, provenance: { generator: provider.id, model: res.model, promptHash, generationRunId: runId } };
+      const servedBy = res.provider ?? provider.id;
+      const runId = recordRun(app, { trace, purpose: 'artwork', provider: servedBy, model: res.model, promptHash, settings: { size: opts.size, quality: g.openai.quality }, usage: res.usage, costUsd: est.usd, costBasis: est.basis, status: 'succeeded', startedAt });
+      return { png: res.png, widthPx: res.widthPx, heightPx: res.heightPx, provenance: { generator: servedBy, provider: servedBy, model: res.model, promptHash, generationRunId: runId } };
     } catch (err) {
       recordRun(app, { trace, purpose: 'artwork', provider: provider.id, model: provider.model(), promptHash, settings: { size: opts.size }, usage: null, costUsd: null, costBasis: 'unknown', status: 'failed', error: errorMessage(err), startedAt });
       throw err;

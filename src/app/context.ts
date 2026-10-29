@@ -16,6 +16,17 @@ export interface AppContext {
   log: Logger;
   assets: AssetStore;
   renderer: Renderer;
-  providers: { text: TextProvider; image: ImageProvider };
+  providers: {
+    text: TextProvider;
+    image: ImageProvider;
+    imageOpenAI?: ImageProvider;
+    imageReplicate?: ImageProvider;
+    imageFal?: ImageProvider;
+    imageGemini?: ImageProvider;
+    imageGrok?: ImageProvider;
+    imageTogether?: ImageProvider;
+    imageHuggingFace?: ImageProvider;
+    imagePollinations?: ImageProvider;
+  };
   clock: Clock;
 }

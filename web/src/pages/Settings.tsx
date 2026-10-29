@@ -81,13 +81,24 @@ function ObjectFields({ value, onChange, path }: { value: any; onChange: (v: any
 
 const SELECT_OPTIONS: Record<string, string[]> = {
   textProvider: ['groq', 'openrouter', 'cerebras', 'together', 'nvidia', 'anthropic', 'deterministic'],
-  imageProvider: ['openai', 'none'],
+  imageProvider: ['pollinations', 'together', 'huggingface', 'gemini', 'openai', 'replicate', 'fal', 'grok', 'none'],
   unconfiguredPolicy: ['deterministic', 'fail'],
   effort: ['low', 'medium', 'high', 'xhigh', 'max'],
   quality: ['low', 'medium', 'high'],
 };
 
-const OPTION_LABELS: Record<string, string> = { ...AI_PROVIDER_LABELS, openai: 'OpenAI', deterministic: 'Deterministic (no AI)' };
+const OPTION_LABELS: Record<string, string> = {
+  ...AI_PROVIDER_LABELS,
+  pollinations: 'Pollinations.ai (FLUX / SD, 100% Free, no key)',
+  together: 'Together AI (FLUX / SDXL, free / fast)',
+  huggingface: 'Hugging Face (FLUX / SD, free tier)',
+  gemini: 'Google Gemini / Imagen (free tier)',
+  openai: 'OpenAI (DALL-E 3, paid)',
+  replicate: 'Replicate (FLUX, paid/metered)',
+  fal: 'Fal.ai (FLUX, paid/metered)',
+  grok: 'xAI Grok Imagine (paid)',
+  deterministic: 'Deterministic (no AI)',
+};
 
 function Field({ name, value, onChange, long }: { name: string; value: any; onChange: (v: any) => void; long?: boolean }) {
   const text = label(name.replace(/([A-Z])/g, ' $1').toLowerCase());
@@ -109,10 +120,15 @@ const AI_KEYS: Record<string, string> = {
   groq_api_key: 'Groq (text, free tier)',
   openrouter_api_key: 'OpenRouter (text, free models)',
   cerebras_api_key: 'Cerebras (text, free credit — may ask for a card)',
-  together_api_key: 'Together AI (text, may need a small credit purchase)',
+  together_api_key: 'Together AI (text & images, free tier)',
+  gemini_api_key: 'Google Gemini (text & Imagen, free tier)',
+  huggingface_token: 'Hugging Face (images, free tier)',
   nvidia_api_key: 'NVIDIA NIM (text, free trial credits)',
   anthropic_api_key: 'Anthropic (text, paid — used last as a backup)',
-  openai_api_key: 'OpenAI (illustrated coloring pictures, paid)',
+  openai_api_key: 'OpenAI (images / DALL-E, paid)',
+  replicate_api_key: 'Replicate (images, paid/metered)',
+  fal_api_key: 'Fal.ai (images, paid/metered)',
+  grok_api_key: 'xAI Grok (images, paid)',
 };
 
 const INTEGRATION_KEYS: Record<string, string> = {
@@ -171,7 +187,8 @@ function AiProviders({ onChanged }: { onChanged: () => void }) {
           return <div className="kv" style={{ marginBottom: 12 }}>
             <span>Text (first choice)</span><span>{g.textProvider === 'deterministic' ? 'Deterministic (no AI)' : providerLabel(g.textProvider)}{activeCfg ? ` · ${activeCfg.model}` : ' (turned off)'}</span>
             <span>Backups, in order</span><span>{g.fallbackOrder.filter((x: string) => x !== g.textProvider).map(providerLabel).join(' → ') || 'none'}</span>
-            <span>Images</span><span>{g.imageProvider} · {g.openai.imageModel}</span>
+            <span>Images (first choice)</span><span>{g.imageProvider} · {g[g.imageProvider]?.model ?? g[g.imageProvider]?.imageModel ?? 'routed'}</span>
+            <span>Image backups, in order</span><span>{(g.imageFallbackOrder ?? []).filter((x: string) => x !== g.imageProvider).join(' → ') || 'none'}</span>
             <span>If no AI key works</span><span>{g.unconfiguredPolicy === 'deterministic' ? 'use the built-in content library' : 'fail the job'}</span>
           </div>;
         }}</Async>

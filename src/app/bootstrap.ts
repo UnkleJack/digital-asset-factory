@@ -6,7 +6,26 @@ import { createSecretStore, type SecretStore } from '../config/secrets.ts';
 import { Logger, type Level } from '../logging/logger.ts';
 import { AssetStore } from '../storage/assetStore.ts';
 import { Renderer } from '../engine/rendering/renderer.ts';
-import { AnthropicTextProvider, OpenAIImageProvider, OpenAICompatibleTextProvider, RoutedTextProvider, TEXT_PROVIDER_META, type TextProvider, type ImageProvider, type AiTextProviderId } from '../engine/generation/providers.ts';
+import {
+  AnthropicTextProvider,
+  OpenAIImageProvider,
+  ReplicateImageProvider,
+  FalImageProvider,
+  GeminiImageProvider,
+  GrokImageProvider,
+  TogetherImageProvider,
+  HuggingFaceImageProvider,
+  PollinationsImageProvider,
+  RoutedImageProvider,
+  ImagePacer,
+  OpenAICompatibleTextProvider,
+  RoutedTextProvider,
+  TEXT_PROVIDER_META,
+  type TextProvider,
+  type ImageProvider,
+  type AiTextProviderId,
+  type AiImageProviderId,
+} from '../engine/generation/providers.ts';
 import { seedBuiltins } from '../engine/templates/seed.ts';
 import { systemClock, type Clock } from '../core/time.ts';
 import type { AppContext } from './context.ts';
@@ -55,22 +74,63 @@ export function bootstrap(opts: BootstrapOptions = {}): App {
     assets,
     renderer: makeRenderer(),
     clock: opts.clock ?? systemClock,
-    providers: {
-      text: opts.textProvider ?? new RoutedTextProvider(
-        {
-          anthropic: new AnthropicTextProvider(() => secrets.get('anthropic_api_key'), () => settings.get('generation').anthropic),
-          openrouter: new OpenAICompatibleTextProvider('openrouter', () => secrets.get(TEXT_PROVIDER_META.openrouter.secretName), () => settings.get('generation').openrouter),
-          groq: new OpenAICompatibleTextProvider('groq', () => secrets.get(TEXT_PROVIDER_META.groq.secretName), () => settings.get('generation').groq),
-          nvidia: new OpenAICompatibleTextProvider('nvidia', () => secrets.get(TEXT_PROVIDER_META.nvidia.secretName), () => settings.get('generation').nvidia),
-          cerebras: new OpenAICompatibleTextProvider('cerebras', () => secrets.get(TEXT_PROVIDER_META.cerebras.secretName), () => settings.get('generation').cerebras),
-          together: new OpenAICompatibleTextProvider('together', () => secrets.get(TEXT_PROVIDER_META.together.secretName), () => settings.get('generation').together),
-        },
-        () => settings.get('generation').textProvider as AiTextProviderId,
-        () => settings.get('generation').fallbackOrder,
-        (from, err) => log.warn('Text provider failed; trying the next backup provider', { provider: from, err: (err as Error)?.message ?? String(err) }),
-      ),
-      image: opts.imageProvider ?? new OpenAIImageProvider(() => secrets.get('openai_api_key'), () => settings.get('generation').openai),
-    },
+    providers: (() => {
+      const openAiImage = new OpenAIImageProvider(() => secrets.get('openai_api_key'), () => settings.get('generation').openai);
+      const replicateImage = new ReplicateImageProvider(() => secrets.get('replicate_api_key'), () => settings.get('generation').replicate);
+      const falImage = new FalImageProvider(() => secrets.get('fal_api_key'), () => settings.get('generation').fal);
+      const geminiImage = new GeminiImageProvider(() => secrets.get('gemini_api_key'), () => settings.get('generation').gemini);
+      const grokImage = new GrokImageProvider(() => secrets.get('grok_api_key'), () => settings.get('generation').grok);
+      const togetherImage = new TogetherImageProvider(() => secrets.get('together_api_key'), () => settings.get('generation').togetherImage);
+      const hfImage = new HuggingFaceImageProvider(() => secrets.get('huggingface_token'), () => settings.get('generation').huggingfaceImage);
+      const pollinationsImage = new PollinationsImageProvider(() => settings.get('generation').pollinations);
+
+      const imageProviders: Partial<Record<AiImageProviderId, ImageProvider>> = {
+        openai: openAiImage,
+        replicate: replicateImage,
+        fal: falImage,
+        gemini: geminiImage,
+        grok: grokImage,
+        together: togetherImage,
+        huggingface: hfImage,
+        pollinations: pollinationsImage,
+      };
+
+      const imagePacer = new ImagePacer();
+
+      const routedImage = new RoutedImageProvider(
+        imageProviders,
+        () => settings.get('generation').imageProvider as AiImageProviderId,
+        () => settings.get('generation').imageFallbackOrder,
+        (from, err) => log.warn('Image provider failed; trying the next backup provider', { provider: from, err: (err as Error)?.message ?? String(err) }),
+        () => settings.get('generation').allowPaidFallback,
+        imagePacer,
+      );
+
+      return {
+        text: opts.textProvider ?? new RoutedTextProvider(
+          {
+            anthropic: new AnthropicTextProvider(() => secrets.get('anthropic_api_key'), () => settings.get('generation').anthropic),
+            openrouter: new OpenAICompatibleTextProvider('openrouter', () => secrets.get(TEXT_PROVIDER_META.openrouter.secretName), () => settings.get('generation').openrouter),
+            groq: new OpenAICompatibleTextProvider('groq', () => secrets.get(TEXT_PROVIDER_META.groq.secretName), () => settings.get('generation').groq),
+            nvidia: new OpenAICompatibleTextProvider('nvidia', () => secrets.get(TEXT_PROVIDER_META.nvidia.secretName), () => settings.get('generation').nvidia),
+            cerebras: new OpenAICompatibleTextProvider('cerebras', () => secrets.get(TEXT_PROVIDER_META.cerebras.secretName), () => settings.get('generation').cerebras),
+            together: new OpenAICompatibleTextProvider('together', () => secrets.get(TEXT_PROVIDER_META.together.secretName), () => settings.get('generation').together),
+          },
+          () => settings.get('generation').textProvider as AiTextProviderId,
+          () => settings.get('generation').fallbackOrder,
+          (from, err) => log.warn('Text provider failed; trying the next backup provider', { provider: from, err: (err as Error)?.message ?? String(err) }),
+        ),
+        image: opts.imageProvider ?? routedImage,
+        imageOpenAI: openAiImage,
+        imageReplicate: replicateImage,
+        imageFal: falImage,
+        imageGemini: geminiImage,
+        imageGrok: grokImage,
+        imageTogether: togetherImage,
+        imageHuggingFace: hfImage,
+        imagePollinations: pollinationsImage,
+      };
+    })(),
     async rebuildRenderer() {
       const old = app.renderer;
       app.renderer = makeRenderer();
