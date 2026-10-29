@@ -29,6 +29,8 @@ export async function api<T = any>(path: string, opts: { method?: string; body?:
   } catch {
     data = null;
   }
+  // Using the app from another computer and the sign-in expired: go to the sign-in page.
+  if (res.status === 401 && data?.error?.code === 'login_required') window.location.href = '/login';
   if (!res.ok) throw new ApiError(data?.error?.message ?? `${res.status} ${res.statusText}`, res.status, data?.error?.code ?? 'error', data?.error?.details);
   return data as T;
 }

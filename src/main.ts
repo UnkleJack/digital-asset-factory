@@ -1,4 +1,5 @@
 import { bootstrap } from './app/bootstrap.ts';
+import { lanAddresses } from './server/remote.ts';
 import { resolvePaths } from './config/paths.ts';
 import { acquireLock } from './ops/lock.ts';
 import { createWorker } from './jobs/handlers.ts';
@@ -42,7 +43,11 @@ const devOrigins = process.env.DAF_DEV ? ['http://localhost:5173', 'http://127.0
 const server = await buildServer({ app, worker, scheduler, port, startedAt: new Date(), devOrigins });
 
 try {
-  await server.listen({ host: '127.0.0.1', port });
+  const remote = app.settings.get('remote');
+  const remoteReady = remote.enabled && !!(await app.secrets.get('remote_access_token'));
+  if (remote.enabled && !remoteReady) app.log.warn('Remote access is on but no access token exists yet; staying local. Make one in Settings → System.');
+  await server.listen({ host: remoteReady ? remote.bindAddress : '127.0.0.1', port });
+  if (remoteReady) app.log.info('Remote access is on: other computers can open this app with the access token', { addresses: lanAddresses().map((a) => `http://${a}:${port}`) });
 } catch (err) {
   const code = (err as NodeJS.ErrnoException).code;
   console.error(code === 'EADDRINUSE' ? `Port ${port} is already in use. Another copy may be running, or set DAF_PORT to a free port.` : `Could not start the server: ${(err as Error).message}`);
@@ -62,7 +67,7 @@ const checkDigest = () => {
 const digestTimer = setInterval(checkDigest, 3_600_000);
 setTimeout(checkDigest, 60_000);
 app.log.info(`Digital Asset Factory is running at http://127.0.0.1:${port}`, { dataDir: paths.dataDir, chrome: app.renderer.available() });
-if (!app.renderer.available()) app.log.warn('Google Chrome was not found; rendering jobs will fail until Settings → Rendering → Chrome path is set.');
+if (!app.renderer.available()) app.log.warn('Google Chrome or Microsoft Edge was not found; rendering jobs will fail until one is installed or Settings → Rendering → Chrome path is set.');
 
 let stopping = false;
 async function shutdown(signal: string) {

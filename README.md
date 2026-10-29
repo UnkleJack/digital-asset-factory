@@ -20,7 +20,7 @@ What it does today, honestly:
 | Research digest email (best sellers, competitors, 2 vetted ideas) | Built and tested with stand-ins; **needs a live run with real search keys and Gmail** |
 | Sales analytics | Gumroad sales pulled automatically every 6 hours; other marketplaces by CSV import |
 
-**New here? Start with [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md)** — every key to get, where to get it, and the daily routine.
+**New here? Start with [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md)** — every key to get, where to get it, and the daily routine. On Windows, see [docs/WINDOWS.md](docs/WINDOWS.md).
 
 See [docs/ACCEPTANCE_REPORT.md](docs/ACCEPTANCE_REPORT.md) for what was verified and how.
 

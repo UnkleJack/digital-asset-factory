@@ -32,6 +32,7 @@ export function registerOperationsRoutes(s: FastifyInstance, deps: ServerDeps): 
         publishedVerified: app.db.value<number>("SELECT count(*) FROM external_listings WHERE verification = 'api_verified'"),
         openOpportunities: app.db.value<number>("SELECT count(*) FROM opportunities WHERE status IN ('new','evaluating','approved')"),
         needsReconciliation: app.db.value<number>("SELECT count(*) FROM listings WHERE status = 'needs_reconciliation'"),
+        packingBacklog: app.db.value<number>('SELECT count(*) FROM packing_backlog'),
       },
       jobs: {
         queued: app.db.value<number>("SELECT count(*) FROM jobs WHERE status = 'queued'"),

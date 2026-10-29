@@ -5,6 +5,7 @@ import { ActionButton, AssetImg, Async, Card, CheckList, Empty, Modal, PageHead,
 import { ago, bytes, fmtDate, generatorLabel, label, money, usd } from '../format.ts';
 import { ParamsEditor } from './Library.tsx';
 import { PackBuilder } from './PackBuilder.tsx';
+import { ProductTags } from './Packing.tsx';
 
 export function ProductDetail() {
   const { id } = useParams();
@@ -80,6 +81,7 @@ function Overview({ v }: { v: any }) {
           {!v.jobs.length && <p className="muted">No production jobs yet.</p>}
         </Card>
       </div>
+      {v.product?.id && <div style={{ marginTop: 14 }}><ProductTags productId={v.product.id} /></div>}
       {listingImgs.length > 0 && <Card title="Listing images" className="" ><div className="thumbs">{listingImgs.map((a: any) => <a key={a.id} href={assetUrl(a.id)} target="_blank" rel="noreferrer" className="thumb sq"><AssetImg id={a.id} alt="Listing image" /></a>)}</div></Card>}
     </>
   );

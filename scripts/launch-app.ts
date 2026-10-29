@@ -3,6 +3,7 @@ import { existsSync, openSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolvePaths } from '../src/config/paths.ts';
+import { resolveChromePath } from '../src/config/chrome.ts';
 
 const port = Number(process.env.DAF_PORT ?? 4317);
 const url = `http://127.0.0.1:${port}`;
@@ -33,12 +34,19 @@ if (!(await healthy())) {
   }
 }
 
-const chrome = '/Applications/Google Chrome.app';
-if (process.platform === 'darwin' && existsSync(chrome)) {
+// Open in its own window with Chrome/Edge if installed (macOS, Windows, Linux), else the default browser.
+const chrome = resolveChromePath(process.env.DAF_CHROME_PATH ?? '');
+if (chrome && existsSync(chrome)) {
   const profile = join(paths.dataDir, 'chrome-app-profile');
   mkdirSync(profile, { recursive: true });
-  spawn('open', ['-na', chrome, '--args', `--app=${url}`, `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check'], { detached: true, stdio: 'ignore' }).unref();
+  spawn(chrome, [`--app=${url}`, `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check'], { detached: true, stdio: 'ignore' }).unref();
   console.log(`Opened Digital Asset Factory in its own window (${url}).`);
 } else {
+  const [cmd, args] = process.platform === 'win32' ? ['cmd', ['/c', 'start', '', url]] : process.platform === 'darwin' ? ['open', [url]] : ['xdg-open', [url]];
+  try {
+    spawn(cmd, args, { detached: true, stdio: 'ignore' }).unref();
+  } catch {
+    // Opening a browser is a convenience; the address below always works.
+  }
   console.log(`Digital Asset Factory is running. Open ${url} in your browser.`);
 }

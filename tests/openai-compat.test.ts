@@ -114,7 +114,7 @@ test('switching Settings → Generation → Text provider changes which API stru
   servers.push(srv);
   const secrets = new MemorySecretStore();
   await secrets.set('openrouter_api_key', KEY);
-  const app = bootstrap({ dataDir: tempDir(), secrets, logConsole: false });
+  const app = bootstrap({ dataDir: tempDir(), secrets, logConsole: false, pacing: false });
   app.settings.update('generation', { textProvider: 'openrouter', openrouter: { baseUrl: srv.url } });
   assert.equal(app.providers.text.id, 'openrouter');
   assert.equal(await app.providers.text.isConfigured(), true);
@@ -149,7 +149,7 @@ test('a model that rejects JSON mode is asked again without response_format, wit
 
 test('every AI key in Settings has a link to where the key is created', async () => {
   const { SECRET_KEY_LINKS } = await import('../src/engine/generation/providers.ts');
-  for (const name of ['anthropic_api_key', 'openai_api_key', 'openrouter_api_key', 'groq_api_key', 'nvidia_api_key', 'cerebras_api_key', 'together_api_key'] as const) {
+  for (const name of ['anthropic_api_key', 'openai_api_key', 'openrouter_api_key', 'groq_api_key', 'nvidia_api_key', 'cerebras_api_key', 'together_api_key', 'gemini_api_key', 'mistral_api_key', 'github_models_token', 'huggingface_token'] as const) {
     assert.match(SECRET_KEY_LINKS[name]?.url ?? '', /^https:\/\//, name);
   }
   assert.equal(SECRET_KEY_LINKS.groq_api_key?.free, true);
@@ -163,7 +163,7 @@ test('a rate-limited or keyless provider falls through to the next backup, and r
   const secrets = new MemorySecretStore();
   await secrets.set('groq_api_key', KEY);
   await secrets.set('cerebras_api_key', KEY);
-  const app = bootstrap({ dataDir: tempDir(), secrets, logConsole: false });
+  const app = bootstrap({ dataDir: tempDir(), secrets, logConsole: false, pacing: false });
   // openrouter is selected but has no key; groq is capped; cerebras answers.
   app.settings.update('generation', { textProvider: 'openrouter', fallbackOrder: ['groq', 'cerebras', 'anthropic'], groq: { baseUrl: limited.url, maxRetries: 0 }, cerebras: { baseUrl: ok.url } });
   assert.equal(await app.providers.text.isConfigured(), true, 'configured when any provider in the chain has a key');
@@ -181,5 +181,61 @@ test('a rate-limited or keyless provider falls through to the next backup, and r
   await assert.rejects(structuredCall(app, { purpose: 'test', schema: Schema, system: 's', prompt: 'p', trace: {} }), /invalid structured output/);
   assert.equal(bad.calls.length, 2);
   assert.equal(limited.calls.length, 1, 'the backup was not called for invalid output');
+  await app.close();
+});
+
+test('a paid provider is never an automatic backup unless allowed, and budgets price the dearest backup', async () => {
+  const limited = await mockServer(() => ({ status: 429, json: { error: { message: 'rate limit reached for today' } } }));
+  const paid = await mockServer(() => ({ json: anthropicMessage(JSON.stringify({ title: 'paid', items: ['a', 'b'] })) }));
+  servers.push(limited, paid);
+  const secrets = new MemorySecretStore();
+  await secrets.set('groq_api_key', KEY);
+  await secrets.set('anthropic_api_key', 'sk-ant-test-paid-123456');
+  const app = bootstrap({ dataDir: tempDir(), secrets, logConsole: false, pacing: false });
+  app.settings.update('generation', { textProvider: 'groq', fallbackOrder: ['anthropic'], groq: { baseUrl: limited.url, maxRetries: 0 }, anthropic: { baseUrl: paid.url, maxRetries: 0 } });
+  await assert.rejects(structuredCall(app, { purpose: 'test', schema: Schema, system: 's', prompt: 'p', trace: {} }), /rate limit/);
+  assert.equal(paid.calls.length, 0, 'Anthropic was not used as a backup');
+
+  app.settings.update('generation', { allowPaidFallback: true });
+  const checks: (number | null)[] = [];
+  const budget = { check: (usd: number | null) => { checks.push(usd); if ((usd ?? 0) > 0) throw new ProviderError('budget', 'budget_exceeded', 'cost limit'); }, record: () => {} };
+  await assert.rejects(structuredCall(app, { purpose: 'test', schema: Schema, system: 's', prompt: 'p', trace: { budget } }), /cost limit/);
+  assert.ok((checks[0] ?? 0) > 0, 'the estimate uses the paid backup\'s price, not the free first choice');
+  assert.equal(limited.calls.length, 1, 'a $0 budget stops the call before any provider is asked');
+  assert.equal(paid.calls.length, 0);
+  await app.close();
+});
+
+test('pacing: a provider at its daily limit or cooling down after a rate limit is skipped; calls are spaced out', async () => {
+  const { Pacer } = await import('../src/engine/generation/pacing.ts');
+  let t = Date.parse('2026-10-24T10:00:00Z');
+  const slept: number[] = [];
+  const counts: Record<string, number> = { groq: 0 };
+  const cfg = { minSecondsBetweenCalls: 2, dailyCallLimits: { groq: 3 } as Record<string, number>, cooldownMinutes: 15 };
+  const pacer = new Pacer(() => cfg, (p, since) => { assert.equal(since, '2026-10-24T00:00:00.000Z'); return counts[p] ?? 0; }, () => t, async (ms) => { slept.push(ms); });
+  await pacer.wait('groq');
+  await pacer.wait('groq');
+  await pacer.wait('cerebras');
+  assert.deepEqual(slept, [2000], 'second groq call waits 2s; another provider does not');
+  counts.groq = 3;
+  assert.match(pacer.blocked('groq')!, /today's limit of 3/);
+  assert.equal(pacer.blocked('cerebras'), null);
+  pacer.rateLimited('cerebras');
+  assert.match(pacer.blocked('cerebras')!, /cooling down/);
+  t += 16 * 60_000;
+  assert.equal(pacer.blocked('cerebras'), null, 'cool-down ends');
+
+  // Through the router: Groq is at its limit, so Cerebras answers without Groq being called.
+  const groqSrv = await mockServer(() => ({ json: chatCompletion(JSON.stringify({ title: 'groq', items: ['a', 'b'] })) }));
+  const cerebrasSrv = await mockServer(() => ({ json: chatCompletion(JSON.stringify({ title: 'cerebras', items: ['a', 'b'] })) }));
+  servers.push(groqSrv, cerebrasSrv);
+  const secrets = new MemorySecretStore();
+  await secrets.set('groq_api_key', KEY);
+  await secrets.set('cerebras_api_key', KEY);
+  const app = bootstrap({ dataDir: tempDir(), secrets, logConsole: false });
+  app.settings.update('generation', { textProvider: 'groq', fallbackOrder: ['cerebras'], groq: { baseUrl: groqSrv.url }, cerebras: { baseUrl: cerebrasSrv.url }, pacing: { minSecondsBetweenCalls: 0, dailyCallLimits: { groq: 1 } } });
+  assert.equal((await structuredCall(app, { purpose: 'test', schema: Schema, system: 's', prompt: 'p', trace: {} })).data.title, 'groq');
+  assert.equal((await structuredCall(app, { purpose: 'test', schema: Schema, system: 's', prompt: 'p', trace: {} })).data.title, 'cerebras');
+  assert.equal(groqSrv.calls.length, 1);
   await app.close();
 });

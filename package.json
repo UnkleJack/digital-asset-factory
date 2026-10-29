@@ -22,7 +22,8 @@
     "migrate": "node --env-file-if-exists=.env scripts/migrate.ts",
     "backup": "node --env-file-if-exists=.env scripts/backup.ts",
     "restore": "node --env-file-if-exists=.env scripts/restore.ts",
-    "samples": "node scripts/generate-samples.ts"
+    "samples": "node scripts/generate-samples.ts",
+    "portable": "node --env-file-if-exists=.env scripts/make-portable.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.1.0",

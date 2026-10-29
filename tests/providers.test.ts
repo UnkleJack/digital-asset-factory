@@ -73,7 +73,8 @@ test('structuredCall re-asks on invalid output a bounded number of times and rec
   servers.push(srv);
   const secrets = new MemorySecretStore();
   await secrets.set('anthropic_api_key', KEY);
-  const app = bootstrap({ dataDir: tempDir(), secrets, logConsole: false });
+  const app = bootstrap({ dataDir: tempDir(), secrets, logConsole: false, pacing: false });
+  app.settings.update('generation', { textProvider: 'anthropic', fallbackOrder: [] }); // these tests stand in for Anthropic
   app.settings.update('generation', { invalidOutputRetries: 2, anthropic: { baseUrl: srv.url, maxRetries: 0 } });
   const r = await structuredCall(app, { purpose: 'test', schema: Schema, system: 's', prompt: 'p', trace: {} });
   assert.equal(r.data.title, 'ok');
@@ -96,7 +97,8 @@ test('budget guard stops generation before the call when the cap would be exceed
   servers.push(srv);
   const secrets = new MemorySecretStore();
   await secrets.set('anthropic_api_key', KEY);
-  const app = bootstrap({ dataDir: tempDir(), secrets, logConsole: false });
+  const app = bootstrap({ dataDir: tempDir(), secrets, logConsole: false, pacing: false });
+  app.settings.update('generation', { textProvider: 'anthropic', fallbackOrder: [] }); // these tests stand in for Anthropic
   app.settings.update('generation', { anthropic: { baseUrl: srv.url } });
   const budget = { check: () => { throw new ProviderError('budget', 'budget_exceeded', 'cap reached'); }, record: () => undefined };
   await assert.rejects(structuredCall(app, { purpose: 'test', schema: Schema, system: 's', prompt: 'p', trace: { budget } }), (e: any) => e.kind === 'budget_exceeded');
@@ -105,7 +107,8 @@ test('budget guard stops generation before the call when the cap would be exceed
 });
 
 test('generation policy: deterministic fallback vs fail when AI is unconfigured', async () => {
-  const app = bootstrap({ dataDir: tempDir(), secrets: new MemorySecretStore(), logConsole: false });
+  const app = bootstrap({ dataDir: tempDir(), secrets: new MemorySecretStore(), logConsole: false, pacing: false });
+  app.settings.update('generation', { textProvider: 'anthropic', fallbackOrder: [] }); // these tests stand in for Anthropic
   const def = productType('habit-tracker');
   const ctx = makeContext(def);
   const r = await generateContent(app, def, ctx, {});
@@ -121,7 +124,8 @@ test('AI content flows through to the product with provenance', async () => {
   servers.push(srv);
   const secrets = new MemorySecretStore();
   await secrets.set('anthropic_api_key', KEY);
-  const app = bootstrap({ dataDir: tempDir(), secrets, logConsole: false });
+  const app = bootstrap({ dataDir: tempDir(), secrets, logConsole: false, pacing: false });
+  app.settings.update('generation', { textProvider: 'anthropic', fallbackOrder: [] }); // these tests stand in for Anthropic
   app.settings.update('generation', { anthropic: { baseUrl: srv.url } });
   const def = productType('habit-tracker');
   const r = await generateContent(app, def, makeContext(def, { audience: 'Students' }), {});

@@ -24,14 +24,16 @@ import { Listings } from './pages/Listings.tsx';
 import { Publishing } from './pages/Publishing.tsx';
 import { Analytics } from './pages/Analytics.tsx';
 import { Settings } from './pages/Settings.tsx';
+import { Packing } from './pages/Packing.tsx';
 
-const NAV_ICONS: Record<string, string> = { '/': '⌂', '/calendar': '⏲', '/digest': '✉', '/research': '⌕', '/library': '▦', '/templates': '✎', '/jobs': '⚙', '/qa': '⚖', '/batches': '⚔', '/listings': '☰', '/publishing': '⇪', '/analytics': '◔', '/settings': '⚒' };
+const NAV_ICONS: Record<string, string> = { '/': '⌂', '/calendar': '⏲', '/digest': '✉', '/research': '⌕', '/library': '▦', '/packing': '⛭', '/templates': '✎', '/jobs': '⚙', '/qa': '⚖', '/batches': '⚔', '/listings': '☰', '/publishing': '⇪', '/analytics': '◔', '/settings': '⚒' };
 const NAV_HINTS: Record<string, string> = {
   '/': 'What the factory is doing right now',
   '/calendar': 'Schedule automatic daily production',
   '/digest': 'Market research emailed every few days, with new ideas',
   '/research': 'Product ideas and the evidence for them',
   '/library': 'Every product; make new ones and build packs',
+  '/packing': 'Finished products sorted onto up to six pack carts',
   '/templates': 'Design systems, fonts, audiences and themes',
   '/jobs': 'Behind-the-scenes production steps',
   '/qa': 'Quality checks on every product',
@@ -59,6 +61,7 @@ function Nav() {
       {link('/digest', 'Research digest')}
       {link('/research', 'Research & opportunities', c.openOpportunities)}
       {link('/library', 'Product library')}
+      {link('/packing', 'Factory floor', c.packingBacklog)}
       {link('/templates', 'Templates')}
       {link('/jobs', 'Production jobs', data?.jobs?.running?.length)}
       {link('/qa', 'QA results', c.qaFailed)}
@@ -91,6 +94,7 @@ function App() {
               <Route path="/products/:id" element={<ProductDetail />} />
               <Route path="/research" element={<Research />} />
               <Route path="/digest" element={<Digest />} />
+              <Route path="/packing" element={<Packing />} />
               <Route path="/templates" element={<Templates />} />
               <Route path="/jobs" element={<Jobs />} />
               <Route path="/qa" element={<QaPage />} />
