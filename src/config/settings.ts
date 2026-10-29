@@ -93,7 +93,7 @@ export const SettingsSchema = z.object({
       maxRetries: z.number().int().min(0).max(6).default(2),
     }).prefault({}),
     groq: z.object({
-      model: z.string().min(1).default('llama-3.1-70b-versatile'),
+      model: z.string().min(1).default('llama-3.3-70b-versatile'),
       baseUrl: z.url().default('https://api.groq.com/openai/v1'),
       timeoutMs: z.number().int().min(5000).max(600000).default(120000),
       maxRetries: z.number().int().min(0).max(6).default(2),
