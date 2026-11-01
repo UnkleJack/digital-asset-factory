@@ -6,16 +6,22 @@ import { habitTracker, todoChecklist, cleaningSchedule, homeInventory, guidedJou
 import { budgetPlanner, invoiceTemplate } from './structured.ts';
 import { mandalaColoring, mazeActivity, wordSearch, illustratedColoring } from './activity.ts';
 import { bundleType } from './bundle.ts';
+import { importedColoring } from './imported.ts';
 
 const ALL: ProductTypeDefinition[] = [
   monthlyCalendar, weeklyPlanner, dailyPlanner, habitTracker, todoChecklist, cleaningSchedule, homeInventory,
-  budgetPlanner, invoiceTemplate, guidedJournal, goalPlanner, mandalaColoring, mazeActivity, wordSearch, illustratedColoring, bundleType,
+  budgetPlanner, invoiceTemplate, guidedJournal, goalPlanner, mandalaColoring, mazeActivity, wordSearch, illustratedColoring, importedColoring, bundleType,
 ];
 
 const BY_ID = new Map(ALL.map((t) => [t.id, t]));
 
 export function productTypes(): ProductTypeDefinition[] {
   return ALL;
+}
+
+/** Types the app may pick on its own (ideas, schedules, suggestions): everything except bundles and import-only types. */
+export function plannableTypes(): ProductTypeDefinition[] {
+  return ALL.filter((t) => t.id !== 'bundle' && !t.importOnly);
 }
 
 export function productType(id: string): ProductTypeDefinition {
@@ -38,6 +44,7 @@ export function describeType(t: ProductTypeDefinition) {
     aiContent: t.aiContent,
     artwork: t.artwork,
     variationAxes: t.variationAxes ?? [],
+    importOnly: t.importOnly ?? false,
     defaultParams: t.id === 'bundle' ? { members: [] } : t.defaultParams(new Date()),
     paramFields: paramFields(t),
   };

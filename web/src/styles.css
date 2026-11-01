@@ -276,3 +276,11 @@ span.chip:not(.on) { border: 1px solid var(--border); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+/* Imports */
+.dropzone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 28px 16px; text-align: center; color: var(--muted); cursor: pointer; background: var(--surface-2); }
+.dropzone.on, .dropzone:hover { border-color: var(--primary); color: var(--primary); }
+.ref-card { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ref-card .small { overflow-wrap: anywhere; }
+.ref-pick { position: relative; padding: 0; cursor: pointer; width: 100%; }
+.ref-card.on .ref-pick { outline: 3px solid var(--primary); outline-offset: 1px; }
+.ref-n { position: absolute; top: 6px; left: 6px; background: var(--primary); color: var(--surface); border-radius: 999px; min-width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }

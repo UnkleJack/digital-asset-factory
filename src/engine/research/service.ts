@@ -5,7 +5,7 @@ import { newId } from '../../core/ids.ts';
 import { validation, notFound, ProviderError } from '../../core/errors.ts';
 import { audit, type AuditActor } from '../../logging/logger.ts';
 import { parseCsv } from '../producttypes/sheets.ts';
-import { hasProductType, productTypes } from '../producttypes/registry.ts';
+import { hasProductType, productTypes, plannableTypes } from '../producttypes/registry.ts';
 import { structuredCall, textMode } from '../generation/service.ts';
 import { AI_SYSTEM_BASE } from '../producttypes/types.ts';
 
@@ -209,7 +209,7 @@ export async function suggestOpportunities(app: AppContext, input: { count?: num
   const mode = await textMode(app).catch(() => ({ mode: 'deterministic' as const, reason: 'AI provider not configured' }));
   if (mode.mode !== 'ai') throw new ProviderError(app.settings.get('generation').textProvider, 'unconfigured', 'AI opportunity suggestions need an AI provider. Add opportunities manually or import research data instead.');
   const count = Math.min(10, Math.max(1, input.count ?? 5));
-  const types = productTypes().filter((t) => t.id !== 'bundle').map((t) => `${t.id} (${t.name}: ${t.description})`).join('\n');
+  const types = plannableTypes().map((t) => `${t.id} (${t.name}: ${t.description})`).join('\n');
   const existing = app.db.all<{ title: string }>('SELECT title FROM opportunities ORDER BY created_at DESC LIMIT 60').map((r) => r.title);
   const r = await structuredCall(app, {
     purpose: 'research:suggest',

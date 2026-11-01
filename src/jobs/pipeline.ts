@@ -9,7 +9,7 @@ import { packageVersion } from '../engine/packaging/service.ts';
 import { prepareListings, isMarketplace, MARKETPLACES, type Marketplace } from '../engine/listing/service.ts';
 import { refreshBatchesForVersion, batchesContaining } from '../engine/approval/batches.ts';
 import { planRunBudget, refreshPlanRun } from '../scheduler/runs.ts';
-import { AssetStore, type AssetRecord } from '../storage/assetStore.ts';
+import type { AssetRecord } from '../storage/assetStore.ts';
 import { getVersion, updateVersion } from '../db/repos.ts';
 import { enqueue, type JobRow, type JobType } from './queue.ts';
 import { permanent } from '../core/errors.ts';
@@ -61,7 +61,7 @@ export async function runStage(app: AppContext, job: JobRow): Promise<unknown> {
   if (['superseded', 'rejected'].includes(v.status)) return { skipped: `version is ${v.status}` };
   const { version, product, spec, ctx } = versionContext(app, versionId);
   const def = productType(product.product_type);
-  const dir = AssetStore.versionDir(product.id, version.version_no);
+  const dir = app.assets.versionDir(version.id);
   let result: unknown = null;
   let stop = false;
 

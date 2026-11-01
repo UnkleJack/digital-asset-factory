@@ -3,6 +3,7 @@ import type { AppContext } from '../../app/context.ts';
 import type { ProductTypeDefinition, TypeContext, ArtworkItem, ImageGenerator } from '../producttypes/types.ts';
 import { CONTENT_LIBRARY_REVISION } from '../producttypes/library.ts';
 import { learningBrief } from './learning.ts';
+import { styleExamplesBrief } from '../references/examples.ts';
 import { estimateTextCostUsd, estimateImageCostUsd, type Usage, type AiTextProviderId } from './providers.ts';
 import { AppError, ProviderError, errorMessage, permanent } from '../../core/errors.ts';
 import { newId } from '../../core/ids.ts';
@@ -70,7 +71,7 @@ export async function textMode(app: AppContext): Promise<TextMode> {
 export async function structuredCall<T>(app: AppContext, req: { purpose: string; schema: z.ZodType<T>; system: string; prompt: string; maxTokens?: number; trace: CallTrace }): Promise<{ data: T; provenance: Provenance }> {
   const g = app.settings.get('generation');
   const provider = app.providers.text;
-  const brief = learningBrief(app);
+  const brief = learningBrief(app) + styleExamplesBrief(app, req.purpose);
   req.system = req.system + brief;
   const promptHash = sha256(`${req.system}\n---\n${req.prompt}`);
   const maxTokens = req.maxTokens ?? g.anthropic.maxTokens;

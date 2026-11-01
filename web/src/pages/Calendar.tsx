@@ -128,7 +128,7 @@ function PlanEditor({ plan, onClose, onSaved }: { plan: any; onClose: () => void
       <h3 style={{ marginTop: 16 }}>Marketplaces for listings</h3>
       <div className="row">{['etsy', 'gumroad', 'generic'].map((m) => <label key={m} className="check"><input type="checkbox" checked={f.marketplaces.includes(m)} onChange={() => toggle('marketplaces', m)} />{label(m)}</label>)}</div>
       <h3 style={{ marginTop: 16 }}>Product types <span className="muted small">(none selected = all)</span></h3>
-      <Async state={types}>{(list) => <div className="row">{list.filter((t) => t.id !== 'bundle').map((t) => <label key={t.id} className="check"><input type="checkbox" checked={f.productTypes.includes(t.id)} onChange={() => toggle('productTypes', t.id)} />{t.name}</label>)}</div>}</Async>
+      <Async state={types}>{(list) => <div className="row">{list.filter((t) => t.id !== 'bundle' && !t.importOnly).map((t) => <label key={t.id} className="check"><input type="checkbox" checked={f.productTypes.includes(t.id)} onChange={() => toggle('productTypes', t.id)} />{t.name}</label>)}</div>}</Async>
       <h3 style={{ marginTop: 16 }}>Category rotation <span className="muted small">(none selected = rotate through all; order follows selection)</span></h3>
       <Async state={cats}>{(list) => <div className="row">{list.map((c) => <label key={c.id} className="check"><input type="checkbox" checked={f.categoryRotation.includes(c.name)} onChange={() => toggle('categoryRotation', c.name)} />{c.name}</label>)}</div>}</Async>
     </Modal>

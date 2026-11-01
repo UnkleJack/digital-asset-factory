@@ -25,14 +25,16 @@ import { Publishing } from './pages/Publishing.tsx';
 import { Analytics } from './pages/Analytics.tsx';
 import { Settings } from './pages/Settings.tsx';
 import { Packing } from './pages/Packing.tsx';
+import { Imports } from './pages/Imports.tsx';
 
-const NAV_ICONS: Record<string, string> = { '/': '⌂', '/calendar': '⏲', '/digest': '✉', '/research': '⌕', '/library': '▦', '/packing': '⛭', '/templates': '✎', '/jobs': '⚙', '/qa': '⚖', '/batches': '⚔', '/listings': '☰', '/publishing': '⇪', '/analytics': '◔', '/settings': '⚒' };
+const NAV_ICONS: Record<string, string> = { '/': '⌂', '/calendar': '⏲', '/digest': '✉', '/research': '⌕', '/library': '▦', '/imports': '⇩', '/packing': '⛭', '/templates': '✎', '/jobs': '⚙', '/qa': '⚖', '/batches': '⚔', '/listings': '☰', '/publishing': '⇪', '/analytics': '◔', '/settings': '⚒' };
 const NAV_HINTS: Record<string, string> = {
   '/': 'What the factory is doing right now',
   '/calendar': 'Schedule automatic daily production',
   '/digest': 'Market research emailed every few days, with new ideas',
   '/research': 'Product ideas and the evidence for them',
   '/library': 'Every product; make new ones and build packs',
+  '/imports': 'Images and text you made with other tools',
   '/packing': 'Finished products sorted onto up to six pack carts',
   '/templates': 'Design systems, fonts, audiences and themes',
   '/jobs': 'Behind-the-scenes production steps',
@@ -61,6 +63,7 @@ function Nav() {
       {link('/digest', 'Research digest')}
       {link('/research', 'Research & opportunities', c.openOpportunities)}
       {link('/library', 'Product library')}
+      {link('/imports', 'Imports')}
       {link('/packing', 'Factory floor', c.packingBacklog)}
       {link('/templates', 'Templates')}
       {link('/jobs', 'Production jobs', data?.jobs?.running?.length)}
@@ -91,6 +94,7 @@ function App() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/library" element={<Library />} />
+              <Route path="/imports" element={<Imports />} />
               <Route path="/products/:id" element={<ProductDetail />} />
               <Route path="/research" element={<Research />} />
               <Route path="/digest" element={<Digest />} />

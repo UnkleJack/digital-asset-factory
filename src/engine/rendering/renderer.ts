@@ -231,6 +231,27 @@ export class Renderer {
     });
   }
 
+  /** Decodes any image Chrome can read (PNG, JPEG, WebP, GIF) and re-encodes it as PNG on white. */
+  async toPng(data: Buffer, mime: string): Promise<{ png: Buffer; widthPx: number; heightPx: number }> {
+    return this.withPage(async (page) => {
+      await page.setContent('<!doctype html><html><body></body></html>');
+      const r = await page.evaluate(async (b64: string, type: string) => {
+        const img = new Image();
+        img.src = `data:${type};base64,${b64}`;
+        await img.decode();
+        const c = document.createElement('canvas');
+        c.width = img.naturalWidth;
+        c.height = img.naturalHeight;
+        const ctx = c.getContext('2d')!;
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, c.width, c.height);
+        ctx.drawImage(img, 0, 0);
+        return { url: c.toDataURL('image/png'), w: c.width, h: c.height };
+      }, data.toString('base64'), mime);
+      return { png: Buffer.from(r.url.slice(r.url.indexOf(',') + 1), 'base64'), widthPx: r.w, heightPx: r.h };
+    });
+  }
+
   async analyzePng(png: Buffer): Promise<ImageAnalysis> {
     return this.withPage(async (page) => {
       await page.setContent('<!doctype html><html><body></body></html>');

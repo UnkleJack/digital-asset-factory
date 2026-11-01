@@ -53,6 +53,8 @@ export interface VersionRow {
   content_signature: string | null;
   render_diagnostics: Record<string, unknown> | null;
   error: string | null;
+  /** Readable folder under the asset root, e.g. products/coloring-pages/mandala-coloring-pages_2026-10-28. */
+  asset_dir: string | null;
   created_at: string;
   updated_at: string;
 }
