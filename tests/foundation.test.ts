@@ -78,6 +78,17 @@ test('a migration file renumbered after it ran is followed to its new number, no
   writeFileSync(join(migDir2, '001_packing.sql'), 'CREATE TABLE packing_t (id TEXT PRIMARY KEY);');
   writeFileSync(join(migDir2, '002_tournaments.sql'), tournaments + ' -- edited');
   assert.throws(() => migrate(db2, join(dir, 'backups2'), migDir2), /checksum mismatch/);
+
+  // An edited file left at its old number is still refused, even if an unchanged copy sits at another number.
+  const db3 = new Db(join(dir, 'c.sqlite'));
+  const migDir3 = join(dir, 'migs3');
+  mkdirSync(migDir3);
+  writeFileSync(join(migDir3, '001_tournaments.sql'), tournaments);
+  migrate(db3, join(dir, 'backups3'), migDir3);
+  writeFileSync(join(migDir3, '001_tournaments.sql'), tournaments + ' -- edited');
+  writeFileSync(join(migDir3, '002_tournaments.sql'), tournaments);
+  assert.throws(() => migrate(db3, join(dir, 'backups3'), migDir3), /checksum mismatch/);
+  db3.close();
   db.close();
   db2.close();
 });

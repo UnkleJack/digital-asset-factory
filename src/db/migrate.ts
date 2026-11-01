@@ -36,6 +36,8 @@ export function migrate(db: Db, backupDir: string, migrationsDir = MIGRATIONS_DI
   for (const row of [...applied.values()]) {
     const sameVersion = files.find((f) => f.version === row.version);
     if (sameVersion && sameVersion.checksum === row.checksum) continue;
+    // If the recorded file is still there under its old name, it was edited, not moved: leave it for the checksum check.
+    if (files.some((f) => f.name === row.name)) continue;
     const moved = files.find((f) => f.checksum === row.checksum && suffix(f.name) === suffix(row.name) && f.version !== row.version && !applied.has(f.version));
     if (!moved) continue;
     applied.delete(row.version);
