@@ -7,8 +7,8 @@ import { createWorker } from '../src/jobs/handlers.ts';
 import { enqueue, claim, recoverInterrupted, getJob } from '../src/jobs/queue.ts';
 import { createProduct } from '../src/engine/specification/service.ts';
 import { startPipeline } from '../src/jobs/pipeline.ts';
-import { createPlan, tick, dueSlots, zonedToUtc, runProductionPlanJob, runPlanNow, jitterFor, nextSlot, updatePlan } from '../src/scheduler/scheduler.ts';
-import { createOpportunity, addObservation, importObservationsCsv } from '../src/engine/research/service.ts';
+import { createPlan, tick, dueSlots, zonedToUtc, runProductionPlanJob, runPlanNow, jitterFor, nextSlot, updatePlan, selectCandidates } from '../src/scheduler/scheduler.ts';
+import { createOpportunity, addObservation, importObservationsCsv, updateOpportunity } from '../src/engine/research/service.ts';
 import { scoreOpportunity } from '../src/engine/scoring/service.ts';
 import { importPerformanceCsv, metrics, generateRecommendations, addPerformance } from '../src/engine/analytics/service.ts';
 import { createBundle, createVariation } from '../src/engine/bundling/service.ts';
@@ -106,6 +106,23 @@ test('scoring separates evidence kinds, excludes unknowns and blocks trademark t
   assert.ok(r.confidence > 0 && r.confidence < 1);
   const blocked = createOpportunity(app, { title: 'Disney princess coloring', productType: 'illustrated-coloring' });
   assert.equal(scoreOpportunity(app, blocked).outcome, 'policy_blocked');
+});
+
+test('import-only types are rejected for opportunities/plans and skipped by scheduler candidate selection', () => {
+  assert.throws(() => createOpportunity(app, { title: 'Imported coloring pack', productType: 'imported-coloring' }), /Unknown product type imported-coloring/);
+  const editable = createOpportunity(app, { title: 'Planner draft', productType: 'weekly-planner' });
+  assert.throws(() => updateOpportunity(app, editable, { productType: 'imported-coloring' }), /Unknown product type imported-coloring/);
+  assert.throws(() => createPlan(app, { name: 'No imports', productTypes: ['imported-coloring'] }), /Unknown product types: imported-coloring/);
+
+  app.db.run("UPDATE opportunities SET status = 'archived'");
+  const legacy = createOpportunity(app, { title: 'Legacy import-only', productType: 'word-search' });
+  const normal = createOpportunity(app, { title: 'Normal candidate', productType: 'maze-activity' });
+  for (const id of [legacy, normal]) app.db.update('opportunities', id, { status: 'approved' });
+  app.db.update('opportunities', legacy, { product_type: 'imported-coloring' });
+  const plan = createPlan(app, { name: 'Candidate filter', quota: 2 });
+  const pick = selectCandidates(app, plan);
+  assert.equal(pick.considered, 2);
+  assert.deepEqual(pick.picked.map((c) => c.id), [normal]);
 });
 
 test('research CSV import keeps valid rows and reports bad ones', () => {
