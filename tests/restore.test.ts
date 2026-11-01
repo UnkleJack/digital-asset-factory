@@ -10,7 +10,7 @@ import { createWorker } from '../src/jobs/handlers.ts';
 import { getVersion, getProduct } from '../src/db/repos.ts';
 import { AssetStore } from '../src/storage/assetStore.ts';
 import { planTidy, applyTidy } from '../src/ops/tidyFolders.ts';
-import { planRestore, applyRestore, queueRebuilds } from '../src/ops/restoreProducts.ts';
+import { planRestore, applyRestore, queueRebuilds, fontsFromNames } from '../src/ops/restoreProducts.ts';
 import { idTime, newId } from '../src/core/ids.ts';
 import { sha256 } from '../src/core/hash.ts';
 import type { Worker } from '../src/jobs/worker.ts';
@@ -51,6 +51,15 @@ test('idTime reads back when an id was made', () => {
   assert.equal(idTime('not-an-id'), null);
 });
 
+test('fonts are matched to their roles from the names embedded in a PDF', () => {
+  assert.deepEqual(fontsFromNames(['Lora-Bold', 'Inter-Regular', 'Inter-SemiBold']), { heading: 'lora', body: 'inter', accent: 'lora' });
+  assert.deepEqual(fontsFromNames(['Caveat-Bold', 'NunitoExtraLight-Regular', 'NunitoExtraLight-SemiBold']), { heading: 'caveat', body: 'nunito', accent: 'caveat' });
+  assert.deepEqual(fontsFromNames(['MerriweatherLight18pt-Bold', 'MerriweatherLight18pt-Regular']), { heading: 'merriweather', body: 'merriweather', accent: 'lora' });
+  // A display face with only a regular weight is the heading, not the body.
+  assert.deepEqual(fontsFromNames(['Pacifico-Regular', 'Montserrat-Regular', 'Montserrat-SemiBold']), { heading: 'pacifico', body: 'montserrat', accent: 'pacifico' });
+  assert.equal(fontsFromNames(['Helvetica']), null);
+});
+
 test('products are restored from their folders after the database is lost', async () => {
   // The old computer: one coloring set built from its seed, one product whose text came from an AI.
   const old = start();
@@ -89,6 +98,9 @@ test('products are restored from their folders after the database is lost', asyn
 
   const result = applyRestore(app, plan);
   assert.deepEqual(result.failed, []);
+  assert.ok(result.batchId);
+  assert.equal(app.db.value<number>('SELECT count(*) FROM approval_items WHERE batch_id = ?', result.batchId), 3, 'every restored product can be reviewed from one batch');
+  assert.equal((getVersion(app.db, mandala.version.id).content_provenance as { generator?: string }).generator, 'deterministic', 'text rebuilt from the seed, never by an AI provider');
   const tidy = applyTidy(app.db, app.assets, planTidy(app.db, app.assets));
   assert.equal(tidy.moved.length, 3);
   queueRebuilds(app, result);
@@ -127,4 +139,16 @@ test('products are restored from their folders after the database is lost', asyn
   assert.equal(app.assets.forVersion(uv.id).filter((a) => a.kind === 'artwork_svg').length, 3);
 
   assert.equal((await planRestore(app)).items.length, 0, 'running it again restores nothing');
+
+  // Lose the database again, now that the folders have readable names: manifests still say which product each holds.
+  const again = start();
+  cpSync(app.assets.resolve('products'), again.assets.resolve('products'), { recursive: true });
+  const second = await planRestore(again);
+  assert.deepEqual(second.items.map((i) => i.productId).sort(), [mandala.product.id, journal.product.id].sort());
+  assert.ok(second.skipped.some((s) => s.folder === getVersion(app.db, uv.id).asset_dir && /no manifest/.test(s.reason)), JSON.stringify(second.skipped));
+  const r2 = applyRestore(again, second);
+  assert.deepEqual(r2.failed, []);
+  assert.equal(getVersion(again.db, mandala.version.id).asset_dir, getVersion(app.db, mandala.version.id).asset_dir, 'readable folders stay where they are');
+  assert.equal(planTidy(again.db, again.assets).moves.length, 0);
+  for (const a of again.assets.forVersion(journal.version.id)) assert.equal(sha256(again.assets.read(a)), a.sha256, a.rel_path);
 });

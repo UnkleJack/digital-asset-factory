@@ -8,6 +8,11 @@ import { DesignTokensSchema, FONTS, FONT_IDS, FONT_PAIRINGS, PaperSchema, toGray
 import { designSystemWithFonts, type FontChoice } from '../engine/templates/designSystems.ts';
 import { startPipeline } from '../jobs/pipeline.ts';
 import { audit } from '../logging/logger.ts';
+import { CONTENT_LIBRARY_REVISION } from '../engine/producttypes/library.ts';
+import { seededRandom } from '../core/hash.ts';
+import { buildContextFromSpec, contentSignature } from '../engine/specification/service.ts';
+import type { SpecRow } from '../db/repos.ts';
+import { createBatch, addToBatch } from '../engine/approval/batches.ts';
 import { newId, idTime } from '../core/ids.ts';
 
 /**
@@ -94,29 +99,62 @@ export async function planRestore(app: AppContext): Promise<RestorePlan> {
   const skipped: { folder: string; reason: string }[] = [];
   const productsDir = app.assets.resolve('products');
   if (!existsSync(productsDir)) return { items, skipped };
+  const readManifest = (folder: string): Manifest | null => {
+    const path = app.assets.resolve(`${folder}/internal/manifest.json`);
+    return existsSync(path) ? (JSON.parse(readFileSync(path, 'utf8')) as Manifest) : null;
+  };
+  // Each candidate folder, grouped by the product it belongs to.
+  const byProduct = new Map<string, { folder: string; versionNo: number; manifest: Manifest | null }[]>();
+  const add = (productId: string, c: { folder: string; versionNo: number; manifest: Manifest | null }) => byProduct.set(productId, [...(byProduct.get(productId) ?? []), c]);
   for (const p of readdirSync(productsDir, { withFileTypes: true })) {
-    if (!p.isDirectory() || !PRODUCT_DIR.test(p.name)) continue;
-    const versions = readdirSync(`${productsDir}/${p.name}`, { withFileTypes: true })
-      .filter((v) => v.isDirectory() && VERSION_DIR.test(v.name))
-      .map((v) => Number(VERSION_DIR.exec(v.name)![1]))
-      .sort((a, b) => a - b);
-    if (!versions.length) continue;
-    if (app.db.get('SELECT 1 FROM products WHERE id = ?', p.name)) {
-      skipped.push({ folder: `products/${p.name}`, reason: 'already in the database' });
+    if (!p.isDirectory()) continue;
+    if (PRODUCT_DIR.test(p.name)) {
+      // Old layout: products/<product id>/v<n>. Folders without a manifest can still be recognised from their files.
+      for (const v of readdirSync(`${productsDir}/${p.name}`, { withFileTypes: true })) {
+        if (!v.isDirectory() || !VERSION_DIR.test(v.name)) continue;
+        const folder = `products/${p.name}/${v.name}`;
+        try {
+          add(p.name, { folder, versionNo: Number(VERSION_DIR.exec(v.name)![1]), manifest: readManifest(folder) });
+        } catch (err) {
+          skipped.push({ folder, reason: `unreadable manifest: ${(err as Error).message}` });
+        }
+      }
       continue;
     }
+    // Readable layout: products/<category>/<name>_<date>. Only a manifest says which product a folder holds.
+    for (const v of readdirSync(`${productsDir}/${p.name}`, { withFileTypes: true })) {
+      if (!v.isDirectory()) continue;
+      const folder = `products/${p.name}/${v.name}`;
+      if (app.db.get('SELECT 1 FROM product_versions WHERE asset_dir = ?', folder)) continue;
+      try {
+        const m = readManifest(folder);
+        if (m) add(m.product.id, { folder, versionNo: m.version.number, manifest: m });
+        else skipped.push({ folder, reason: 'no manifest, so there is no record of which product it was' });
+      } catch (err) {
+        skipped.push({ folder, reason: `unreadable manifest: ${(err as Error).message}` });
+      }
+    }
+  }
+  for (const [productId, candidates] of byProduct) {
+    if (app.db.get('SELECT 1 FROM products WHERE id = ?', productId)) {
+      if (candidates.some((c) => !app.db.get('SELECT 1 FROM assets WHERE rel_path LIKE ?', `${c.folder}/%`))) skipped.push({ folder: candidates[0].folder, reason: 'its product is already in the database' });
+      continue;
+    }
+    candidates.sort((a, b) => a.versionNo - b.versionNo);
     const found: RestoreItem[] = [];
-    for (const n of versions) {
-      const folder = AssetStore.legacyVersionDir(p.name, n);
-      if (app.db.get('SELECT 1 FROM assets WHERE rel_path LIKE ?', `${folder}/%`)) {
-        skipped.push({ folder, reason: 'its files are already recorded for another product' });
+    for (const c of candidates) {
+      if (app.db.get('SELECT 1 FROM assets WHERE rel_path LIKE ?', `${c.folder}/%`)) {
+        skipped.push({ folder: c.folder, reason: 'its files are already recorded for another product' });
+        continue;
+      }
+      if (found.some((f) => f.versionNo === c.versionNo)) {
+        skipped.push({ folder: c.folder, reason: `a second copy of version ${c.versionNo}` });
         continue;
       }
       try {
-        const manifestPath = app.assets.resolve(`${folder}/internal/manifest.json`);
-        found.push(existsSync(manifestPath) ? await fromManifest(app, folder, JSON.parse(readFileSync(manifestPath, 'utf8')) as Manifest) : await fromFiles(app, folder, p.name, n));
+        found.push(c.manifest ? await fromManifest(app, c.folder, c.manifest) : await fromFiles(app, c.folder, productId, c.versionNo));
       } catch (err) {
-        skipped.push({ folder, reason: (err as Error).message });
+        skipped.push({ folder: c.folder, reason: (err as Error).message });
       }
     }
     // Every version of a product shares its title and slug; take them from the newest one.
@@ -149,11 +187,11 @@ export async function planRestore(app: AppContext): Promise<RestorePlan> {
 
 async function fromManifest(app: AppContext, folder: string, m: Manifest): Promise<RestoreItem> {
   const def = productType(m.product.type);
-  if (m.product.id !== folder.split('/')[1]) throw new Error(`manifest is for ${m.product.id}, not this folder`);
+  const legacy = PRODUCT_DIR.test(folder.split('/')[1]);
+  if (legacy && folder !== AssetStore.legacyVersionDir(m.product.id, m.version.number)) throw new Error(`manifest is for ${m.product.id} v${m.version.number}, not this folder`);
   const notes: string[] = [];
   const files: RestoreFile[] = [];
   const missing: string[] = [];
-  if (folder !== AssetStore.legacyVersionDir(m.product.id, m.version.number)) throw new Error(`manifest is for version ${m.version.number}, not ${folder}`);
   for (const f of m.files) {
     const rel = f.path;
     if (!rel.startsWith(`${folder}/`) || rel === `${folder}/internal/manifest.json`) {
@@ -170,7 +208,13 @@ async function fromManifest(app: AppContext, folder: string, m: Manifest): Promi
   files.push(await describe(app, manifestRel, { kind: 'manifest', role: 'internal', provenance: { generator: 'packaging@1' } }));
   if (missing.length) notes.push(`${missing.length} listed file(s) are missing`);
   if (files.some((f) => f.changed)) notes.push(`${files.filter((f) => f.changed).length} file(s) differ from the checksum in the manifest`);
+  // Rebuild only what the seed alone reproduces: deterministic text from today's library, and artwork that is
+  // either absent or procedural. AI images and imported images cannot be made again, so those stay view-only.
   const deterministic = m.contentProvenance?.generator === 'deterministic';
+  const sameLibrary = !m.contentProvenance?.library || m.contentProvenance.library === CONTENT_LIBRARY_REVISION;
+  const rebuildable = deterministic && sameLibrary && (def.artwork === 'none' || def.artwork === 'procedural');
+  if (deterministic && !sameLibrary) notes.push(`built with ${String(m.contentProvenance?.library)}, the app now has ${CONTENT_LIBRARY_REVISION}: restored view-only so its text is not changed`);
+  else if (deterministic && !rebuildable) notes.push(`its ${def.artwork} artwork cannot be made again from the seed: restored view-only`);
   const pdf = files.find((f) => f.kind === 'pdf');
   return {
     folder,
@@ -180,7 +224,7 @@ async function fromManifest(app: AppContext, folder: string, m: Manifest): Promi
     slug: m.product.slug,
     title: m.product.title,
     productType: def.id,
-    mode: deterministic ? 'rebuild' : 'view_only',
+    mode: rebuildable ? 'rebuild' : 'view_only',
     params: def.paramsSchema.parse(m.specification.params) as Record<string, unknown>,
     paper: PaperSchema.parse(m.specification.paper ?? {}),
     seed: m.specification.seed,
@@ -291,16 +335,28 @@ export async function fontsFromPdf(app: AppContext, rel: string): Promise<FontCh
     const base = obj.get(PDFName.of('BaseFont'));
     if (base) names.push(base.toString().replace(/^\//, '').replace(/^[A-Z]{6}\+/, ''));
   }
+  return fontsFromNames(names);
+}
+
+/** Maps embedded font names such as "Lora-Bold" or "NunitoExtraLight-SemiBold" to heading, body and accent fonts. */
+export function fontsFromNames(names: string[]): FontChoice | null {
   const byLength = [...FONT_IDS].sort((a, b) => normalise(FONTS[b].family).length - normalise(FONTS[a].family).length);
   const idOf = (name: string): FontId | null => byLength.find((id) => normalise(name.split('-')[0]).startsWith(normalise(FONTS[id].family))) ?? null;
-  const heading = names.map((n) => (/-bold$/i.test(n) ? idOf(n) : null)).find(Boolean) ?? null;
-  const body = names.map((n) => (/-regular$/i.test(n) ? idOf(n) : null)).find(Boolean) ?? null;
-  if (!heading && !body) return null;
-  const h = heading ?? body!;
-  const b = body ?? heading!;
-  const used = new Set(names.map(idOf).filter(Boolean));
-  const pairing = FONT_PAIRINGS.find((p) => p.fonts.heading === h && p.fonts.body === b && (used.has(p.fonts.accent) || ![...used].some((u) => u !== h && u !== b)));
-  return { heading: h, body: b, accent: pairing?.fonts.accent ?? ([...used].find((u) => u !== h && u !== b) as FontId | undefined) ?? h };
+  const faces = names.map((n) => ({ id: idOf(n), weight: (/-([a-z]+)$/i.exec(n)?.[1] ?? '').toLowerCase() })).filter((f): f is { id: FontId; weight: string } => !!f.id);
+  const used = [...new Set(faces.map((f) => f.id))];
+  if (!used.length) return null;
+  if (used.length === 1) return { ...(FONT_PAIRINGS.find((p) => p.fonts.heading === used[0] && p.fonts.body === used[0])?.fonts ?? { heading: used[0], body: used[0], accent: used[0] }) };
+  // A known pairing whose heading and body are both in the PDF is the best evidence of which font did what.
+  const pairing = FONT_PAIRINGS.filter((p) => used.includes(p.fonts.heading) && used.includes(p.fonts.body) && p.fonts.heading !== p.fonts.body)
+    .sort((a, b) => Number(used.includes(b.fonts.accent)) - Number(used.includes(a.fonts.accent)))[0];
+  if (pairing) return { ...pairing.fonts };
+  // Otherwise body text is set in regular and semibold, so the body font is the one with those weights;
+  // the heading is the other font (bold, or a display face that only has one weight).
+  const weightsOf = (id: FontId) => new Set(faces.filter((f) => f.id === id).map((f) => f.weight));
+  const body = used.find((id) => weightsOf(id).has('semibold')) ?? used.find((id) => weightsOf(id).has('regular') && FONTS[id].weights.length > 1) ?? used[used.length - 1];
+  const heading = used.find((id) => id !== body && weightsOf(id).has('bold')) ?? used.find((id) => id !== body) ?? body;
+  const accent = used.find((id) => id !== body && id !== heading) ?? heading;
+  return { heading, body, accent };
 }
 
 /** The colours drawn on page 1, as #rrggbb. Pure black and white are left out: line art uses them whatever the design. */
@@ -346,8 +402,10 @@ function designSystemFor(app: AppContext, it: RestoreItem): { id: string; note: 
 }
 
 export interface RestoreResult {
-  restored: { productId: string; title: string; mode: RestoreItem['mode']; queued: boolean }[];
+  restored: { productId: string; versionId: string; title: string; mode: RestoreItem['mode']; queued: boolean }[];
   failed: { folder: string; error: string }[];
+  /** The approval batch holding every restored product, so each can be reviewed, approved or regenerated. */
+  batchId: string | null;
 }
 
 export function applyRestore(app: AppContext, plan: RestorePlan): RestoreResult {
@@ -372,7 +430,9 @@ export function applyRestore(app: AppContext, plan: RestorePlan): RestoreResult 
           if (it.mode === 'unfinished' && ds.gray) it.paper = { ...it.paper, grayscale: true };
           const specId = newId('spc');
           app.db.insert('product_specs', { id: specId, product_id: productId, product_type: def.id, params: JSON.stringify(it.params), design_system_id: ds.id, audience_id: null, theme_id: null, paper: JSON.stringify(it.paper), seed: it.seed, created_at: it.createdAt });
-          const base = { id: it.versionId, product_id: productId, version_no: it.versionNo, spec_id: specId, parent_version_id: parent, origin: parent ? 'regenerate' : 'initial', change_note: RESTORE_NOTE, content_provenance: it.contentProvenance ? JSON.stringify(it.contentProvenance) : null, created_at: it.createdAt, updated_at: now };
+          // Folders already in the readable layout keep their place; old-layout ones are moved by tidy-folders.
+          const assetDir = PRODUCT_DIR.test(it.folder.split('/')[1]) ? null : it.folder;
+          const base = { id: it.versionId, product_id: productId, version_no: it.versionNo, spec_id: specId, parent_version_id: parent, origin: parent ? 'regenerate' : 'initial', change_note: RESTORE_NOTE, content_provenance: it.contentProvenance ? JSON.stringify(it.contentProvenance) : null, asset_dir: assetDir, created_at: it.createdAt, updated_at: now };
           if (it !== latest) {
             app.db.insert('product_versions', { ...base, stage: it.mode === 'unfinished' ? 'rendered' : 'packaged', status: 'superseded', qa_status: 'pending', deliverable_hash: it.deliverableHash });
           } else if (it.mode === 'view_only') {
@@ -380,7 +440,11 @@ export function applyRestore(app: AppContext, plan: RestorePlan): RestoreResult 
           } else if (it.mode === 'unfinished') {
             app.db.insert('product_versions', { ...base, stage: 'rendered', status: 'failed', qa_status: 'pending', error: 'Restored from files: this build stopped before its quality check and its seed was not saved. Use Regenerate to make a finished version.' });
           } else {
-            app.db.insert('product_versions', { ...base, content_provenance: null, stage: 'specified', status: 'in_progress', qa_status: 'pending' });
+            // Rebuild the text from the seed here, not in the pipeline: the pipeline would ask an AI provider if
+            // one is set up now, and replace what this product originally said.
+            const spec: SpecRow = { id: specId, product_id: productId, product_type: def.id, params: it.params, design_system_id: ds.id, audience_id: null, theme_id: null, paper: it.paper, seed: it.seed, created_at: it.createdAt };
+            const content = def.contentSchema.parse(def.deterministicContent(buildContextFromSpec(app, spec, it.title), seededRandom(it.seed)));
+            app.db.insert('product_versions', { ...base, content: JSON.stringify(content), content_signature: contentSignature(def.id, spec, content), stage: 'content_generated', status: 'in_progress', qa_status: 'pending' });
           }
           for (const f of it.files) {
             app.db.insert('assets', { id: newId('ast'), product_id: productId, version_id: it.versionId, kind: f.kind, role: f.role, rel_path: f.rel, mime: f.mime, size_bytes: f.bytes, sha256: f.sha256, page_count: f.pageCount, page_index: f.pageIndex, width_pt: f.widthPt, height_pt: f.heightPt, width_px: f.widthPx, height_px: f.heightPx, provenance: JSON.stringify(f.provenance), created_at: it.createdAt });
@@ -395,22 +459,24 @@ export function applyRestore(app: AppContext, plan: RestorePlan): RestoreResult 
         }
         audit(app.db, 'system', 'product.restored', 'product', productId, { versions: versions.map((v) => ({ folder: v.folder, mode: v.mode, files: v.files.length, missing: v.missing, notes: v.notes })) });
       });
-      restored.push({ productId, title: latest.title, mode: latest.mode, queued: false });
+      restored.push({ productId, versionId: latest.versionId, title: latest.title, mode: latest.mode, queued: false });
     } catch (err) {
       failed.push({ folder: `products/${productId}`, error: (err as Error).message });
     }
   }
-  return { restored, failed };
+  let batchId: string | null = null;
+  if (restored.length) {
+    batchId = createBatch(app, `Restored products (${new Date().toISOString().slice(0, 10)})`, 'manual');
+    for (const r of restored) addToBatch(app, batchId, r.versionId);
+  }
+  return { restored, failed, batchId };
 }
 
 /** Queues the normal pipeline for restored products whose content comes from the seed. Run after any folder moves. */
 export function queueRebuilds(app: AppContext, result: RestoreResult): void {
   for (const r of result.restored) {
     if (r.mode !== 'rebuild') continue;
-    const versionId = app.db.value<string>('SELECT current_version_id FROM products WHERE id = ?', r.productId);
-    if (versionId) {
-      startPipeline(app, versionId);
-      r.queued = true;
-    }
+    startPipeline(app, r.versionId);
+    r.queued = true;
   }
 }
