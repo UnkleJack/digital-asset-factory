@@ -229,7 +229,7 @@ export function paperDimsMm(p: Paper): { w: number; h: number } {
 
 export const mmToPt = (mm: number) => (mm / 25.4) * 72;
 
-function toGray(hexColor: string): string {
+export function toGray(hexColor: string): string {
   const n = parseInt(hexColor.slice(1), 16);
   const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
   const y = Math.round(0.2126 * r + 0.7152 * g + 0.0722 * b);
