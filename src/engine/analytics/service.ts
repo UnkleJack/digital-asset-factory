@@ -5,7 +5,7 @@ import { hashObject } from '../../core/hash.ts';
 import { validation, notFound, conflict } from '../../core/errors.ts';
 import { audit, type AuditActor } from '../../logging/logger.ts';
 import { parseCsv } from '../producttypes/sheets.ts';
-import { productTypes } from '../producttypes/registry.ts';
+import { productTypes, plannableTypes } from '../producttypes/registry.ts';
 
 const METRICS = ['views', 'favorites', 'orders', 'units', 'revenue_cents', 'refunds'] as const;
 const REAL_SOURCES = ['marketplace_api', 'csv_import', 'manual_entry'] as const;
@@ -176,7 +176,7 @@ export function generateRecommendations(app: AppContext): { created: number; ope
   }
 
   const produced = new Set(app.db.all<{ t: string }>('SELECT DISTINCT product_type AS t FROM products').map((r) => r.t));
-  const untried = productTypes().filter((t) => t.id !== 'bundle' && !produced.has(t.id));
+  const untried = plannableTypes().filter((t) => !produced.has(t.id));
   if (untried.length) recs.push({ kind: 'run_experiment', title: `Try a small run of ${untried.slice(0, 3).map((t) => t.name.toLowerCase()).join(', ')}`, rationale: 'These product types have never been produced, so there is no evidence about them either way. A small test batch would create some.', evidence: { untried: untried.map((t) => t.id), note: 'No data — this is an experiment suggestion, not a demand signal.' }, confidence: 0.2, subjectType: null, subjectId: null });
 
   let created = 0;

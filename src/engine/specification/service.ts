@@ -5,6 +5,7 @@ import { PaperSchema, DesignTokensSchema, AudienceProfileSchema, applyAudienceAn
 import { getProduct, getSpec, getVersion, mapSpec, updateVersion, type ProductRow, type SpecRow, type VersionRow } from '../../db/repos.ts';
 import { json } from '../../db/sqlite.ts';
 import { newId, slugify } from '../../core/ids.ts';
+import { referenceImageAsPng } from '../references/load.ts';
 import { hashObject, randomSeed } from '../../core/hash.ts';
 import { validation, notFound, conflict } from '../../core/errors.ts';
 import { audit, type AuditActor } from '../../logging/logger.ts';
@@ -60,6 +61,7 @@ export function buildContextFromSpec(app: AppContext, spec: SpecRow, title: stri
     shopName: app.settings.get('general').shopName,
     seed: spec.seed,
     revisionNotes,
+    loadReferenceImage: (id: string) => referenceImageAsPng(app, id),
   };
 }
 
@@ -80,6 +82,7 @@ export function createProduct(app: AppContext, input: CreateProductInput, actor:
   const base = def.id === 'bundle' ? {} : { ...(def.defaultParams(app.clock.now()) as object), ...json<Record<string, unknown>>(template?.default_params, {}) };
   if (def.id !== 'bundle') delete (base as Record<string, unknown>).members;
   const params = resolveParams(def.id, base, input.params);
+  if (def.importOnly && !((params as { references?: unknown[] }).references ?? []).length) throw validation(`${def.name} are made from the Imports screen, from images you imported.`);
   const paperParsed = PaperSchema.safeParse(input.paper ?? {});
   if (!paperParsed.success) throw validation('Invalid paper settings', zodIssues(paperParsed.error));
   const baseDesignSystemId = input.designSystemId ?? template?.default_design_system_id ?? app.db.value<string>('SELECT id FROM design_systems ORDER BY is_builtin DESC, created_at LIMIT 1');

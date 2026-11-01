@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { AppContext } from '../../app/context.ts';
 import { structuredCall, textMode } from '../generation/service.ts';
-import { productTypes, hasProductType } from '../producttypes/registry.ts';
+import { productTypes, plannableTypes, hasProductType } from '../producttypes/registry.ts';
 import { createOpportunity } from '../research/service.ts';
 import { AppError, ProviderError, errorMessage, notFound, validation } from '../../core/errors.ts';
 import { newId } from '../../core/ids.ts';
@@ -176,7 +176,7 @@ function reviewHistory(app: AppContext): string {
 
 async function generateIdeas(app: AppContext, context: string, runIds: string[]) {
   const cfg = app.settings.get('research').digest;
-  const types = productTypes().filter((t) => t.id !== 'bundle').map((t) => `${t.id}: ${t.name}`).join('\n');
+  const types = plannableTypes().map((t) => `${t.id}: ${t.name}`).join('\n');
   const existing = app.db.all<{ title: string }>('SELECT title FROM opportunities ORDER BY created_at DESC LIMIT 50').map((r) => r.title);
   const taste = cfg.tastePreferences.trim() || '(not set yet)';
   const history = reviewHistory(app);
@@ -216,7 +216,7 @@ async function generateIdeas(app: AppContext, context: string, runIds: string[])
     purpose: 'digest:ideas-refine',
     schema: Proposals,
     system: `${RULES}\nYou turn vetted ideas into concrete business proposals. Address every critique directly. Be specific about money: price points, bundles, upsells, which platforms.`,
-    prompt: `Research findings and gaps:\n${context}\n\nOwner's taste: ${taste}\n\nShortlisted ideas with critiques:\n${shortlist.map((s, i) => `${i + 1}. ${s.title} (score ${s.total}/10) — ${s.candidate!.pitch}\nCritique: ${s.critique}`).join('\n\n')}\n\nFor each: title (keep it), summary, targetBuyer, monetization, pricePoints, firstProducts (the first 3-5 things to make), platforms, risks, evidence (which research findings support demand, with URLs; say plainly if support is thin), productType (one id from: ${productTypes().filter((t) => t.id !== 'bundle').map((t) => t.id).join(', ')}, the closest fit).`,
+    prompt: `Research findings and gaps:\n${context}\n\nOwner's taste: ${taste}\n\nShortlisted ideas with critiques:\n${shortlist.map((s, i) => `${i + 1}. ${s.title} (score ${s.total}/10) — ${s.candidate!.pitch}\nCritique: ${s.critique}`).join('\n\n')}\n\nFor each: title (keep it), summary, targetBuyer, monetization, pricePoints, firstProducts (the first 3-5 things to make), platforms, risks, evidence (which research findings support demand, with URLs; say plainly if support is thin), productType (one id from: ${plannableTypes().map((t) => t.id).join(', ')}, the closest fit).`,
     maxTokens: 5000,
     trace: {},
   });

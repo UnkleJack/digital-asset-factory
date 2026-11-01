@@ -16,6 +16,7 @@ import { registerAnalyticsRoutes } from './routes/analytics.ts';
 import { registerDigestRoutes } from './routes/digest.ts';
 import { registerTournamentRoutes } from './routes/tournaments.ts';
 import { registerPackingRoutes } from './routes/packing.ts';
+import { registerReferenceRoutes } from './routes/references.ts';
 import { RemoteGate, registerRemoteRoutes, isLoopback } from './remote.ts';
 
 export interface ServerDeps {
@@ -109,6 +110,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   registerDigestRoutes(server, deps);
   registerTournamentRoutes(server, { app });
   registerPackingRoutes(server, deps);
+  registerReferenceRoutes(server, deps);
 
   server.all('/api/*', async (_req, reply) => reply.code(404).send({ error: { code: 'not_found', message: 'Unknown API endpoint' } }));
 

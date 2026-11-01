@@ -4,7 +4,7 @@ import type { AppContext } from '../../app/context.ts';
 import { productType } from '../producttypes/registry.ts';
 import { versionContext } from '../specification/service.ts';
 import { updateVersion, getProduct } from '../../db/repos.ts';
-import { AssetStore, type AssetRecord } from '../../storage/assetStore.ts';
+import type { AssetRecord } from '../../storage/assetStore.ts';
 import { html, n } from '../rendering/html.ts';
 import { fontFaces, fontStack, documentHtml } from '../rendering/theme.ts';
 import { pngDataUri } from '../rendering/components.ts';
@@ -91,7 +91,7 @@ export async function packageVersion(app: AppContext, versionId: string): Promis
   const { version, product, spec, ctx } = versionContext(app, versionId);
   const def = productType(product.product_type);
   if (!version.content) throw permanent('not_rendered', 'Cannot package a version without content');
-  const dir = AssetStore.versionDir(product.id, version.version_no);
+  const dir = app.assets.versionDir(version.id);
   app.assets.removeVersionRole(versionId, ['listing_image', 'internal']);
   const existing = app.assets.forVersion(versionId, 'deliverable').filter((a) => !PACKAGE_KINDS.has(a.kind));
   const pdf = existing.find((a) => a.kind === 'pdf');

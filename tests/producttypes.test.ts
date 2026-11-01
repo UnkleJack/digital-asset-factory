@@ -18,6 +18,8 @@ const POINTS = { letter: [612, 792], a4: [595.28, 841.89], a5: [419.53, 595.28] 
 async function renderType(id: string, opts: Parameters<typeof makeContext>[1] = {}) {
   const def = productType(id);
   const ctx = makeContext(def, opts);
+  // Import-only types read your imported images; stand in a line-art PNG for each one.
+  if (def.importOnly) ctx.loadReferenceImage = async (refId) => ({ png: await renderer.screenshotHtml(`<!doctype html><body style="margin:0;background:#fff"><svg width="600" height="600"><circle cx="300" cy="300" r="250" fill="none" stroke="#000" stroke-width="4"/></svg>`, 600, 600), widthPx: 600, heightPx: 600, provenance: { generator: 'imported', referenceId: refId } });
   const content = deterministic(def, ctx);
   const art: ArtworkItem[] = def.generateArtwork ? await def.generateArtwork(ctx, content, seededRandom(ctx.seed), null) : [];
   const out = await renderProduct(def, ctx, content, art, renderer, { fontsDir: FONTS_DIR, previewPages: 1, previewDpi: 48 });
@@ -34,6 +36,7 @@ const SMALL: Record<string, object> = {
   'maze-activity': { pages: 3 },
   'word-search': { puzzles: 3 },
   'home-inventory': { rooms: ['Kitchen', 'Garage', 'Office'] },
+  'imported-coloring': { references: ['ref_a', 'ref_b'] },
 };
 
 for (const def of productTypes().filter((t) => t.artwork !== 'ai-image' && t.id !== 'bundle')) {

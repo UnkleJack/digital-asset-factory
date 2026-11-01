@@ -70,7 +70,7 @@ function OpportunityForm({ onClose, onSaved, initial }: { onClose: () => void; o
     <Modal title={initial ? 'Edit opportunity' : 'Add opportunity'} wide onClose={onClose} footer={<><button onClick={onClose}>Cancel</button><button className="primary" onClick={save}>Save</button></>}>
       <div className="form">
         <label className="f">Title<input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} /></label>
-        <label className="f">Product type<select value={f.productType} onChange={(e) => setF({ ...f, productType: e.target.value })}><option value="">Choose…</option>{types.data?.filter((t) => t.id !== 'bundle').map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
+        <label className="f">Product type<select value={f.productType} onChange={(e) => setF({ ...f, productType: e.target.value })}><option value="">Choose…</option>{types.data?.filter((t) => t.id !== 'bundle' && !t.importOnly).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
         <label className="f">Audience<select value={f.audienceId} onChange={(e) => setF({ ...f, audienceId: e.target.value })}><option value="">General</option>{audiences.data?.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
         <label className="f">Theme<select value={f.themeId} onChange={(e) => setF({ ...f, themeId: e.target.value })}><option value="">None</option>{themes.data?.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
         <label className="f">Search keywords (comma separated)<input value={f.keywords} onChange={(e) => setF({ ...f, keywords: e.target.value })} /></label>

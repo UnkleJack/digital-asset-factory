@@ -87,7 +87,7 @@ export function fontPreview(id: string, fallback = 'sans-serif') {
   return { fontFamily: `'daf-${id}', ${fallback}` };
 }
 
-const ARTWORK_NOTE: Record<string, string> = { none: 'Layout only, no artwork', procedural: 'Pattern artwork made by the app, no AI needed', 'ai-image': 'AI-drawn pictures, needs an image key' };
+const ARTWORK_NOTE: Record<string, string> = { none: 'Layout only, no artwork', procedural: 'Pattern artwork made by the app, no AI needed', 'ai-image': 'AI-drawn pictures, needs an image key', imported: 'Your imported images (make these from Imports)' };
 
 function NewProductModal({ onClose }: { onClose: () => void }) {
   const types = useApi<any[]>('/product-types');
@@ -119,8 +119,8 @@ function NewProductModal({ onClose }: { onClose: () => void }) {
   const shownFonts: Fonts | null = fonts ?? baseDesign?.tokens.fonts ?? null;
   const imageKeyMissing = secrets.data && !secrets.data.secrets.find((s: any) => s.name === 'openai_api_key')?.configured;
 
-  const categories = [...new Set((types.data ?? []).filter((t) => t.id !== 'bundle').map((t) => t.category as string))];
-  const kinds = (types.data ?? []).filter((t) => t.id !== 'bundle' && t.category === category);
+  const categories = [...new Set((types.data ?? []).filter((t) => t.id !== 'bundle' && !t.importOnly).map((t) => t.category as string))];
+  const kinds = (types.data ?? []).filter((t) => t.id !== 'bundle' && !t.importOnly && t.category === category);
 
   // Values a bulk variation can take along each axis this product type supports.
   const axisValues = (a: string): VariationValue[] => {

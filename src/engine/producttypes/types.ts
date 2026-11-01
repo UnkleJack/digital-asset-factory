@@ -3,7 +3,7 @@ import type { AudienceProfile, DesignTokens, Paper } from '../templates/library.
 import type { SafeHtml } from '../rendering/html.ts';
 
 export type Family = 'printable' | 'activity' | 'structured' | 'bundle';
-export type ArtworkMode = 'none' | 'procedural' | 'ai-image';
+export type ArtworkMode = 'none' | 'procedural' | 'ai-image' | 'imported';
 
 export interface TypeContext<P> {
   title: string;
@@ -15,6 +15,8 @@ export interface TypeContext<P> {
   shopName: string;
   seed: number;
   revisionNotes: string;
+  /** Reads an image from the reference library as PNG (set by the app; absent in isolated tests). */
+  loadReferenceImage?: (id: string) => Promise<{ png: Buffer; widthPx: number; heightPx: number; provenance: Record<string, unknown> }>;
 }
 
 export interface ArtworkItem {
@@ -84,6 +86,8 @@ export interface ProductTypeDefinition<P = any, C = any> {
   qaText(content: C): string[];
   listingHints(ctx: TypeContext<P>, content: C): ListingHints;
   variationAxes?: string[];
+  /** Made only from the Imports screen (needs your images), never offered for new products, ideas or schedules. */
+  importOnly?: boolean;
 }
 
 export function pick<T>(rand: () => number, items: readonly T[]): T {

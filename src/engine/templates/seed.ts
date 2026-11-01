@@ -38,7 +38,7 @@ export function seedBuiltins(db: Db): { inserted: number } {
         inserted++;
       }
     }
-    for (const type of productTypes()) {
+    for (const type of productTypes().filter((t) => !t.importOnly)) {
       const name = `${type.name} (standard)`;
       if (!db.get('SELECT 1 FROM templates WHERE product_type = ? AND name = ?', type.id, name)) {
         const ds = db.get<{ id: string }>('SELECT id FROM design_systems WHERE name = ?', DEFAULT_DESIGN[type.id] ?? 'Minimal Mono');

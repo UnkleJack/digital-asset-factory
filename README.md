@@ -97,6 +97,39 @@ AI images (for illustrated coloring pages) use OpenAI only, under **Settings →
 Scheduled runs only happen while the app is running. A run missed while the computer was off is
 recorded, and the most recent missed run is caught up at start-up (within the catch-up window in Settings).
 
+## Importing things you made elsewhere
+
+**Imports** (left menu, under Make) takes images and text you made with other tools.
+
+- **Images** (PNG, JPEG, WebP, GIF): drop them in, say which tool made them and what they are (for
+  example "mandala"). Files are recognised by their contents, so a JPEG saved as `.png` is stored as
+  `.jpg`. An exact copy of an image already in the library is skipped. Anything that is not an image
+  (or is named like a key file, e.g. `client_secret_….json`) is refused. Pick images in the order you
+  want the pages and press **Make coloring product**: it goes through QA, listings and Batch approval
+  like any other product, and each page records which tool made it.
+- **Text examples** (titles, descriptions, tags, page text): the AI is shown up to 8 recent ones that
+  fit the job (listing text when it writes listings, page text when it writes pages) and told to match
+  their style without copying. Untick "Use as example" to stop using one.
+
+Nothing here trains or fine-tunes a model; the examples ride along in the prompt, the same way your
+review notes do. Check each image tool's terms before selling what it made.
+
+## Where your files go
+
+Each product gets a folder named after what it is and the day it was made:
+
+```
+data/assets/products/coloring-pages/intricate-mandala-coloring-pages_2026-10-28/
+data/assets/products/coloring-pages/intricate-mandala-coloring-pages_2026-10-28-2/   (a second one that day, or a revision)
+data/assets/references/images/mandala_2026-11-01.webp                                 (imported images)
+```
+
+Products made before this layout live in `products/prd_…/v1`. To move them: quit the app, run
+`npm run tidy-folders` to see what would move (nothing changes), then `npm run tidy-folders -- --apply`.
+It takes a full backup first and stops if that fails, moves each folder, and updates every stored
+path. File names inside the folders do not change, so approvals stay valid. Old folders the database
+has no record of are listed and left alone.
+
 ## Commands
 
 | Command | What it does |
@@ -109,6 +142,7 @@ recorded, and the most recent missed run is caught up at start-up (within the ca
 | `npm run typecheck` | Type-check server and web code |
 | `npm run samples` | Produce one sample of every product type into `verification-output/samples` |
 | `npm run migrate` | Apply database migrations (also done automatically at start-up) |
+| `npm run tidy-folders` | Show how old `prd_…/v1` folders would be renamed; `-- --apply` backs up, then does it |
 | `npm run backup` | Snapshot the database and files into `data/backups` (`-- --list` to list) |
 | `npm run restore -- <name>` | Restore a backup (quit the app first) |
 
