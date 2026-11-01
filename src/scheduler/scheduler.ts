@@ -9,7 +9,7 @@ import { startPipeline } from '../jobs/pipeline.ts';
 import { createProduct } from '../engine/specification/service.ts';
 import { createBatch, addToBatch } from '../engine/approval/batches.ts';
 import { scoreOpportunity, latestScore } from '../engine/scoring/service.ts';
-import { hasProductType, productType } from '../engine/producttypes/registry.ts';
+import { productType, plannableTypes } from '../engine/producttypes/registry.ts';
 import { addPlanRunNote, refreshPlanRun } from './runs.ts';
 import { MARKETPLACES } from '../engine/listing/service.ts';
 import { sha256 } from '../core/hash.ts';
@@ -33,6 +33,7 @@ const PlanInput = z.object({
   // Which computer runs this plan (Settings → General → machine name); empty = any computer running the app.
   runOn: z.string().trim().max(60).default(''),
 });
+const PLANNABLE_TYPE_IDS = new Set(plannableTypes().map((t) => t.id));
 
 export interface PlanRow {
   id: string;
@@ -72,7 +73,7 @@ export function listPlans(app: AppContext): PlanRow[] {
 function validatePlan(input: unknown, partial: boolean) {
   const p = (partial ? PlanInput.partial() : PlanInput).safeParse(input);
   if (!p.success) throw validation('Invalid production plan', p.error.issues);
-  const bad = (p.data.productTypes ?? []).filter((t) => !hasProductType(t) || t === 'bundle');
+  const bad = (p.data.productTypes ?? []).filter((t) => !PLANNABLE_TYPE_IDS.has(t));
   if (bad.length) throw validation(`Unknown product types: ${bad.join(', ')}`);
   return p.data;
 }
@@ -243,6 +244,7 @@ export function selectCandidates(app: AppContext, plan: PlanRow): { picked: Cand
   const since = new Date(app.clock.now().getTime() - 30 * 86_400_000).toISOString();
   const eligible: Candidate[] = [];
   for (const o of rows) {
+    if (!PLANNABLE_TYPE_IDS.has(o.product_type)) continue;
     if (plan.product_types.length && !plan.product_types.includes(o.product_type)) continue;
     if (app.db.get('SELECT 1 FROM products WHERE opportunity_id = ? AND created_at > ?', o.id, since)) continue;
     let sc = latestScore(app, o.id);

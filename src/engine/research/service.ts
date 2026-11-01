@@ -107,6 +107,7 @@ export function importObservationsCsv(app: AppContext, filename: string, text: s
 }
 
 const FactorInput = z.object({ value: z.number().min(0).max(10), evidence: z.enum(EVIDENCE_KINDS), note: z.string().max(500).optional() });
+const PLANNABLE_TYPE_IDS = new Set(plannableTypes().map((t) => t.id));
 const OpportunityInput = z.object({
   title: z.string().trim().min(3).max(140),
   description: z.string().max(4000).default(''),
@@ -124,7 +125,7 @@ export function createOpportunity(app: AppContext, input: unknown, origin: 'manu
   const p = OpportunityInput.safeParse(input);
   if (!p.success) throw validation('Invalid opportunity', p.error.issues);
   const o = p.data;
-  if (!hasProductType(o.productType)) throw validation(`Unknown product type ${o.productType}`);
+  if (!hasProductType(o.productType) || !PLANNABLE_TYPE_IDS.has(o.productType)) throw validation(`Unknown product type ${o.productType}`);
   for (const [t, id] of [['categories', o.categoryId], ['audiences', o.audienceId], ['themes', o.themeId]] as const) if (id && !app.db.get(`SELECT 1 FROM ${t} WHERE id = ?`, id)) throw validation(`Unknown ${t} ${id}`);
   const id = newId('opp');
   const now = new Date().toISOString();
@@ -147,7 +148,7 @@ export function updateOpportunity(app: AppContext, id: string, patch: unknown, a
   const p = OpportunityPatch.safeParse(patch);
   if (!p.success) throw validation('Invalid opportunity changes', p.error.issues);
   const o = p.data;
-  if (o.productType && !hasProductType(o.productType)) throw validation(`Unknown product type ${o.productType}`);
+  if (o.productType && (!hasProductType(o.productType) || !PLANNABLE_TYPE_IDS.has(o.productType))) throw validation(`Unknown product type ${o.productType}`);
   const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (o.title !== undefined) row.title = o.title;
   if (o.description !== undefined) row.description = o.description;
@@ -224,7 +225,7 @@ For each idea return title, productType, description, differentiation (what woul
   });
   const ids: string[] = [];
   for (const idea of r.data.ideas) {
-    if (!hasProductType(idea.productType) || idea.productType === 'bundle') continue;
+    if (!hasProductType(idea.productType) || !PLANNABLE_TYPE_IDS.has(idea.productType)) continue;
     ids.push(createOpportunity(app, {
       title: idea.title, description: idea.description, productType: idea.productType, keywords: idea.keywords, seasonalMonths: idea.seasonalMonths,
       differentiationNote: idea.differentiation, inputs: {},
