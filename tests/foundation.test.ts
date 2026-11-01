@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, mkdirSync, symlinkSync, readdirSync, copyFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, symlinkSync, readdirSync, copyFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Db } from '../src/db/sqlite.ts';
@@ -40,6 +40,57 @@ test('migrations apply once, record checksums, and back up before later migratio
 
   writeFileSync(join(migDir, '999_extra.sql'), 'CREATE TABLE extra_t (id TEXT PRIMARY KEY, x TEXT);');
   assert.throws(() => migrate(db, join(dir, 'backups'), migDir), /checksum mismatch/);
+});
+
+test('a migration file renumbered after it ran is followed to its new number, not treated as modified', () => {
+  const dir = tempDir();
+  const migDir = join(dir, 'migs');
+  mkdirSync(migDir);
+  const tournaments = 'CREATE TABLE tourney_t (id TEXT PRIMARY KEY);';
+  writeFileSync(join(migDir, '001_initial.sql'), 'CREATE TABLE base_t (id TEXT PRIMARY KEY);');
+  writeFileSync(join(migDir, '002_tournaments.sql'), tournaments);
+  const db = new Db(join(dir, 'a.sqlite'));
+  migrate(db, join(dir, 'backups'), migDir);
+
+  // The same file moves to 004, and two other migrations take 002 and 003.
+  rmSync(join(migDir, '002_tournaments.sql'));
+  writeFileSync(join(migDir, '002_packing.sql'), 'CREATE TABLE packing_t (id TEXT PRIMARY KEY);');
+  writeFileSync(join(migDir, '003_spread.sql'), 'ALTER TABLE base_t ADD COLUMN x TEXT;');
+  writeFileSync(join(migDir, '004_tournaments.sql'), tournaments);
+
+  const r = migrate(db, join(dir, 'backups'), migDir);
+  assert.deepEqual(r.renumbered, [{ from: 2, to: 4, name: '004_tournaments.sql' }]);
+  assert.deepEqual(r.applied, ['002_packing.sql', '003_spread.sql']);
+  assert.ok(r.backupFile, 'backs up before changing a database that has tables');
+  assert.deepEqual(
+    db.all<{ version: number; name: string }>('SELECT version, name FROM schema_migrations ORDER BY version').map((m) => `${m.version}:${m.name}`),
+    ['1:001_initial.sql', '2:002_packing.sql', '3:003_spread.sql', '4:004_tournaments.sql'],
+  );
+  assert.deepEqual(migrate(db, join(dir, 'backups'), migDir).applied, []);
+
+  // A renumbered file whose contents also changed is still refused.
+  const db2 = new Db(join(dir, 'b.sqlite'));
+  const migDir2 = join(dir, 'migs2');
+  mkdirSync(migDir2);
+  writeFileSync(join(migDir2, '001_tournaments.sql'), tournaments);
+  migrate(db2, join(dir, 'backups2'), migDir2);
+  rmSync(join(migDir2, '001_tournaments.sql'));
+  writeFileSync(join(migDir2, '001_packing.sql'), 'CREATE TABLE packing_t (id TEXT PRIMARY KEY);');
+  writeFileSync(join(migDir2, '002_tournaments.sql'), tournaments + ' -- edited');
+  assert.throws(() => migrate(db2, join(dir, 'backups2'), migDir2), /checksum mismatch/);
+
+  // An edited file left at its old number is still refused, even if an unchanged copy sits at another number.
+  const db3 = new Db(join(dir, 'c.sqlite'));
+  const migDir3 = join(dir, 'migs3');
+  mkdirSync(migDir3);
+  writeFileSync(join(migDir3, '001_tournaments.sql'), tournaments);
+  migrate(db3, join(dir, 'backups3'), migDir3);
+  writeFileSync(join(migDir3, '001_tournaments.sql'), tournaments + ' -- edited');
+  writeFileSync(join(migDir3, '002_tournaments.sql'), tournaments);
+  assert.throws(() => migrate(db3, join(dir, 'backups3'), migDir3), /checksum mismatch/);
+  db3.close();
+  db.close();
+  db2.close();
 });
 
 test('transactions roll back on error, including nested savepoints', () => {

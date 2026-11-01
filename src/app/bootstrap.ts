@@ -59,6 +59,7 @@ export function bootstrap(opts: BootstrapOptions = {}): App {
     throw new Error(`The database at ${paths.dbFile} failed its integrity check (${check}). Restore a backup with "npm run restore".`);
   }
   const mig = migrate(db, paths.backupsDir);
+  if (mig.renumbered.length) log.info('Migration records moved to renumbered files', { renumbered: mig.renumbered, backup: mig.backupFile });
   if (mig.applied.length) log.info('Database migrated', { applied: mig.applied, backup: mig.backupFile });
   const settings = new SettingsService(db);
   const secrets = opts.secrets ?? createSecretStore(paths.dataDir);
