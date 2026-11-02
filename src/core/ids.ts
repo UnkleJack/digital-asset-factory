@@ -39,3 +39,12 @@ export function slugify(input: string, maxLen = 60): string {
     .replace(/-+$/g, '');
   return s || 'item';
 }
+
+/** When an id from newId was made (to the millisecond), or null if it is not one of ours. */
+export function idTime(id: string): Date | null {
+  const m = /^[a-z]+_([0-9a-hjkmnp-tv-z]{10})/.exec(id);
+  if (!m) return null;
+  let ms = 0;
+  for (const c of m[1]) ms = ms * 32 + ALPHABET.indexOf(c);
+  return new Date(ms);
+}

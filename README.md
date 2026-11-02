@@ -180,5 +180,6 @@ data/           your database, files, logs and backups (git-ignored)
 | Products say “built-in content library” | No AI key is configured or the key failed its test; see Settings → AI providers. |
 | “Illustrated coloring pages” fail | That type needs an image provider key (Settings → AI providers). |
 | A listing says “needs reconciliation” | A publish attempt had an unknown result. Check the marketplace, then use **Reconcile** on Publishing status. |
+| Products missing from the app, but their folders are still in `data/assets/products` | Quit the app and run `npm run restore-products` to see what can come back, then `npm run restore-products -- --apply`. It backs up first. |
 | Database integrity error at start-up | Restore the latest backup with `npm run restore`. |
 | Logs | Settings → Logs & audit, or `data/logs/*.jsonl` (secrets are redacted). |
