@@ -133,7 +133,7 @@ Adopted 2026-11-03.
 
 ## Article 8: Current state
 
-As of 2026-11-03, `main` after pull request #8.
+As of 2026-11-03, `main` after pull request #9, plus milestone 2a on branch `claude/project-thread-val3xe` (pull request #10, not merged yet).
 
 **Working**
 - All 17 product types produce offline with the built-in content library: QA, packaging, listings, batch approval and export packages.
@@ -141,7 +141,8 @@ As of 2026-11-03, `main` after pull request #8.
 - Pack carts and the bundle builder. Production plans, which run while the app is open.
 - Portable copy: `npm run portable`.
 - HAPPY DAFFY milestone 1: Insert Coin, Start Gate with the zero-credit lock, Title, Character Select, the cabinet, keyboard, WASD and controller input, and a motion switch.
-- Tests: 123 tests, 121 pass, 2 skipped, 0 fail.
+- HAPPY DAFFY milestone 2a (pull request #10): Worlds the owner builds by hand. The World Builder creates worlds, milestones and tasks. Each task belongs to one character, has a task type (any of the 17 product types except imports, or Custom), a difficulty and effort points the owner sets. The Worlds list shows only worlds where the chosen character has an open task (open, in progress or blocked), sorted by the fewest effort points left before the next milestone. A milestone completes by itself when all its tasks are complete and reopens if one is reopened. World Detail lists that character's open tasks. The Task Workspace behind OPEN TASK is milestone 3.
+- Tests: 125 tests, 123 pass, 2 skipped, 0 fail.
 
 **Built but not proven live**
 - AI text and image providers have only been tested against stand-in servers, never with real keys.
@@ -153,7 +154,8 @@ As of 2026-11-03, `main` after pull request #8.
 - `data/` has no backup off the Mac.
 
 **Not built yet**
-- HAPPY DAFFY milestones 2 to 10: Worlds, Task Workspace, QA Review, Packs, live provider credits, XP and Codex, Leaderboards, the laziness failsafe, and new modules.
+- HAPPY DAFFY milestone 2b and 2c: AI suggestions shown as clickable choices in the World Builder, and the factory generating worlds and tasks from settings the owner tunes.
+- HAPPY DAFFY milestones 3 to 10: Task Workspace, QA Review, Packs, live provider credits, XP and Codex, Leaderboards, the laziness failsafe, and new modules.
 - The AI Chatbot itself.
 - From the 2026-10-28 plan: the mandala engine expansion (Workstream A), geometric pattern art (Workstream B), and the test-browser isolation fix (C1).
 
@@ -161,14 +163,15 @@ As of 2026-11-03, `main` after pull request #8.
 
 **Next, in order**
 1. **On the Mac:** `git pull`, `npm ci`, `npm run backup`, then `npm run restore-products` (dry run), then `-- --apply`. Then try `/arcade`.
-2. **HAPPY DAFFY milestone 2, Worlds.** This needs the owner's answer to question A below.
+2. **HAPPY DAFFY milestone 2b and 2c.** AI suggestions as clickable choices, then factory-generated worlds and tasks from tunable settings. Character persona names and sprites are waiting on the owner's picks (question E).
 3. **Factory upgrades from the 2026-10-28 plan:** mandala engine expansion, then geometric pattern art.
 
 **Undecided**
-- **A.** Who creates worlds, milestones and tasks: the owner on a new screen, or the factory from things it already tracks?
+- **A.** Answered 2026-11-03: both. The owner builds from scratch first (done in 2a), then AI suggestions and factory generation from tunable settings (2b, 2c). Still open: which settings to tune, and whether suggestions need a live AI provider or can come from the built-in content library when no key is set.
 - **B.** The spec's own open questions H1 to H18 (`docs/ASSET_FOUNDRY_UX_SPEC.md`, section H). These include the low-credit threshold, the pack bonus, the vagueness test, the QA checklist, the laziness thresholds and the XP values.
 - **C.** What the AI Chatbot can see and do. Questions about income, money owed and tax can't get definite answers until the factory holds that data.
 - **D.** An off-Mac backup for `data/`.
+- **E.** Characters, settled 2026-11-03. Each is an original pixel design, and the two side characters face the middle. **GAGE**, the ninja, is IDE on the left. **B.M.O.**, the desk robot with a headset (an original design; only the name is borrowed, at the owner's request), is the AI Chatbot in the middle. **SPARKS**, the wizard, is DAF on the right. The names, roles and bios live in `src/engine/arcade/service.ts`. Still open: a custom-portrait slot for the owner's own images.
 
 ---
 
@@ -178,3 +181,4 @@ As of 2026-11-03, `main` after pull request #8.
 | --- | --- |
 | 2026-11-03 | Article 1 adopted (Asset Foundry / the factory). |
 | 2026-11-03 | Constitution expanded to Articles 1 to 9. HAPPY DAFFY named as the arcade game. One source of truth set: GitHub `main` plus the Mac folder. |
+| 2026-11-03 | Articles 8 and 9 updated for milestone 2a (owner-built Worlds) and the character naming question. |

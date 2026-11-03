@@ -121,10 +121,10 @@ table.t tr.click:hover td { background: var(--surface-2); }
 .pill.primary { background: var(--primary-soft); color: var(--primary); }
 
 button, .btn { font: inherit; border: 1px solid var(--border); background: var(--surface); color: var(--text); padding: 8px 16px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; transition: background 0.15s, border-color 0.15s, color 0.15s; }
-button:hover:not(:disabled), .btn:hover { background: var(--surface-2); border-color: var(--primary); color: var(--primary); text-decoration: none; }
+button:hover:not(:disabled):not(.arcade-room *), .btn:hover { background: var(--surface-2); border-color: var(--primary); color: var(--primary); text-decoration: none; }
 button:disabled { opacity: .5; cursor: not-allowed; }
 button.primary, .btn.primary { background: var(--primary); border-color: var(--primary); color: var(--primary-ink); font-weight: 600; }
-button.primary:hover:not(:disabled) { filter: brightness(1.1); background: var(--primary); }
+button.primary:hover:not(:disabled):not(.arcade-room *) { filter: brightness(1.1); background: var(--primary); }
 button.danger { color: var(--bad); border-color: var(--bad); background: var(--bad-soft); }
 button.danger:hover:not(:disabled) { background: var(--bad); color: white; }
 button.link { border: none; background: none; color: var(--primary); padding: 4px 0; }

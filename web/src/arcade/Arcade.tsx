@@ -6,16 +6,19 @@ import '@fontsource/press-start-2p/400.css';
 import './arcade.css';
 import { useApi } from '../api.ts';
 import { useArcadeInput, type Direction } from './input.ts';
+import { WorldsScreen, WorldDetail, BuilderScreen, BuilderWorldScreen } from './Worlds.tsx';
 import { ARCADE_GAME_NAME, ARCADE_TAGLINE, ENGINE_NAME } from '../../../src/core/brand.ts';
 
 // HAPPY DAFFY: the arcade front end of Asset Foundry, from the UX spec, milestone 1 (entry flow + navigation skeleton).
-// Insert Coin → Start Gate → Title → Character Select → Worlds (placeholder until milestone 2).
+// Insert Coin → Start Gate → Title → Character Select → Worlds → World Detail / World Builder.
 
 interface Character {
   id: string;
   type: 'IDE' | 'AI_CHATBOT' | 'DAF';
   displayName: string;
+  role: string;
   tagline: string;
+  bio: string;
   scope: string;
   stats: { eye: number | null; craft: number | null; taste: number | null; patience: number | null };
 }
@@ -28,9 +31,9 @@ interface ArcadeData {
 
 const TITLE_WORDS = ARCADE_GAME_NAME.split(' ');
 
-type Screen = 'attract' | 'gate' | 'title' | 'select' | 'worlds';
-const SCREEN_TITLES: Record<Screen, string> = { attract: 'INSERT COIN', gate: 'START GATE', title: 'TITLE', select: 'CHARACTER SELECT', worlds: 'WORLDS' };
-const BACK: Partial<Record<Screen, Screen>> = { gate: 'attract', select: 'title', worlds: 'select' };
+type Screen = 'attract' | 'gate' | 'title' | 'select' | 'worlds' | 'world' | 'builder' | 'builderWorld';
+const SCREEN_TITLES: Record<Screen, string> = { attract: 'INSERT COIN', gate: 'START GATE', title: 'TITLE', select: 'CHARACTER SELECT', worlds: 'WORLDS', world: 'WORLD DETAIL', builder: 'WORLD BUILDER', builderWorld: 'WORLD BUILDER' };
+const BACK: Partial<Record<Screen, Screen>> = { gate: 'attract', select: 'title', worlds: 'select', world: 'worlds', builder: 'worlds', builderWorld: 'builder' };
 const CHARACTER_KEY = 'daf.arcade.character';
 const MOTION_KEY = 'daf.arcade.reducedMotion';
 
@@ -74,6 +77,8 @@ export function Arcade() {
   const [reduced, toggleMotion] = useReducedMotion();
   const [stick, setStick] = useState<Direction | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [worldId, setWorldId] = useState<string | null>(null);
+  const [builderWorldId, setBuilderWorldId] = useState<string | null>(null);
   const screenRef = useRef<HTMLDivElement>(null);
 
   const credits = data?.credits;
@@ -127,7 +132,10 @@ export function Arcade() {
   else if (screen === 'gate') body = <StartGate allowed={startAllowed} known={creditsKnown} notice={notice} onStart={pressStart} onBack={back} />;
   else if (screen === 'title') body = <Title data={data} reduced={reduced} zero={credits?.state === 'zero'} onStart={() => go('select')} />;
   else if (screen === 'select') body = <CharacterSelect characters={data?.characters ?? []} chosen={character} highlight={highlight} onHighlight={setHighlight} onChoose={choose} onEnter={() => go('worlds')} onBack={back} />;
-  else body = <Worlds character={active} onSwitch={back} onGo={(s) => setNotice(`${s} UNLOCKS IN A LATER BUILD`)} notice={notice} />;
+  else if (screen === 'worlds') body = <WorldsScreen character={active} onOpen={(id) => { setWorldId(id); go('world'); }} onBuilder={() => go('builder')} onSwitch={() => go('select')} />;
+  else if (screen === 'world' && worldId) body = <WorldDetail worldId={worldId} character={active} onBack={() => go('worlds')} />;
+  else if (screen === 'builderWorld' && builderWorldId) body = <BuilderWorldScreen worldId={builderWorldId} defaultCharacter={character} onBack={() => go('builder')} />;
+  else body = <BuilderScreen onOpen={(id) => { setBuilderWorldId(id); go('builderWorld'); }} onBack={() => go('worlds')} />;
 
   return (
     <div className={`arcade-room${reduced ? ' reduced' : ''}`}>
@@ -310,14 +318,15 @@ function CharacterSelect({ characters, chosen, highlight, onHighlight, onChoose,
           >
             <span className="char-portrait" aria-hidden="true"><CharacterSprite type={c.type} /></span>
             <span className="char-name">{c.displayName}</span>
-            <span className="char-tag">{c.tagline}</span>
+            <span className="char-tag">{c.role === c.displayName ? c.tagline : `${c.role} · ${c.tagline}`}</span>
             {chosen === c.id ? <span className="char-picked">SELECTED</span> : null}
           </button>
         ))}
       </div>
       {shown ? (
         <div className="char-info">
-          <p className="crt-text">{shown.scope}</p>
+          <p className="crt-text">{shown.bio}</p>
+          <p className="fine">{shown.role}: {shown.scope}</p>
           <dl className="stat-panel" aria-label={`${shown.displayName} stats`}>
             {STAT_NAMES.map(([k, label]) => (
               <div key={k} className="stat">
@@ -340,95 +349,89 @@ function CharacterSelect({ characters, chosen, highlight, onHighlight, onChoose,
   );
 }
 
-const NAV_DESTINATIONS = ['WORLDS', 'PACKS', 'LEADERBOARDS', 'CODEX'] as const;
-
-function Worlds({ character, onSwitch, onGo, notice }: { character: Character | null; onSwitch: () => void; onGo: (s: string) => void; notice: string | null }) {
-  return (
-    <div className="scr worlds-screen">
-      <nav className="arcade-tabs" aria-label="Arcade">
-        {NAV_DESTINATIONS.map((d) => (
-          <button key={d} type="button" className={`arcade-tab${d === 'WORLDS' ? ' active' : ' unavailable'}`} data-nav aria-current={d === 'WORLDS' ? 'page' : undefined} aria-disabled={d !== 'WORLDS'} onClick={() => d !== 'WORLDS' && onGo(d)}>
-            {d}{d !== 'WORLDS' ? <small>SOON</small> : null}
-          </button>
-        ))}
-      </nav>
-      <h2 className="screen-title">WORLDS</h2>
-      <p className="crt-text center-text">{character ? `${character.displayName}: ${character.scope}` : 'No character selected.'}</p>
-      <div className="empty-panel" role="status">
-        <p className="big-pixel">NO WORLDS OPEN</p>
-        <p className="crt-text">Worlds, milestones and tasks are built in the next update. Until then no projects are loaded for any character.</p>
-      </div>
-      {notice ? <p className="lock-line">{notice}</p> : null}
-      <div className="row-actions">
-        <button type="button" className="arc-btn" data-nav data-autofocus onClick={onSwitch}>SWITCH CHARACTER</button>
-      </div>
-    </div>
-  );
-}
-
 // Small pixel portraits drawn as SVG rects so no image files are needed.
 function CharacterSprite({ type }: { type: Character['type'] }) {
   const px = (rows: string[], palette: Record<string, string>) =>
     rows.flatMap((row, y) => [...row].map((ch, x) => (palette[ch] ? <rect key={`${x}-${y}`} x={x} y={y} width="1" height="1" fill={palette[ch]} /> : null)));
+  // Original designs (not copied from any game). IDE: ninja, facing right. AI Chatbot: desk robot, facing front.
+  // DAF: wizard, facing left. Side characters face the middle of the select screen.
   const art: Record<Character['type'], { rows: string[]; palette: Record<string, string> }> = {
     IDE: {
       rows: [
-        '....kkkkkk....',
-        '...kkkkkkkk...',
-        '..kssssssssk..',
-        '..ksgggsgggs..',
-        '..kssssssssk..',
-        '...ssssssss...',
-        '....ssmmss....',
-        '..hhhhhhhhhh..',
-        '.hhhhhhhhhhhh.',
-        'llllllllllllll',
-        'lccccccccccccl',
-        'lc<>c==c/ccc>l',
-        'lccccccccccccl',
-        'llllllllllllll',
+        '....hh..............',
+        '.....hh.............',
+        '......gh.kkkkk......',
+        '.......gknnnnnk.....',
+        '........knnnnnnk....',
+        '.......knnnnnnnnk...',
+        '.......knnnsssssk...',
+        '.......knnnsskesk...',
+        '...rrrrknnnnnnnnk...',
+        '..rrRrkkknnnnnnk....',
+        '.rR..rRkNNnnnnnkk...',
+        '......knNnnnnnnnsss.',
+        '......knnNnnnnnkss..',
+        '......knnnggggggk...',
+        '......knnnnnnnnnk...',
+        '.......knnnk.knnnk..',
+        '.......knnk...knnk..',
+        '......knnnk...knnnk.',
+        '......kkkkk...kkkkkk',
+        '....................',
       ],
-      palette: { k: '#2b2b2b', s: '#d9a066', g: '#a8ff00', m: '#7a3b2e', h: '#3a3a5c', l: '#555', c: '#0b1a0b', '<': '#a8ff00', '>': '#a8ff00', '=': '#f5c542', '/': '#a8ff00' },
+      palette: { k: '#0b0d14', n: '#22304f', N: '#3b5384', s: '#d9a066', e: '#a8ff00', r: '#d93a3a', R: '#8c1f1f', g: '#f5c542', h: '#7a5230' },
     },
     AI_CHATBOT: {
       rows: [
-        '......aa......',
-        '......aa......',
-        '..mmmmmmmmmm..',
-        '.mmmmmmmmmmmm.',
-        '.mbbbbbbbbbbm.',
-        '.mbeebbbbeebm.',
-        '.mbeebbbbeebm.',
-        '.mbbbbbbbbbbm.',
-        '.mbbggggggbbm.',
-        '.mmmmmmmmmmmm.',
-        '....mmmmmm....',
-        '..qqqqqqqqqq..',
-        '..q.wwwwww.q..',
-        '..qqqqqqqqqq..',
+        '.........gg.........',
+        '.........kk.........',
+        '......kkkkkkkk......',
+        '.....kmmmmmmmmk.....',
+        '....kmMMMMMMMMmk....',
+        '...hkmbbbbbbbbmkh...',
+        '...hkmbeebbeebmkh...',
+        '...hkmbeebbeebmkh...',
+        '...hkmbbbbbbbbmk.h..',
+        '....kmbbgggggbmk.c..',
+        '.....kmmmmmmmmkccc..',
+        '.......kkmmkk.......',
+        '...kkkkkkkkkkkkkk...',
+        '..kmmMMMMMMMMMMmmk..',
+        '..kmmqqqqqqqqqqmmk..',
+        '..kmmqwwwwwwwwqmmk..',
+        '..kmmqwkkkwkkwqmmk..',
+        '..kmmqqqqqqqqqqmmk..',
+        '..kkkkkkkkkkkkkkkk..',
+        '....................',
       ],
-      palette: { a: '#f5c542', m: '#8a8a9a', b: '#10141a', e: '#5ef0ff', g: '#a8ff00', q: '#f5c542', w: '#f0f0d8' },
+      palette: { k: '#0b0d14', m: '#7c8494', M: '#a9b1c0', b: '#0f1a14', e: '#5ef0ff', g: '#a8ff00', h: '#f5c542', c: '#f5c542', q: '#c48a2a', w: '#f0f0d8' },
     },
     DAF: {
       rows: [
-        '...yyyyyyyy...',
-        '..yyyyyyyyyy..',
-        '.yyyyyyyyyyyy.',
-        '..ssssssssss..',
-        '..sdddsddds...',
-        '..ssssssssss..',
-        '...ssskkss....',
-        '..jjjjjjjjjj..',
-        '.jjjjzzjjjjjj.',
-        '.jjjjzzjjjjjj.',
-        '.jj.jjjjjj.jj.',
-        '.ss.jjjjjj.ss.',
-        '....bb..bb....',
-        '...bbb..bbb...',
+        '..............kk....',
+        '.............kPk....',
+        '............kppk....',
+        '..kk.......kpppk....',
+        '.kOOk.....kpgppk....',
+        '.kOok....kpppppk....',
+        '..kk....kpppppppk...',
+        '..tt..kkgggggggggk..',
+        '..tt...kssskppppk...',
+        '..tt...kekskppppk...',
+        '..tt..kssssspppk....',
+        '..tt..kwwwwwwppk....',
+        '..ttsskwWwwwwPppk...',
+        '..ttsskwwWwwPpppk...',
+        '..tt..kpwwwpPpgppk..',
+        '..tt..kppwpPpppppk..',
+        '..tt.kppppPppgpppk..',
+        '..tt.kpppPppppppppk.',
+        '..tt.kkkkkkkkkkkkkk.',
+        '....................',
       ],
-      palette: { y: '#f5c542', s: '#b9784a', d: '#111', k: '#5a2a1a', j: '#2f5d1f', z: '#a8ff00', b: '#222' },
+      palette: { k: '#0b0d14', p: '#4b3591', P: '#7d5fd0', g: '#f5c542', s: '#e0b080', e: '#111111', w: '#ecece4', W: '#b5b5ad', t: '#8a5a32', o: '#a8ff00', O: '#e6ffb0' },
     },
   };
   const a = art[type];
-  return <svg viewBox="0 0 14 14" shapeRendering="crispEdges" width="100%" height="100%">{px(a.rows, a.palette)}</svg>;
+  return <svg viewBox="0 0 20 20" shapeRendering="crispEdges" width="100%" height="100%">{px(a.rows, a.palette)}</svg>;
 }

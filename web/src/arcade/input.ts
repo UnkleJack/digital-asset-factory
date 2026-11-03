@@ -1,5 +1,15 @@
 import { useEffect, useRef, type RefObject } from 'react';
 
+/** When a screen's data arrives after it first drew, move focus to its main control (unless the player is typing). */
+export function useFocusMainWhenReady(ready: boolean): void {
+  useEffect(() => {
+    if (!ready) return;
+    const root = document.querySelector<HTMLElement>('.crt-screen');
+    if (!root || isTyping(document.activeElement)) return;
+    root.querySelector<HTMLElement>('[data-autofocus]')?.focus({ preventScroll: true });
+  }, [ready]);
+}
+
 // Keyboard and controller input for the arcade (spec G4/G5 proposed mappings).
 // Directions move focus through the screen's [data-nav] controls in reading order;
 // Enter/Space activate the focused control (native button behaviour); Esc goes back.
