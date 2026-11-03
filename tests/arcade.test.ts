@@ -34,6 +34,9 @@ const setCredits = (n: number) => server.inject({ method: 'PATCH', url: '/api/se
 
 test('three characters: IDE, AI Chatbot, DAF, with no invented stats', () => {
   assert.deepEqual(CHARACTERS.map((c) => c.type), ['IDE', 'AI_CHATBOT', 'DAF']);
+  // Persona names picked by the owner on 2026-11-03.
+  assert.deepEqual(CHARACTERS.map((c) => c.displayName), ['GAGE', 'B.M.O.', 'SPARKS']);
+  assert.ok(CHARACTERS.every((c) => c.bio.length > 0 && c.role.length > 0));
   for (const c of CHARACTERS) {
     assert.ok(c.scope.length > 10, `${c.type} explains what its worlds hold`);
     assert.deepEqual(Object.values(c.stats), [null, null, null, null], 'stats stay blank until the XP rules are approved');

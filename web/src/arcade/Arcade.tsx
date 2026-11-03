@@ -10,13 +10,15 @@ import { WorldsScreen, WorldDetail, BuilderScreen, BuilderWorldScreen } from './
 import { ARCADE_GAME_NAME, ARCADE_TAGLINE, ENGINE_NAME } from '../../../src/core/brand.ts';
 
 // HAPPY DAFFY: the arcade front end of Asset Foundry, from the UX spec, milestone 1 (entry flow + navigation skeleton).
-// Insert Coin → Start Gate → Title → Character Select → Worlds (placeholder until milestone 2).
+// Insert Coin → Start Gate → Title → Character Select → Worlds → World Detail / World Builder.
 
 interface Character {
   id: string;
   type: 'IDE' | 'AI_CHATBOT' | 'DAF';
   displayName: string;
+  role: string;
   tagline: string;
+  bio: string;
   scope: string;
   stats: { eye: number | null; craft: number | null; taste: number | null; patience: number | null };
 }
@@ -316,14 +318,15 @@ function CharacterSelect({ characters, chosen, highlight, onHighlight, onChoose,
           >
             <span className="char-portrait" aria-hidden="true"><CharacterSprite type={c.type} /></span>
             <span className="char-name">{c.displayName}</span>
-            <span className="char-tag">{c.tagline}</span>
+            <span className="char-tag">{c.role === c.displayName ? c.tagline : `${c.role} · ${c.tagline}`}</span>
             {chosen === c.id ? <span className="char-picked">SELECTED</span> : null}
           </button>
         ))}
       </div>
       {shown ? (
         <div className="char-info">
-          <p className="crt-text">{shown.scope}</p>
+          <p className="crt-text">{shown.bio}</p>
+          <p className="fine">{shown.role}: {shown.scope}</p>
           <dl className="stat-panel" aria-label={`${shown.displayName} stats`}>
             {STAT_NAMES.map(([k, label]) => (
               <div key={k} className="stat">
