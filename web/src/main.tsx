@@ -27,11 +27,11 @@ import { Settings } from './pages/Settings.tsx';
 import { Packing } from './pages/Packing.tsx';
 import { Imports } from './pages/Imports.tsx';
 import { Arcade } from './arcade/Arcade.tsx';
-import { SUITE_NAME } from '../../src/core/brand.ts';
+import { ARCADE_GAME_NAME, SUITE_NAME } from '../../src/core/brand.ts';
 
 const NAV_ICONS: Record<string, string> = { '/arcade': '◉', '/': '⌂', '/calendar': '⏲', '/digest': '✉', '/research': '⌕', '/library': '▦', '/imports': '⇩', '/packing': '⛭', '/templates': '✎', '/jobs': '⚙', '/qa': '⚖', '/batches': '⚔', '/listings': '☰', '/publishing': '⇪', '/analytics': '◔', '/settings': '⚒' };
 const NAV_HINTS: Record<string, string> = {
-  '/arcade': 'Asset Foundry: the arcade cabinet front end (early build)',
+  '/arcade': 'The arcade cabinet: play your way through the suite (early build)',
   '/': 'What the factory is doing right now',
   '/calendar': 'Schedule automatic daily production',
   '/digest': 'Market research emailed every few days, with new ideas',
@@ -60,7 +60,7 @@ function Nav() {
   return (
     <nav className="sidebar nav" aria-label="Main">
       <div className="brand">{SUITE_NAME}<small>{data ? (data.providers.text.mode === 'ai' ? `AI: ${data.providers.text.model}` : 'AI not configured') : ' '}</small></div>
-      {link('/arcade', 'Asset Foundry arcade')}
+      {link('/arcade', `${ARCADE_GAME_NAME} arcade`)}
       {link('/', 'Dashboard')}
       {link('/calendar', 'Production calendar')}
       <div className="nav-section">Make</div>

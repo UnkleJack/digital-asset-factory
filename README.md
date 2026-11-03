@@ -1,6 +1,6 @@
 # Asset Foundry
 
-Asset Foundry is the suite. Its production engine is the factory (Digital Asset Factory, DAF). See [CONSTITUTION.md](CONSTITUTION.md).
+Asset Foundry is the suite. Its production engine is the factory (Digital Asset Factory, DAF), and HAPPY DAFFY is its arcade game. **[CONSTITUTION.md](CONSTITUTION.md) is the canonical record** of names, rules, where things live and current state.
 
 A local-first application that produces printable digital products (calendars, planners, trackers,
 journals, budget and invoice templates, coloring and activity pages, bundles), checks them, prepares

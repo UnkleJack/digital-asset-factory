@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { SUITE_NAME, SUITE_SHORT_NAME, ENGINE_NAME, ENGINE_SHORT_NAME } from '../src/core/brand.ts';
+import { SUITE_NAME, SUITE_SHORT_NAME, ENGINE_NAME, ENGINE_SHORT_NAME, ARCADE_GAME_NAME } from '../src/core/brand.ts';
 import { SettingsSchema } from '../src/config/settings.ts';
 
 // CONSTITUTION.md, article 1: the suite is Asset Foundry; the engine is the factory.
@@ -11,6 +11,7 @@ test('suite and engine names match the constitution', () => {
   assert.equal(SUITE_SHORT_NAME, 'Foundry');
   assert.equal(ENGINE_NAME, 'Digital Asset Factory');
   assert.equal(ENGINE_SHORT_NAME, 'DAF');
+  assert.equal(ARCADE_GAME_NAME, 'HAPPY DAFFY');
   assert.equal(SettingsSchema.parse({}).email.fromName, SUITE_NAME);
   assert.match(readFileSync(new URL('../web/index.html', import.meta.url), 'utf8'), /<title>Asset Foundry<\/title>/);
 });
