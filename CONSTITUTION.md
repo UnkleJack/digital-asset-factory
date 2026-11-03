@@ -142,7 +142,8 @@ As of 2026-11-03, `main` after pull request #9, plus milestone 2a on branch `cla
 - Portable copy: `npm run portable`.
 - HAPPY DAFFY milestone 1: Insert Coin, Start Gate with the zero-credit lock, Title, Character Select, the cabinet, keyboard, WASD and controller input, and a motion switch.
 - HAPPY DAFFY milestone 2a (pull request #10): Worlds the owner builds by hand. The World Builder creates worlds, milestones and tasks. Each task belongs to one character, has a task type (any of the 17 product types except imports, or Custom), a difficulty and effort points the owner sets. The Worlds list shows only worlds where the chosen character has an open task (open, in progress or blocked), sorted by the fewest effort points left before the next milestone. A milestone completes by itself when all its tasks are complete and reopens if one is reopened. World Detail lists that character's open tasks. The Task Workspace behind OPEN TASK is milestone 3.
-- Tests: 125 tests, 123 pass, 2 skipped, 0 fail.
+- HAPPY DAFFY milestones 2b and 2c: AI suggestions and AI-written worlds in the World Builder. NEED AN IDEA? gives clickable world ideas and task ideas that fill the forms. LET THE AI BUILD A WORLD takes a goal, the number of milestones, tasks per milestone, a difficulty mix, optional product types and an optional character, then shows a review screen. Nothing is saved until the owner presses SAVE WORLD, and the owner can remove tasks and milestones first. The owner's rule (2026-11-03): this part is AI-first. With no working AI provider it says so, and it never uses the built-in content library. Totals, ordering, progress and validation stay rule-based. Only tested against a stand-in AI so far, because no real provider key has been tried.
+- Tests: 129 tests, 127 pass, 2 skipped, 0 fail.
 
 **Built but not proven live**
 - AI text and image providers have only been tested against stand-in servers, never with real keys.
@@ -154,7 +155,6 @@ As of 2026-11-03, `main` after pull request #9, plus milestone 2a on branch `cla
 - `data/` has no backup off the Mac.
 
 **Not built yet**
-- HAPPY DAFFY milestone 2b and 2c: AI suggestions shown as clickable choices in the World Builder, and the factory generating worlds and tasks from settings the owner tunes.
 - HAPPY DAFFY milestones 3 to 10: Task Workspace, QA Review, Packs, live provider credits, XP and Codex, Leaderboards, the laziness failsafe, and new modules.
 - The AI Chatbot itself.
 - From the 2026-10-28 plan: the mandala engine expansion (Workstream A), geometric pattern art (Workstream B), and the test-browser isolation fix (C1).
@@ -163,11 +163,12 @@ As of 2026-11-03, `main` after pull request #9, plus milestone 2a on branch `cla
 
 **Next, in order**
 1. **On the Mac:** `git pull`, `npm ci`, `npm run backup`, then `npm run restore-products` (dry run), then `-- --apply`. Then try `/arcade`.
-2. **HAPPY DAFFY milestone 2b and 2c.** AI suggestions as clickable choices, then factory-generated worlds and tasks from tunable settings. Character persona names and sprites are waiting on the owner's picks (question E).
-3. **Factory upgrades from the 2026-10-28 plan:** mandala engine expansion, then geometric pattern art.
+2. **Try the AI suggestions with a real key.** Add a text provider key in Settings, then use NEED AN IDEA? and LET THE AI BUILD A WORLD in the World Builder. Until then they only run against a test stand-in.
+3. **HAPPY DAFFY milestone 3, the Task Workspace** (the screen behind OPEN TASK). Its questions are the spec's section H.
+4. **Factory upgrades from the 2026-10-28 plan:** mandala engine expansion, then geometric pattern art.
 
 **Undecided**
-- **A.** Answered 2026-11-03: both. The owner builds from scratch first (done in 2a), then AI suggestions and factory generation from tunable settings (2b, 2c). Still open: which settings to tune, and whether suggestions need a live AI provider or can come from the built-in content library when no key is set.
+- **A.** Answered 2026-11-03 and built: both. The owner builds from scratch, and the AI suggests and writes worlds. Possible later additions: more settings to tune, and effort points the AI estimates from past work.
 - **B.** The spec's own open questions H1 to H18 (`docs/ASSET_FOUNDRY_UX_SPEC.md`, section H). These include the low-credit threshold, the pack bonus, the vagueness test, the QA checklist, the laziness thresholds and the XP values.
 - **C.** What the AI Chatbot can see and do. Questions about income, money owed and tax can't get definite answers until the factory holds that data.
 - **D.** An off-Mac backup for `data/`.
