@@ -171,7 +171,7 @@ As of 2026-11-03, `main` after pull request #9, plus milestone 2a on branch `cla
 - **B.** The spec's own open questions H1 to H18 (`docs/ASSET_FOUNDRY_UX_SPEC.md`, section H). These include the low-credit threshold, the pack bonus, the vagueness test, the QA checklist, the laziness thresholds and the XP values.
 - **C.** What the AI Chatbot can see and do. Questions about income, money owed and tax can't get definite answers until the factory holds that data.
 - **D.** An off-Mac backup for `data/`.
-- **E.** Character persona names and bios. Brawlers were turned down (2026-11-03). The select screen now shows original pixel designs: a ninja for IDE on the left, a desk robot with a headset for the AI Chatbot in the middle, and a wizard for DAF on the right. The two side characters face the middle. Still open: whether the ninja and wizard swap sides, the persona names, and a custom-portrait slot for the owner's own images.
+- **E.** Character persona names and bios. Brawlers were turned down (2026-11-03). The select screen now shows original pixel designs: a ninja for IDE on the left, a desk robot with a headset for the AI Chatbot in the middle, and a wizard for DAF on the right. The two side characters face the middle. The owner confirmed these sides on 2026-11-03. Still open: the persona names and a custom-portrait slot for the owner's own images.
 
 ---
 
