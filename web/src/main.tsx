@@ -26,9 +26,11 @@ import { Analytics } from './pages/Analytics.tsx';
 import { Settings } from './pages/Settings.tsx';
 import { Packing } from './pages/Packing.tsx';
 import { Imports } from './pages/Imports.tsx';
+import { Arcade } from './arcade/Arcade.tsx';
 
-const NAV_ICONS: Record<string, string> = { '/': '⌂', '/calendar': '⏲', '/digest': '✉', '/research': '⌕', '/library': '▦', '/imports': '⇩', '/packing': '⛭', '/templates': '✎', '/jobs': '⚙', '/qa': '⚖', '/batches': '⚔', '/listings': '☰', '/publishing': '⇪', '/analytics': '◔', '/settings': '⚒' };
+const NAV_ICONS: Record<string, string> = { '/arcade': '◉', '/': '⌂', '/calendar': '⏲', '/digest': '✉', '/research': '⌕', '/library': '▦', '/imports': '⇩', '/packing': '⛭', '/templates': '✎', '/jobs': '⚙', '/qa': '⚖', '/batches': '⚔', '/listings': '☰', '/publishing': '⇪', '/analytics': '◔', '/settings': '⚒' };
 const NAV_HINTS: Record<string, string> = {
+  '/arcade': 'Asset Foundry: the arcade cabinet front end (early build)',
   '/': 'What the factory is doing right now',
   '/calendar': 'Schedule automatic daily production',
   '/digest': 'Market research emailed every few days, with new ideas',
@@ -57,6 +59,7 @@ function Nav() {
   return (
     <nav className="sidebar nav" aria-label="Main">
       <div className="brand">Digital Asset Factory<small>{data ? (data.providers.text.mode === 'ai' ? `AI: ${data.providers.text.model}` : 'AI not configured') : ' '}</small></div>
+      {link('/arcade', 'Asset Foundry arcade')}
       {link('/', 'Dashboard')}
       {link('/calendar', 'Production calendar')}
       <div className="nav-section">Make</div>
@@ -87,33 +90,43 @@ function App() {
   return (
     <BrowserRouter>
       <ToastProvider>
-        <div className="shell">
-          <Nav />
-          <main className="main">
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/calendar" element={<CalendarPage />} />
-              <Route path="/library" element={<Library />} />
-              <Route path="/imports" element={<Imports />} />
-              <Route path="/products/:id" element={<ProductDetail />} />
-              <Route path="/research" element={<Research />} />
-              <Route path="/digest" element={<Digest />} />
-              <Route path="/packing" element={<Packing />} />
-              <Route path="/templates" element={<Templates />} />
-              <Route path="/jobs" element={<Jobs />} />
-              <Route path="/qa" element={<QaPage />} />
-              <Route path="/batches" element={<Batches />} />
-              <Route path="/batches/:id" element={<BatchReview />} />
-              <Route path="/listings" element={<Listings />} />
-              <Route path="/publishing" element={<Publishing />} />
-              <Route path="/analytics" element={<Analytics />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </main>
-        </div>
+        <Routes>
+          {/* The arcade has its own full-screen cabinet; everything else keeps the back-office layout. */}
+          <Route path="/arcade/*" element={<Arcade />} />
+          <Route path="*" element={<BackOffice />} />
+        </Routes>
       </ToastProvider>
     </BrowserRouter>
+  );
+}
+
+function BackOffice() {
+  return (
+    <div className="shell">
+      <Nav />
+      <main className="main">
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/calendar" element={<CalendarPage />} />
+          <Route path="/library" element={<Library />} />
+          <Route path="/imports" element={<Imports />} />
+          <Route path="/products/:id" element={<ProductDetail />} />
+          <Route path="/research" element={<Research />} />
+          <Route path="/digest" element={<Digest />} />
+          <Route path="/packing" element={<Packing />} />
+          <Route path="/templates" element={<Templates />} />
+          <Route path="/jobs" element={<Jobs />} />
+          <Route path="/qa" element={<QaPage />} />
+          <Route path="/batches" element={<Batches />} />
+          <Route path="/batches/:id" element={<BatchReview />} />
+          <Route path="/listings" element={<Listings />} />
+          <Route path="/publishing" element={<Publishing />} />
+          <Route path="/analytics" element={<Analytics />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </main>
+    </div>
   );
 }
 

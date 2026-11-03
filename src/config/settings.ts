@@ -354,6 +354,12 @@ export const SettingsSchema = z.object({
     enabled: z.boolean().default(false),
     bindAddress: z.string().trim().min(2).max(60).default('0.0.0.0'),
   }).prefault({}),
+  arcade: z.object({
+    // The arcade's credit meter runs on this test number until live provider headroom is wired in
+    // (spec milestone 6). The arcade always labels it TEST so it is never mistaken for live data.
+    // 0 locks PRESS START, which is how the zero-credit lock is tried out.
+    testCredits: z.number().int().min(0).max(99).default(3),
+  }).prefault({}),
   email: z.object({
     // Gmail's SMTP relay: the Gmail address you send from goes here; its app password is the smtp_password secret.
     smtpUser: z.string().max(200).default(''),
