@@ -6,9 +6,9 @@ import '@fontsource/press-start-2p/400.css';
 import './arcade.css';
 import { useApi } from '../api.ts';
 import { useArcadeInput, type Direction } from './input.ts';
-import { ENGINE_NAME, SUITE_NAME, SUITE_TAGLINE } from '../../../src/core/brand.ts';
+import { ARCADE_GAME_NAME, ARCADE_TAGLINE, ENGINE_NAME } from '../../../src/core/brand.ts';
 
-// Asset Foundry: the arcade front end from the UX spec, milestone 1 (entry flow + navigation skeleton).
+// HAPPY DAFFY: the arcade front end of Asset Foundry, from the UX spec, milestone 1 (entry flow + navigation skeleton).
 // Insert Coin → Start Gate → Title → Character Select → Worlds (placeholder until milestone 2).
 
 interface Character {
@@ -26,7 +26,7 @@ interface ArcadeData {
   startAllowed: boolean;
 }
 
-const TITLE_WORDS = SUITE_NAME.toUpperCase().split(' ');
+const TITLE_WORDS = ARCADE_GAME_NAME.split(' ');
 
 type Screen = 'attract' | 'gate' | 'title' | 'select' | 'worlds';
 const SCREEN_TITLES: Record<Screen, string> = { attract: 'INSERT COIN', gate: 'START GATE', title: 'TITLE', select: 'CHARACTER SELECT', worlds: 'WORLDS' };
@@ -132,10 +132,10 @@ export function Arcade() {
   return (
     <div className={`arcade-room${reduced ? ' reduced' : ''}`}>
       <div className="cabinet">
-        <header className="cab-marquee" aria-label={SUITE_NAME}>
+        <header className="cab-marquee" aria-label={ARCADE_GAME_NAME}>
           <div className="marquee-lights" aria-hidden="true" />
           <h1 className="marquee-title">{TITLE_WORDS.map((w, i) => <span key={w}>{i ? ' ' : ''}{w}</span>)}</h1>
-          <p className="marquee-sub">{SUITE_TAGLINE}</p>
+          <p className="marquee-sub">{ARCADE_TAGLINE}</p>
         </header>
 
         <div className="cab-status">
