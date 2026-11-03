@@ -1,4 +1,4 @@
-# Running Digital Asset Factory on Windows 11
+# Running Asset Foundry on Windows 11
 
 The app runs the same on Windows as on a Mac. These steps take about 15 minutes the first time.
 
@@ -15,7 +15,7 @@ The app runs the same on Windows as on a Mac. These steps take about 15 minutes 
 Double-click **`start.bat`** in the app folder.
 
 - The first time, it installs the parts it needs (a few minutes).
-- Then it builds the interface and starts. When the window says `Digital Asset Factory is running at http://127.0.0.1:4317`, open that address in Chrome or Edge.
+- Then it builds the interface and starts. When the window says `Asset Foundry is running at http://127.0.0.1:4317`, open that address in Chrome or Edge.
 - Leave that black window open while you use the app. Close it to stop the app.
 
 If Windows asks whether to allow Node.js through the firewall: choose **Private networks** only. (You only need this if another computer will connect to this one.)

@@ -1,5 +1,5 @@
 @echo off
-rem Digital Asset Factory for Windows: double-click this file to start the app.
+rem Asset Foundry for Windows: double-click this file to start the app.
 cd /d "%~dp0"
 where node >nul 2>nul
 if errorlevel 1 (
@@ -11,6 +11,6 @@ if not exist node_modules (
   echo First run: installing... this takes a few minutes.
   call npm install || (pause & exit /b 1)
 )
-echo Starting Digital Asset Factory. Leave this window open; close it to stop the app.
+echo Starting Asset Foundry. Leave this window open; close it to stop the app.
 call npm start
 pause

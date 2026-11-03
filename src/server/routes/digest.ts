@@ -7,6 +7,7 @@ import { searchesThisMonth } from '../../engine/digest/search.ts';
 import { smtpMailer } from '../../engine/digest/email.ts';
 import { errorMessage } from '../../core/errors.ts';
 import { int, parse, type Q, type P } from './util.ts';
+import { SUITE_NAME } from '../../core/brand.ts';
 
 export function registerDigestRoutes(s: FastifyInstance, { app }: ServerDeps): void {
   s.get('/api/digest', async (req) => {
@@ -25,7 +26,7 @@ export function registerDigestRoutes(s: FastifyInstance, { app }: ServerDeps): v
   s.post('/api/integrations/email/test', async () => {
     const to = app.settings.get('research').digest.recipientEmail;
     try {
-      await smtpMailer(app).send({ to, subject: 'Digital Asset Factory: email works', text: 'This is a test from Digital Asset Factory. Research digests will arrive at this address.', html: '<p>This is a test from <b>Digital Asset Factory</b>. Research digests will arrive at this address.</p>' });
+      await smtpMailer(app).send({ to, subject: `${SUITE_NAME}: email works`, text: `This is a test from ${SUITE_NAME}. Research digests will arrive at this address.`, html: `<p>This is a test from <b>${SUITE_NAME}</b>. Research digests will arrive at this address.</p>` });
       return { ok: true, to };
     } catch (err) {
       return { ok: false, error: errorMessage(err) };

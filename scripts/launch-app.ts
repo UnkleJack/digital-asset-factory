@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolvePaths } from '../src/config/paths.ts';
 import { resolveChromePath } from '../src/config/chrome.ts';
+import { SUITE_NAME } from '../src/core/brand.ts';
 
 const port = Number(process.env.DAF_PORT ?? 4317);
 const url = `http://127.0.0.1:${port}`;
@@ -40,7 +41,7 @@ if (chrome && existsSync(chrome)) {
   const profile = join(paths.dataDir, 'chrome-app-profile');
   mkdirSync(profile, { recursive: true });
   spawn(chrome, [`--app=${url}`, `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check'], { detached: true, stdio: 'ignore' }).unref();
-  console.log(`Opened Digital Asset Factory in its own window (${url}).`);
+  console.log(`Opened ${SUITE_NAME} in its own window (${url}).`);
 } else {
   const [cmd, args] = process.platform === 'win32' ? ['cmd', ['/c', 'start', '', url]] : process.platform === 'darwin' ? ['open', [url]] : ['xdg-open', [url]];
   try {
@@ -48,5 +49,5 @@ if (chrome && existsSync(chrome)) {
   } catch {
     // Opening a browser is a convenience; the address below always works.
   }
-  console.log(`Digital Asset Factory is running. Open ${url} in your browser.`);
+  console.log(`${SUITE_NAME} is running. Open ${url} in your browser.`);
 }

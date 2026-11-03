@@ -17,7 +17,9 @@ import { registerDigestRoutes } from './routes/digest.ts';
 import { registerTournamentRoutes } from './routes/tournaments.ts';
 import { registerPackingRoutes } from './routes/packing.ts';
 import { registerReferenceRoutes } from './routes/references.ts';
+import { registerArcadeRoutes } from './routes/arcade.ts';
 import { RemoteGate, registerRemoteRoutes, isLoopback } from './remote.ts';
+import { SUITE_NAME } from '../core/brand.ts';
 
 export interface ServerDeps {
   app: App;
@@ -111,6 +113,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   registerTournamentRoutes(server, { app });
   registerPackingRoutes(server, deps);
   registerReferenceRoutes(server, deps);
+  registerArcadeRoutes(server, deps);
 
   server.all('/api/*', async (_req, reply) => reply.code(404).send({ error: { code: 'not_found', message: 'Unknown API endpoint' } }));
 
@@ -125,7 +128,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
       return reply.code(404).send({ error: { code: 'not_found', message: 'Not found' } });
     });
   } else {
-    server.get('/', async (_req, reply) => reply.type('text/html').send('<!doctype html><meta charset="utf-8"><title>Digital Asset Factory</title><body style="font-family:system-ui;padding:40px"><h1>Digital Asset Factory</h1><p>The web interface has not been built yet. Run <code>npm run build:web</code> (or use <code>npm start</code>, which builds it) and reload.</p><p>The API is available at <a href="/api/health">/api/health</a>.</p></body>'));
+    server.get('/', async (_req, reply) => reply.type('text/html').send(`<!doctype html><meta charset="utf-8"><title>${SUITE_NAME}</title><body style="font-family:system-ui;padding:40px"><h1>${SUITE_NAME}</h1><p>The web interface has not been built yet. Run <code>npm run build:web</code> (or use <code>npm start</code>, which builds it) and reload.</p><p>The API is available at <a href="/api/health">/api/health</a>.</p></body>`));
   }
   return server;
 }

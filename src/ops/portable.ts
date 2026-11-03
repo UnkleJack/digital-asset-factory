@@ -2,6 +2,7 @@ import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from '
 import { join, relative } from 'node:path';
 import { zipSync, strToU8, type Zippable } from 'fflate';
 import { PROJECT_ROOT, type Paths } from '../config/paths.ts';
+import { SUITE_NAME } from '../core/brand.ts';
 
 export interface PortableOptions {
   /** Include node_modules so the copy runs with no internet (recommended). */
@@ -41,8 +42,8 @@ function walk(dir: string, into: Zippable, prefix: string, skipTop?: (name: stri
 }
 
 function portableReadme(withData: boolean): string {
-  return `Digital Asset Factory — portable copy
-=====================================
+  return `${SUITE_NAME} — portable copy
+${'='.repeat(SUITE_NAME.length + 16)}
 
 This is a complete copy of the app${withData ? ', including the products, listings and settings from the computer it was made on' : ''}.
 
@@ -72,7 +73,7 @@ No internet needed to run: dependencies are included, fonts are bundled, and pro
 are produced offline. Internet is only needed for AI text/images, the research digest
 search, email, Gumroad posting, and npm install if you rebuild the web interface.
 
-Made by Digital Asset Factory → npm run portable (Settings → Backups has the same command).
+Made by ${SUITE_NAME} → npm run portable (Settings → Backups has the same command).
 `;
 }
 

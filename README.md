@@ -1,4 +1,6 @@
-# Digital Asset Factory
+# Asset Foundry
+
+Asset Foundry is the suite. Its production engine is the factory (Digital Asset Factory, DAF). See [CONSTITUTION.md](CONSTITUTION.md).
 
 A local-first application that produces printable digital products (calendars, planners, trackers,
 journals, budget and invoice templates, coloring and activity pages, bundles), checks them, prepares

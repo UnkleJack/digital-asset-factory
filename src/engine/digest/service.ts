@@ -9,6 +9,7 @@ import { audit, type AuditActor } from '../../logging/logger.ts';
 import { json } from '../../db/sqlite.ts';
 import { makeSearcher, DEFAULT_ENDPOINTS, type SearchEndpoints, type SearchResult } from './search.ts';
 import { smtpMailer, type Mailer } from './email.ts';
+import { SUITE_NAME } from '../../core/brand.ts';
 
 /*
  * The research digest: (1) what sells on each platform, (2) what tracked competitor shops are
@@ -389,6 +390,6 @@ export function renderDigestEmail(d: { date: string; platforms: any[]; shops: an
       <p><b>Risks:</b> ${esc(f.risks)}<br><b>Evidence:</b> ${esc(f.evidence)}</p></div>`);
     t.push('', `${i + 1}. ${f.title} (${f.score}/10)`, f.summary, `Buyer: ${f.targetBuyer}`, `Money: ${f.monetization}`, `Prices: ${f.pricePoints}`, `Sell on: ${f.platforms.join(', ')}`, `Make first: ${f.firstProducts.join('; ')}`, `Risks: ${f.risks}`, `Evidence: ${f.evidence}`);
   });
-  h.push(`<p style="color:#777;font-size:12px;margin-top:24px">Sent by Digital Asset Factory. Open the Digest page in the app to save an idea to Research.</p></div>`);
+  h.push(`<p style="color:#777;font-size:12px;margin-top:24px">Sent by ${SUITE_NAME}. Open the Digest page in the app to save an idea to Research.</p></div>`);
   return { subject: `Research digest ${d.date}: ${d.finals.map((f: any) => f.title).join(' / ') || 'market scan'}`.slice(0, 200), html: h.join('\n'), text: t.join('\n') };
 }
