@@ -6,6 +6,7 @@ import '@fontsource/press-start-2p/400.css';
 import './arcade.css';
 import { useApi } from '../api.ts';
 import { useArcadeInput, type Direction } from './input.ts';
+import { WorldsScreen, WorldDetail, BuilderScreen, BuilderWorldScreen } from './Worlds.tsx';
 import { ARCADE_GAME_NAME, ARCADE_TAGLINE, ENGINE_NAME } from '../../../src/core/brand.ts';
 
 // HAPPY DAFFY: the arcade front end of Asset Foundry, from the UX spec, milestone 1 (entry flow + navigation skeleton).
@@ -28,9 +29,9 @@ interface ArcadeData {
 
 const TITLE_WORDS = ARCADE_GAME_NAME.split(' ');
 
-type Screen = 'attract' | 'gate' | 'title' | 'select' | 'worlds';
-const SCREEN_TITLES: Record<Screen, string> = { attract: 'INSERT COIN', gate: 'START GATE', title: 'TITLE', select: 'CHARACTER SELECT', worlds: 'WORLDS' };
-const BACK: Partial<Record<Screen, Screen>> = { gate: 'attract', select: 'title', worlds: 'select' };
+type Screen = 'attract' | 'gate' | 'title' | 'select' | 'worlds' | 'world' | 'builder' | 'builderWorld';
+const SCREEN_TITLES: Record<Screen, string> = { attract: 'INSERT COIN', gate: 'START GATE', title: 'TITLE', select: 'CHARACTER SELECT', worlds: 'WORLDS', world: 'WORLD DETAIL', builder: 'WORLD BUILDER', builderWorld: 'WORLD BUILDER' };
+const BACK: Partial<Record<Screen, Screen>> = { gate: 'attract', select: 'title', worlds: 'select', world: 'worlds', builder: 'worlds', builderWorld: 'builder' };
 const CHARACTER_KEY = 'daf.arcade.character';
 const MOTION_KEY = 'daf.arcade.reducedMotion';
 
@@ -74,6 +75,8 @@ export function Arcade() {
   const [reduced, toggleMotion] = useReducedMotion();
   const [stick, setStick] = useState<Direction | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [worldId, setWorldId] = useState<string | null>(null);
+  const [builderWorldId, setBuilderWorldId] = useState<string | null>(null);
   const screenRef = useRef<HTMLDivElement>(null);
 
   const credits = data?.credits;
@@ -127,7 +130,10 @@ export function Arcade() {
   else if (screen === 'gate') body = <StartGate allowed={startAllowed} known={creditsKnown} notice={notice} onStart={pressStart} onBack={back} />;
   else if (screen === 'title') body = <Title data={data} reduced={reduced} zero={credits?.state === 'zero'} onStart={() => go('select')} />;
   else if (screen === 'select') body = <CharacterSelect characters={data?.characters ?? []} chosen={character} highlight={highlight} onHighlight={setHighlight} onChoose={choose} onEnter={() => go('worlds')} onBack={back} />;
-  else body = <Worlds character={active} onSwitch={back} onGo={(s) => setNotice(`${s} UNLOCKS IN A LATER BUILD`)} notice={notice} />;
+  else if (screen === 'worlds') body = <WorldsScreen character={active} onOpen={(id) => { setWorldId(id); go('world'); }} onBuilder={() => go('builder')} onSwitch={() => go('select')} />;
+  else if (screen === 'world' && worldId) body = <WorldDetail worldId={worldId} character={active} onBack={() => go('worlds')} />;
+  else if (screen === 'builderWorld' && builderWorldId) body = <BuilderWorldScreen worldId={builderWorldId} defaultCharacter={character} onBack={() => go('builder')} />;
+  else body = <BuilderScreen onOpen={(id) => { setBuilderWorldId(id); go('builderWorld'); }} onBack={() => go('worlds')} />;
 
   return (
     <div className={`arcade-room${reduced ? ' reduced' : ''}`}>
@@ -336,32 +342,6 @@ function CharacterSelect({ characters, chosen, highlight, onHighlight, onChoose,
         </button>
       </div>
       {!chosen ? <p className="hint-line">PICK A CHARACTER FIRST</p> : null}
-    </div>
-  );
-}
-
-const NAV_DESTINATIONS = ['WORLDS', 'PACKS', 'LEADERBOARDS', 'CODEX'] as const;
-
-function Worlds({ character, onSwitch, onGo, notice }: { character: Character | null; onSwitch: () => void; onGo: (s: string) => void; notice: string | null }) {
-  return (
-    <div className="scr worlds-screen">
-      <nav className="arcade-tabs" aria-label="Arcade">
-        {NAV_DESTINATIONS.map((d) => (
-          <button key={d} type="button" className={`arcade-tab${d === 'WORLDS' ? ' active' : ' unavailable'}`} data-nav aria-current={d === 'WORLDS' ? 'page' : undefined} aria-disabled={d !== 'WORLDS'} onClick={() => d !== 'WORLDS' && onGo(d)}>
-            {d}{d !== 'WORLDS' ? <small>SOON</small> : null}
-          </button>
-        ))}
-      </nav>
-      <h2 className="screen-title">WORLDS</h2>
-      <p className="crt-text center-text">{character ? `${character.displayName}: ${character.scope}` : 'No character selected.'}</p>
-      <div className="empty-panel" role="status">
-        <p className="big-pixel">NO WORLDS OPEN</p>
-        <p className="crt-text">Worlds, milestones and tasks are built in the next update. Until then no projects are loaded for any character.</p>
-      </div>
-      {notice ? <p className="lock-line">{notice}</p> : null}
-      <div className="row-actions">
-        <button type="button" className="arc-btn" data-nav data-autofocus onClick={onSwitch}>SWITCH CHARACTER</button>
-      </div>
     </div>
   );
 }
