@@ -133,7 +133,7 @@ Adopted 2026-11-03.
 
 ## Article 8: Current state
 
-As of 2026-11-03, `main` after pull request #8, plus milestone 2a on branch `claude/project-thread-val3xe` (pull request #9).
+As of 2026-11-03, `main` after pull request #9, plus milestone 2a on branch `claude/project-thread-val3xe` (pull request #10, not merged yet).
 
 **Working**
 - All 17 product types produce offline with the built-in content library: QA, packaging, listings, batch approval and export packages.
@@ -141,7 +141,7 @@ As of 2026-11-03, `main` after pull request #8, plus milestone 2a on branch `cla
 - Pack carts and the bundle builder. Production plans, which run while the app is open.
 - Portable copy: `npm run portable`.
 - HAPPY DAFFY milestone 1: Insert Coin, Start Gate with the zero-credit lock, Title, Character Select, the cabinet, keyboard, WASD and controller input, and a motion switch.
-- HAPPY DAFFY milestone 2a (pull request #9): Worlds the owner builds by hand. The World Builder creates worlds, milestones and tasks. Each task belongs to one character, has a task type (any of the 17 product types except imports, or Custom), a difficulty and effort points the owner sets. The Worlds list shows only worlds where the chosen character has an open task (open, in progress or blocked), sorted by the fewest effort points left before the next milestone. A milestone completes by itself when all its tasks are complete and reopens if one is reopened. World Detail lists that character's open tasks. The Task Workspace behind OPEN TASK is milestone 3.
+- HAPPY DAFFY milestone 2a (pull request #10): Worlds the owner builds by hand. The World Builder creates worlds, milestones and tasks. Each task belongs to one character, has a task type (any of the 17 product types except imports, or Custom), a difficulty and effort points the owner sets. The Worlds list shows only worlds where the chosen character has an open task (open, in progress or blocked), sorted by the fewest effort points left before the next milestone. A milestone completes by itself when all its tasks are complete and reopens if one is reopened. World Detail lists that character's open tasks. The Task Workspace behind OPEN TASK is milestone 3.
 - Tests: 125 tests, 123 pass, 2 skipped, 0 fail.
 
 **Built but not proven live**
