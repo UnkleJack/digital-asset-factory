@@ -1,4 +1,5 @@
 import type { AppContext } from '../../app/context.ts';
+import { portraitUrl } from './portraits.ts';
 
 // The arcade front end ("Asset Foundry") from the UX spec. Milestone 1 covers the entry flow only:
 // Insert Coin → Start Gate → Title → Character Select. Worlds, tasks, XP and leaderboards come later.
@@ -66,7 +67,7 @@ export interface ArcadeState {
     live: false;
     state: CreditState;
   };
-  characters: readonly ArcadeCharacter[];
+  characters: readonly (ArcadeCharacter & { portraitUrl: string | null })[];
   /** Leaderboard records. Empty until leaderboards exist; the title screen shows a placeholder, never made-up entries. */
   hiScores: { label: string; score: number }[];
 }
@@ -75,7 +76,7 @@ export function arcadeState(app: AppContext): ArcadeState {
   const value = app.settings.get('arcade').testCredits;
   return {
     credits: { value, source: 'test', live: false, state: value <= 0 ? 'zero' : 'normal' },
-    characters: CHARACTERS,
+    characters: CHARACTERS.map((c) => ({ ...c, portraitUrl: portraitUrl(app, c.id) })),
     hiScores: [],
   };
 }

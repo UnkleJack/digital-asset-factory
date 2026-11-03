@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { createReadStream } from 'node:fs';
 import type { FastifyInstance } from 'fastify';
 import type { ServerDeps } from '../app.ts';
 import { arcadeState, canStart } from '../../engine/arcade/service.ts';
@@ -6,6 +7,8 @@ import {
   DIFFICULTIES, TASK_STATUSES, worldsFor, worldDetailFor, listAllWorlds, worldForBuilder,
   createWorld, updateWorld, addMilestone, addTask, updateTask, deleteTask,
 } from '../../engine/arcade/worlds.ts';
+import { setPortrait, clearPortrait, portraitFor, MAX_PORTRAIT_BYTES } from '../../engine/arcade/portraits.ts';
+import { notFound } from '../../core/errors.ts';
 import { parse, type P, type Q } from './util.ts';
 
 const Effort = z.number().positive().max(10_000);
@@ -45,6 +48,27 @@ export function registerArcadeRoutes(s: FastifyInstance, { app }: ServerDeps): v
   s.get('/api/arcade', async () => {
     const state = arcadeState(app);
     return { ...state, startAllowed: canStart(state) };
+  });
+
+  // Custom portraits: the owner's own image for a character, instead of the pixel art.
+  const PortraitBody = z.object({ dataBase64: z.string().min(8).max(Math.ceil((MAX_PORTRAIT_BYTES * 4) / 3) + 16) });
+  s.get('/api/arcade/characters/:id/portrait', async (req, reply) => {
+    const id = (req.params as P).id;
+    const p = portraitFor(app, id);
+    if (!p) throw notFound('Portrait', id);
+    reply.header('Content-Type', p.mime);
+    reply.header('Content-Security-Policy', "default-src 'none'; sandbox");
+    reply.header('Cache-Control', 'private, max-age=300');
+    return reply.send(createReadStream(app.assets.resolve(p.rel)));
+  });
+  s.put('/api/arcade/characters/:id/portrait', async (req) => {
+    const b = parse(PortraitBody, req.body, 'portrait');
+    setPortrait(app, (req.params as P).id, Buffer.from(b.dataBase64, 'base64'));
+    return arcadeState(app).characters.find((c) => c.id === (req.params as P).id);
+  });
+  s.delete('/api/arcade/characters/:id/portrait', async (req) => {
+    clearPortrait(app, (req.params as P).id);
+    return { ok: true };
   });
 
   // Player side: only worlds where the character has open tasks.

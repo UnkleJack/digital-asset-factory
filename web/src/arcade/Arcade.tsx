@@ -4,7 +4,7 @@ import '@fontsource/bungee-shade/400.css';
 import '@fontsource/bungee/400.css';
 import '@fontsource/press-start-2p/400.css';
 import './arcade.css';
-import { useApi } from '../api.ts';
+import { api, errorText, useApi } from '../api.ts';
 import { useArcadeInput, type Direction } from './input.ts';
 import { WorldsScreen, WorldDetail, BuilderScreen, BuilderWorldScreen } from './Worlds.tsx';
 import { ARCADE_GAME_NAME, ARCADE_TAGLINE, ENGINE_NAME } from '../../../src/core/brand.ts';
@@ -19,6 +19,8 @@ interface Character {
   role: string;
   tagline: string;
   bio: string;
+  /** The owner's own image for this character, or null for the built-in pixel art. */
+  portraitUrl: string | null;
   scope: string;
   stats: { eye: number | null; craft: number | null; taste: number | null; patience: number | null };
 }
@@ -131,7 +133,7 @@ export function Arcade() {
   else if (screen === 'attract') body = <Attract onCoin={insertCoin} />;
   else if (screen === 'gate') body = <StartGate allowed={startAllowed} known={creditsKnown} notice={notice} onStart={pressStart} onBack={back} />;
   else if (screen === 'title') body = <Title data={data} reduced={reduced} zero={credits?.state === 'zero'} onStart={() => go('select')} />;
-  else if (screen === 'select') body = <CharacterSelect characters={data?.characters ?? []} chosen={character} highlight={highlight} onHighlight={setHighlight} onChoose={choose} onEnter={() => go('worlds')} onBack={back} />;
+  else if (screen === 'select') body = <CharacterSelect characters={data?.characters ?? []} chosen={character} highlight={highlight} onHighlight={setHighlight} onChoose={choose} onEnter={() => go('worlds')} onBack={back} onPortraitChanged={() => void reload()} />;
   else if (screen === 'worlds') body = <WorldsScreen character={active} onOpen={(id) => { setWorldId(id); go('world'); }} onBuilder={() => go('builder')} onSwitch={() => go('select')} />;
   else if (screen === 'world' && worldId) body = <WorldDetail worldId={worldId} character={active} onBack={() => go('worlds')} />;
   else if (screen === 'builderWorld' && builderWorldId) body = <BuilderWorldScreen worldId={builderWorldId} defaultCharacter={character} onBack={() => go('builder')} />;
@@ -294,9 +296,62 @@ function Title({ data, reduced, zero, onStart }: { data: ArcadeData | null; redu
 
 const STAT_NAMES = [['eye', 'EYE'], ['craft', 'CRAFT'], ['taste', 'TASTE'], ['patience', 'PATIENCE']] as const;
 
-function CharacterSelect({ characters, chosen, highlight, onHighlight, onChoose, onEnter, onBack }: {
+function readBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).slice(String(r.result).indexOf(',') + 1));
+    r.onerror = () => reject(r.error ?? new Error('Could not read the file'));
+    r.readAsDataURL(file);
+  });
+}
+
+function PortraitControls({ character, onChanged }: { character: Character; onChanged: () => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const run = async (fn: () => Promise<unknown>) => {
+    setBusy(true);
+    setErr(null);
+    try {
+      await fn();
+      onChanged();
+    } catch (e) {
+      setErr(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="portrait-controls">
+      <input
+        ref={input}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        className="sr-only"
+        tabIndex={-1}
+        aria-label={`Custom portrait for ${character.displayName}`}
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = '';
+          if (f) void run(async () => api(`/arcade/characters/${character.id}/portrait`, { method: 'PUT', body: { dataBase64: await readBase64(f) } }));
+        }}
+      />
+      <button type="button" className="arc-btn small" data-nav disabled={busy} onClick={() => input.current?.click()}>
+        {character.portraitUrl ? 'CHANGE PORTRAIT' : 'CUSTOM PORTRAIT'}
+      </button>
+      {character.portraitUrl ? (
+        <button type="button" className="arc-btn small" data-nav disabled={busy} onClick={() => void run(() => api(`/arcade/characters/${character.id}/portrait`, { method: 'DELETE' }))}>
+          USE PIXEL ART
+        </button>
+      ) : null}
+      {err ? <p className="crt-error" role="alert">{err}</p> : null}
+    </div>
+  );
+}
+
+function CharacterSelect({ characters, chosen, highlight, onHighlight, onChoose, onEnter, onBack, onPortraitChanged }: {
   characters: Character[]; chosen: string | null; highlight: string | null;
-  onHighlight: (id: string) => void; onChoose: (id: string) => void; onEnter: () => void; onBack: () => void;
+  onHighlight: (id: string) => void; onChoose: (id: string) => void; onEnter: () => void; onBack: () => void; onPortraitChanged: () => void;
 }) {
   const shown = characters.find((c) => c.id === (highlight ?? chosen)) ?? characters[0];
   return (
@@ -316,7 +371,9 @@ function CharacterSelect({ characters, chosen, highlight, onHighlight, onChoose,
             onMouseEnter={() => onHighlight(c.id)}
             onClick={() => onChoose(c.id)}
           >
-            <span className="char-portrait" aria-hidden="true"><CharacterSprite type={c.type} /></span>
+            <span className="char-portrait" aria-hidden="true">
+              {c.portraitUrl ? <img className="char-photo" src={c.portraitUrl} alt="" /> : <CharacterSprite type={c.type} />}
+            </span>
             <span className="char-name">{c.displayName}</span>
             <span className="char-tag">{c.role === c.displayName ? c.tagline : `${c.role} · ${c.tagline}`}</span>
             {chosen === c.id ? <span className="char-picked">SELECTED</span> : null}
@@ -327,6 +384,7 @@ function CharacterSelect({ characters, chosen, highlight, onHighlight, onChoose,
         <div className="char-info">
           <p className="crt-text">{shown.bio}</p>
           <p className="fine">{shown.role}: {shown.scope}</p>
+          <PortraitControls character={shown} onChanged={onPortraitChanged} />
           <dl className="stat-panel" aria-label={`${shown.displayName} stats`}>
             {STAT_NAMES.map(([k, label]) => (
               <div key={k} className="stat">

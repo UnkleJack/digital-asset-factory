@@ -73,3 +73,37 @@ test('GET /api/arcade: zero credits lock Start, credits come back unlock it', as
 
   assert.equal((await setCredits(-1)).statusCode, 422, 'negative credits are refused');
 });
+
+// Custom portraits: the owner's own image replaces the pixel art; removing it brings the pixel art back.
+const PNG_96 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAIAAABt+uBvAAADcUlEQVR4nO1cwXLFIAhMOv3/X04PmUlT05ddYEEP7PFVATeIq7HZj+PYGp/xNTuA1dEEATRBAE0QQBME0AQBNEEATRBAEwTwPdf9vu9Ms4lyf6/3TZLyCcUB1xH0Ly+k90jfICoIGoYX9Ki1ht2lOrgPRu4o1fivlyTTNdEXONITVEZNjVMxQVegUxbmDO9KoTiXnbvfoJK4Q5NB06kZIIxHQFAwGvi0g2ajqkKlSkx23FPA5yUyxhBBjgie1MC+ji7Pvu5h+gmy+o4rYJ+FaAUIEsR0l4sUq0E+1H/6RkqgiZ08RZrKkUcHrcDOZlQ9Z2PH4mDOIHLMlcooNSSnkl6HnY1OJV8wNoKYyTVFVZs4Mk20rDNplW7k7RzHIdyCXTDUID59Igepn2CyKQxSmUE+ZfTe5WpJGj/zaN9lxzhsDYLx8ekwyLz3kQwNfF6eNnlT4heH/MYKUjOY5VXPhBNFMn1IdiTnB3FfpJ26V88SdjbXUh2BgCD5wgHBcKTiERMUH5uWnRPx8ZMWohkEHWTPhewANDqIkSfQiPU8DEpnibbOLdJkfKe0Y36MePEBECQpH/zm9o7hrw7LZGDvLkIZJKzfTyPXjwWV+AWJU0wi1eAIs2VR31EEmEYQPz2LpfOAziCAJgigCQJoggCmEcSX3oy9Lo/OIIBEgiQaT3Uw6EaIIOFW4GWzOvcoChAkEWnkhnP/i+GvDstkYO8ucmsQ+ejeN6sqLz5oDszgizrmTZ77nom7AYNoBsmHvVoAmKAVDmWeKKvfghpU+RLmROWLpjqhqOKoWFiztyC0b5+ZlpG+QnkpziD+ZgH/0mJozD8DCViCyH0Db+oEpGlo4PPytMmbUl6gOujLSwPdzDNXlQIrbDexkpYPSWKSrq3hZV3iZPLoguSBJ53q24o0L3lgMy1Mm1vT83CuYktxlLr199wG5Z9DRPXwkZiCsUbiySBeE6emUgE7my+DrC59QkZoMLL2938cou7xEwOT7+dcc2wdHO78eRDMeV8E7pLk8xJKgnhRiOZwzs151QLaX15AppT7ugVoksegPA+assm4I+MJ9feDkOXsTcCWTFO2o/6GGfJSMAviGjrPGnY3pUxc8G1TTH2D6C9xAkwg6I97jqyZwmoR7bss+o4iQBME0AQBNEEATRBAEwTQBAE0QQA/UJ8waelu2L4AAAAASUVORK5CYII=', 'base64');
+
+test('custom portrait: set, serve, replace the pixel art, reject non-images, remove', async () => {
+  const url = '/api/arcade/characters/ide/portrait';
+  const before = (await server.inject({ method: 'GET', url: '/api/arcade', headers: H })).json();
+  assert.ok(before.characters.every((c: { portraitUrl: string | null }) => c.portraitUrl === null), 'no portraits at first');
+
+  const put = await server.inject({ method: 'PUT', url, headers: H, payload: { dataBase64: PNG_96.toString('base64') } });
+  assert.equal(put.statusCode, 200, put.body);
+  const after = (await server.inject({ method: 'GET', url: '/api/arcade', headers: H })).json();
+  const ide = after.characters.find((c: { id: string }) => c.id === 'ide');
+  assert.match(ide.portraitUrl, /^\/api\/arcade\/characters\/ide\/portrait\?v=\d+$/);
+  assert.equal(after.characters.find((c: { id: string }) => c.id === 'daf').portraitUrl, null, 'only the chosen character changes');
+
+  const got = await server.inject({ method: 'GET', url, headers: H });
+  assert.equal(got.statusCode, 200);
+  assert.equal(got.headers['content-type'], 'image/png');
+  assert.ok(got.rawPayload.equals(PNG_96));
+
+  // A text file with an image name is refused: the bytes decide, not the name.
+  const bad = await server.inject({ method: 'PUT', url, headers: H, payload: { dataBase64: Buffer.from('this is not an image, only some text pretending').toString('base64') } });
+  assert.equal(bad.statusCode, 422);
+  assert.equal((await server.inject({ method: 'GET', url, headers: H })).statusCode, 200, 'a refused upload leaves the old portrait');
+
+  const unknown = await server.inject({ method: 'PUT', url: '/api/arcade/characters/nobody/portrait', headers: H, payload: { dataBase64: PNG_96.toString('base64') } });
+  assert.equal(unknown.statusCode, 404);
+
+  assert.equal((await server.inject({ method: 'DELETE', url, headers: H })).statusCode, 200);
+  assert.equal((await server.inject({ method: 'GET', url, headers: H })).statusCode, 404);
+  const gone = (await server.inject({ method: 'GET', url: '/api/arcade', headers: H })).json();
+  assert.equal(gone.characters.find((c: { id: string }) => c.id === 'ide').portraitUrl, null);
+});
