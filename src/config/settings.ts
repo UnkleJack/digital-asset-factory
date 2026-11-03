@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Db } from '../db/sqlite.ts';
 import { validation } from '../core/errors.ts';
+import { SUITE_NAME } from '../core/brand.ts';
 
 const effort = z.enum(['low', 'medium', 'high', 'xhigh', 'max']);
 
@@ -365,7 +366,7 @@ export const SettingsSchema = z.object({
     smtpUser: z.string().max(200).default(''),
     smtpHost: z.string().min(1).default('smtp.gmail.com'),
     smtpPort: z.number().int().min(1).max(65535).default(465),
-    fromName: z.string().min(1).max(80).default('Digital Asset Factory'),
+    fromName: z.string().min(1).max(80).default(SUITE_NAME),
   }).prefault({}),
 });
 

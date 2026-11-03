@@ -1,5 +1,6 @@
 import type { ListingRow } from '../../db/repos.ts';
 import type { AssetRecord } from '../../storage/assetStore.ts';
+import { SUITE_NAME } from '../../core/brand.ts';
 
 export interface AdapterInput {
   listing: ListingRow;
@@ -64,7 +65,7 @@ export const etsyAdapter: MarketplaceAdapter = {
     `Price: ${money(i.listing.price_cents, i.listing.currency)}. Etsy still asks for a quantity on digital listings; set the quantity you prefer.`,
     `Digital files: upload every file in the files/ folder (${i.files.length} file(s)).`,
     'Preview the listing, then publish it.',
-    'Back in Digital Asset Factory open Publishing → Record publication and paste the listing URL so the status is tracked.',
+    `Back in ${SUITE_NAME} open Publishing → Record publication and paste the listing URL so the status is tracked.`,
   ],
 };
 
@@ -82,7 +83,7 @@ export const gumroadAdapter: MarketplaceAdapter = {
     'Cover and thumbnail: upload the images from the images/ folder (01 as the main image).',
     `Content: upload every file in the files/ folder (${i.files.length} file(s)).`,
     'Publish the product.',
-    'Back in Digital Asset Factory open Publishing → Record publication and paste the product URL.',
+    `Back in ${SUITE_NAME} open Publishing → Record publication and paste the product URL.`,
   ],
 };
 
@@ -97,7 +98,7 @@ export const genericAdapter: MarketplaceAdapter = {
     'Upload the files in files/ as the downloadable product in your shop platform.',
     'Use catalog.csv (title, description, price, tags) to fill in the product details, or import it if your platform supports CSV import.',
     'Upload the images in images/ as product photos.',
-    'Record the product URL in Digital Asset Factory under Publishing → Record publication.',
+    `Record the product URL in ${SUITE_NAME} under Publishing → Record publication.`,
   ],
 };
 

@@ -1,4 +1,4 @@
-# Digital Asset Factory — Product Specification
+# Digital Asset Factory (the engine of Asset Foundry) — Product Specification
 
 ## 1. Purpose
 

@@ -27,6 +27,7 @@ import { Settings } from './pages/Settings.tsx';
 import { Packing } from './pages/Packing.tsx';
 import { Imports } from './pages/Imports.tsx';
 import { Arcade } from './arcade/Arcade.tsx';
+import { SUITE_NAME } from '../../src/core/brand.ts';
 
 const NAV_ICONS: Record<string, string> = { '/arcade': '◉', '/': '⌂', '/calendar': '⏲', '/digest': '✉', '/research': '⌕', '/library': '▦', '/imports': '⇩', '/packing': '⛭', '/templates': '✎', '/jobs': '⚙', '/qa': '⚖', '/batches': '⚔', '/listings': '☰', '/publishing': '⇪', '/analytics': '◔', '/settings': '⚒' };
 const NAV_HINTS: Record<string, string> = {
@@ -58,7 +59,7 @@ function Nav() {
   );
   return (
     <nav className="sidebar nav" aria-label="Main">
-      <div className="brand">Digital Asset Factory<small>{data ? (data.providers.text.mode === 'ai' ? `AI: ${data.providers.text.model}` : 'AI not configured') : ' '}</small></div>
+      <div className="brand">{SUITE_NAME}<small>{data ? (data.providers.text.mode === 'ai' ? `AI: ${data.providers.text.model}` : 'AI not configured') : ' '}</small></div>
       {link('/arcade', 'Asset Foundry arcade')}
       {link('/', 'Dashboard')}
       {link('/calendar', 'Production calendar')}

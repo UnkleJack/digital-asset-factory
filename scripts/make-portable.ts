@@ -1,5 +1,6 @@
 import { resolvePaths } from '../src/config/paths.ts';
 import { makePortablePackage } from '../src/ops/portable.ts';
+import { SUITE_NAME } from '../src/core/brand.ts';
 
 const args = process.argv.slice(2);
 const noDeps = args.includes('--no-deps');
@@ -8,7 +9,7 @@ const outIdx = args.indexOf('--out');
 const outPath = outIdx >= 0 ? args[outIdx + 1] : undefined;
 
 const paths = resolvePaths();
-console.log(`Packaging a portable copy of Digital Asset Factory (deps: ${noDeps ? 'excluded' : 'included'}, data: ${withData ? 'included' : 'excluded'})…`);
+console.log(`Packaging a portable copy of ${SUITE_NAME} (deps: ${noDeps ? 'excluded' : 'included'}, data: ${withData ? 'included' : 'excluded'})…`);
 const result = makePortablePackage(paths, { includeDeps: !noDeps, includeData: withData, outPath });
 for (const w of result.warnings) console.log(`Note: ${w}`);
 console.log(`Portable package ready: ${result.zipPath}`);

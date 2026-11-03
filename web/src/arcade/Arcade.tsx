@@ -6,6 +6,7 @@ import '@fontsource/press-start-2p/400.css';
 import './arcade.css';
 import { useApi } from '../api.ts';
 import { useArcadeInput, type Direction } from './input.ts';
+import { ENGINE_NAME, SUITE_NAME, SUITE_TAGLINE } from '../../../src/core/brand.ts';
 
 // Asset Foundry: the arcade front end from the UX spec, milestone 1 (entry flow + navigation skeleton).
 // Insert Coin → Start Gate → Title → Character Select → Worlds (placeholder until milestone 2).
@@ -24,6 +25,8 @@ interface ArcadeData {
   hiScores: { label: string; score: number }[];
   startAllowed: boolean;
 }
+
+const TITLE_WORDS = SUITE_NAME.toUpperCase().split(' ');
 
 type Screen = 'attract' | 'gate' | 'title' | 'select' | 'worlds';
 const SCREEN_TITLES: Record<Screen, string> = { attract: 'INSERT COIN', gate: 'START GATE', title: 'TITLE', select: 'CHARACTER SELECT', worlds: 'WORLDS' };
@@ -129,10 +132,10 @@ export function Arcade() {
   return (
     <div className={`arcade-room${reduced ? ' reduced' : ''}`}>
       <div className="cabinet">
-        <header className="cab-marquee" aria-label="Asset Foundry">
+        <header className="cab-marquee" aria-label={SUITE_NAME}>
           <div className="marquee-lights" aria-hidden="true" />
-          <h1 className="marquee-title"><span>ASSET</span> <span>FOUNDRY</span></h1>
-          <p className="marquee-sub">A DIGITAL ASSET FACTORY PRODUCTION</p>
+          <h1 className="marquee-title">{TITLE_WORDS.map((w, i) => <span key={w}>{i ? ' ' : ''}{w}</span>)}</h1>
+          <p className="marquee-sub">{SUITE_TAGLINE}</p>
         </header>
 
         <div className="cab-status">
@@ -145,7 +148,7 @@ export function Arcade() {
             <button type="button" className="cab-switch" onClick={toggleMotion} aria-pressed={reduced} title="Reduce CRT flicker, scrolling and other movement">
               MOTION: {reduced ? 'LOW' : 'FULL'}
             </button>
-            <Link className="cab-switch" to="/" title="The classic Digital Asset Factory screens">BACK OFFICE</Link>
+            <Link className="cab-switch" to="/" title={`The factory's back-office screens (${ENGINE_NAME})`}>BACK OFFICE</Link>
           </div>
         </div>
 
@@ -232,7 +235,7 @@ function Attract({ onCoin }: { onCoin: () => void }) {
   return (
     <div className="scr center attract">
       <p className="attract-kicker">PLAYER 1</p>
-      <h2 className="screen-title giant">ASSET<br />FOUNDRY</h2>
+      <h2 className="screen-title giant">{TITLE_WORDS.map((w, i) => <span key={w}>{i ? <br /> : null}{w}</span>)}</h2>
       <button type="button" className="arc-btn primary coin-btn" data-nav data-autofocus onClick={onCoin}>
         <span className="blink">INSERT COIN</span>
       </button>
@@ -269,7 +272,7 @@ function Title({ data, reduced, zero, onStart }: { data: ArcadeData | null; redu
           {!reduced ? <span className="hiscore-text" aria-hidden="true">{text}</span> : null}
         </div>
       </div>
-      <h2 className="screen-title giant">ASSET<br />FOUNDRY</h2>
+      <h2 className="screen-title giant">{TITLE_WORDS.map((w, i) => <span key={w}>{i ? <br /> : null}{w}</span>)}</h2>
       <p className="title-sub">THE HUSTLE NEVER CLOCKS OUT</p>
       {zero ? <p className="lock-line" role="status">CREDITS: 0 · NO CREDITS LEFT</p> : null}
       <button type="button" className="arc-btn primary" data-nav data-autofocus onClick={onStart}>

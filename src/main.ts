@@ -9,6 +9,7 @@ import { generateRecommendations } from './engine/analytics/service.ts';
 import { syncGumroadSales } from './engine/publishing/gumroad.ts';
 import { runDigest, isDigestDue } from './engine/digest/service.ts';
 import { buildServer } from './server/app.ts';
+import { SUITE_NAME } from './core/brand.ts';
 
 const port = Number(process.env.DAF_PORT ?? 4317);
 const paths = resolvePaths();
@@ -66,7 +67,7 @@ const checkDigest = () => {
 };
 const digestTimer = setInterval(checkDigest, 3_600_000);
 setTimeout(checkDigest, 60_000);
-app.log.info(`Digital Asset Factory is running at http://127.0.0.1:${port}`, { dataDir: paths.dataDir, chrome: app.renderer.available() });
+app.log.info(`${SUITE_NAME} is running at http://127.0.0.1:${port}`, { dataDir: paths.dataDir, chrome: app.renderer.available() });
 if (!app.renderer.available()) app.log.warn('Google Chrome or Microsoft Edge was not found; rendering jobs will fail until one is installed or Settings → Rendering → Chrome path is set.');
 
 let stopping = false;

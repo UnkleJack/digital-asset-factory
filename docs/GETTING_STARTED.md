@@ -1,4 +1,4 @@
-# Getting started with Digital Asset Factory
+# Getting started with Asset Foundry
 
 This guide assumes you have never opened the app before. Follow it top to bottom once; after that, the daily routine at the end is all you need.
 
@@ -26,7 +26,7 @@ cd ~/Projects/digital-asset-factory
 npm start
 ```
 
-When it says `Digital Asset Factory is running at http://127.0.0.1:4317`, open that address in Chrome. Leave the Terminal window open while you use the app. To stop it, click the Terminal window and press `Ctrl+C`.
+When it says `Asset Foundry is running at http://127.0.0.1:4317`, open that address in Chrome. Leave the Terminal window open while you use the app. To stop it, click the Terminal window and press `Ctrl+C`.
 
 You need Google Chrome (or, on Windows, Microsoft Edge, which is already installed) — the app uses it to make the PDFs and finds it automatically.
 
@@ -79,7 +79,7 @@ The app also has its own **monthly search cap** (Digest page), so it can never r
 
 1. Make a **new Gmail account just for the business** (for example `yourshopname@gmail.com`). This keeps business mail separate and is free.
 2. In that account: **Google Account → Security → 2-Step Verification → turn on**.
-3. Then open **myaccount.google.com/apppasswords**, create one named "Digital Asset Factory", and copy the 16 letters.
+3. Then open **myaccount.google.com/apppasswords**, create one named "Asset Foundry", and copy the 16 letters.
 4. In the app: Settings → Integrations → paste the 16 letters into **Gmail app password** → Save. The spaces don't matter.
 5. In **Email (research digest)** type the new Gmail address → **Save** → **Send a test email**.
 

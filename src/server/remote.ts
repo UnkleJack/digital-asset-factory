@@ -5,6 +5,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { networkInterfaces } from 'node:os';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { App } from '../app/bootstrap.ts';
+import { SUITE_NAME } from '../core/brand.ts';
 
 export const TOKEN_COOKIE = 'daf_token';
 const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
@@ -93,12 +94,12 @@ export class RemoteGate {
   }
 }
 
-const LOGIN_PAGE = (msg = '') => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in · Digital Asset Factory</title>
+const LOGIN_PAGE = (msg = '') => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in · ${SUITE_NAME}</title>
 <style>:root{color-scheme:dark}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#15100b;color:#eadfca;font:16px system-ui,sans-serif}
 form{width:min(380px,calc(100vw - 32px));padding:28px;border:1px solid #6b5228;border-radius:6px;background:#211810}h1{margin:0 0 6px;font-size:22px;color:#d6a54e}
 p{color:#b9a98b;font-size:14px}input{box-sizing:border-box;width:100%;padding:10px;margin:8px 0 14px;border:1px solid #6b5228;border-radius:4px;background:#120d08;color:inherit;font:inherit}
 button{width:100%;padding:10px;border:1px solid #d6a54e;border-radius:4px;background:#d6a54e;color:#1b1209;font-weight:700;font-size:15px;cursor:pointer}.err{color:#ff8a7a}</style></head>
-<body><form method="post" action="/api/login"><h1>Digital Asset Factory</h1><p>This app is running on another computer. Enter the access token shown in Settings → System on that computer.</p>
+<body><form method="post" action="/api/login"><h1>${SUITE_NAME}</h1><p>This app is running on another computer. Enter the access token shown in Settings → System on that computer.</p>
 ${msg ? `<p class="err">${msg}</p>` : ''}<label>Access token<input name="token" type="password" autocomplete="current-password" required autofocus></label><button>Sign in</button></form></body></html>`;
 
 export function registerRemoteRoutes(server: FastifyInstance, app: App, gate: RemoteGate): void {

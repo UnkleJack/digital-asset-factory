@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { SUITE_NAME } from '../../src/core/brand.ts';
 
 export class ApiError extends Error {
   status: number;
@@ -20,7 +21,7 @@ export async function api<T = any>(path: string, opts: { method?: string; body?:
   try {
     res = await fetch(`/api${path}`, { method, headers, body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined });
   } catch {
-    throw new ApiError('The app server is not responding. Is Digital Asset Factory still running?', 0, 'offline', null);
+    throw new ApiError(`The app server is not responding. Is ${SUITE_NAME} still running?`, 0, 'offline', null);
   }
   const text = await res.text();
   let data: any = null;

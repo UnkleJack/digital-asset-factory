@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Digital Asset Factory for macOS/Linux: ./start.sh to start the app.
+# Asset Foundry for macOS/Linux: ./start.sh to start the app.
 cd "$(dirname "$0")"
 
 if ! command -v node >/dev/null; then
@@ -12,5 +12,5 @@ if [ ! -d node_modules ]; then
   npm install || exit 1
 fi
 
-echo "Starting Digital Asset Factory. Leave this window open; close it to stop the app."
+echo "Starting Asset Foundry. Leave this window open; close it to stop the app."
 npm start

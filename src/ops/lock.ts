@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { SUITE_NAME } from '../core/brand.ts';
 
 function alive(pid: number): boolean {
   try {
@@ -19,7 +20,7 @@ export function lockHolder(dataDir: string): number | null {
 
 export function acquireLock(dataDir: string): () => void {
   const holder = lockHolder(dataDir);
-  if (holder) throw new Error(`Digital Asset Factory is already running (process ${holder}) on this data folder. Close it first, or open http://127.0.0.1:4317.`);
+  if (holder) throw new Error(`${SUITE_NAME} is already running (process ${holder}) on this data folder. Close it first, or open http://127.0.0.1:4317.`);
   const file = join(dataDir, 'daf.lock');
   writeFileSync(file, String(process.pid));
   return () => {
