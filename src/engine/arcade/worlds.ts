@@ -269,3 +269,24 @@ export function deleteTask(app: AppContext, taskId: string): void {
     app.db.update('worlds', t.world_id, { updated_at: now });
   });
 }
+
+// ---------- Whole worlds in one go (used when a proposal is accepted) ----------
+
+export interface ProposedTask extends Omit<NewTask, 'milestoneId'> {}
+export interface ProposedWorld {
+  name: string;
+  description?: string;
+  milestones: { name: string; tasks: ProposedTask[] }[];
+}
+
+/** Saves a world with its milestones and tasks together. Every task is checked like a hand-made one; one bad task saves nothing. */
+export function createWorldFromProposal(app: AppContext, proposal: ProposedWorld): { id: string } {
+  return app.db.tx(() => {
+    const { id } = createWorld(app, { name: proposal.name, description: proposal.description, milestones: proposal.milestones.map((m) => m.name) });
+    const saved = milestonesOf(app, id);
+    proposal.milestones.forEach((m, i) => {
+      for (const t of m.tasks) addTask(app, id, { ...t, milestoneId: saved[i]!.id });
+    });
+    return { id };
+  });
+}

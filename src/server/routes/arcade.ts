@@ -1,11 +1,15 @@
 import { z } from 'zod';
+import { createReadStream } from 'node:fs';
 import type { FastifyInstance } from 'fastify';
 import type { ServerDeps } from '../app.ts';
 import { arcadeState, canStart } from '../../engine/arcade/service.ts';
 import {
   DIFFICULTIES, TASK_STATUSES, worldsFor, worldDetailFor, listAllWorlds, worldForBuilder,
-  createWorld, updateWorld, addMilestone, addTask, updateTask, deleteTask,
+  createWorld, updateWorld, addMilestone, addTask, updateTask, deleteTask, createWorldFromProposal,
 } from '../../engine/arcade/worlds.ts';
+import { generateWorld, suggestWorlds, suggestTasks, DIFFICULTY_MIXES, GENERATE_LIMITS } from '../../engine/arcade/suggest.ts';
+import { setPortrait, clearPortrait, portraitFor, MAX_PORTRAIT_BYTES } from '../../engine/arcade/portraits.ts';
+import { notFound } from '../../core/errors.ts';
 import { parse, type P, type Q } from './util.ts';
 
 const Effort = z.number().positive().max(10_000);
@@ -28,6 +32,27 @@ const NewTask = z.object({
   difficulty: z.enum(DIFFICULTIES),
   estimatedEffort: Effort,
 });
+const ProposedTask = z.object({
+  title: z.string().trim().min(1).max(120),
+  description: z.string().max(4000).optional(),
+  characterId: z.string().min(2),
+  taskType: z.string().min(2).max(60),
+  difficulty: z.enum(DIFFICULTIES),
+  estimatedEffort: Effort,
+});
+const Proposal = z.object({
+  name: z.string().trim().min(1).max(80),
+  description: z.string().max(2000).optional(),
+  milestones: z.array(z.object({ name: z.string().trim().min(1).max(80), tasks: z.array(ProposedTask).max(40) })).min(1).max(30),
+});
+const GenerateBody = z.object({
+  goal: z.string().trim().min(1).max(1000),
+  milestones: z.number().int().min(GENERATE_LIMITS.milestones.min).max(GENERATE_LIMITS.milestones.max),
+  tasksPerMilestone: z.number().int().min(GENERATE_LIMITS.tasksPerMilestone.min).max(GENERATE_LIMITS.tasksPerMilestone.max),
+  difficulty: z.enum(DIFFICULTY_MIXES),
+  productTypes: z.array(z.string().min(2).max(60)).max(40).optional(),
+  characterId: z.string().min(2).nullable().optional(),
+});
 const TaskPatch = z.object({
   characterId: z.string().min(2).optional(),
   title: z.string().trim().min(1).max(120).optional(),
@@ -45,6 +70,27 @@ export function registerArcadeRoutes(s: FastifyInstance, { app }: ServerDeps): v
   s.get('/api/arcade', async () => {
     const state = arcadeState(app);
     return { ...state, startAllowed: canStart(state) };
+  });
+
+  // Custom portraits: the owner's own image for a character, instead of the pixel art.
+  const PortraitBody = z.object({ dataBase64: z.string().min(8).max(Math.ceil((MAX_PORTRAIT_BYTES * 4) / 3) + 16) });
+  s.get('/api/arcade/characters/:id/portrait', async (req, reply) => {
+    const id = (req.params as P).id;
+    const p = portraitFor(app, id);
+    if (!p) throw notFound('Portrait', id);
+    reply.header('Content-Type', p.mime);
+    reply.header('Content-Security-Policy', "default-src 'none'; sandbox");
+    reply.header('Cache-Control', 'private, max-age=300');
+    return reply.send(createReadStream(app.assets.resolve(p.rel)));
+  });
+  s.put('/api/arcade/characters/:id/portrait', async (req) => {
+    const b = parse(PortraitBody, req.body, 'portrait');
+    setPortrait(app, (req.params as P).id, Buffer.from(b.dataBase64, 'base64'));
+    return arcadeState(app).characters.find((c) => c.id === (req.params as P).id);
+  });
+  s.delete('/api/arcade/characters/:id/portrait', async (req) => {
+    clearPortrait(app, (req.params as P).id);
+    return { ok: true };
   });
 
   // Player side: only worlds where the character has open tasks.
@@ -68,5 +114,25 @@ export function registerArcadeRoutes(s: FastifyInstance, { app }: ServerDeps): v
   s.delete('/api/arcade/builder/tasks/:id', async (req) => {
     deleteTask(app, (req.params as P).id);
     return { ok: true };
+  });
+  // AI suggestions and AI-written worlds. Nothing is saved until the owner accepts it.
+  s.post('/api/arcade/builder/suggest/worlds', async (req) => {
+    const b = parse(z.object({ hint: z.string().max(500).optional() }), req.body ?? {}, 'suggestion request');
+    const r = await suggestWorlds(app, b.hint);
+    return { suggestions: r.result, model: r.provenance.model ?? null };
+  });
+  s.post('/api/arcade/builder/suggest/tasks', async (req) => {
+    const b = parse(z.object({ worldId: z.string().min(3), milestoneId: z.string().min(3).optional(), hint: z.string().max(500).optional() }), req.body, 'suggestion request');
+    const r = await suggestTasks(app, b);
+    return { suggestions: r.result, model: r.provenance.model ?? null };
+  });
+  s.post('/api/arcade/builder/generate', async (req) => {
+    const b = parse(GenerateBody, req.body, 'world settings');
+    const r = await generateWorld(app, b);
+    return { proposal: r.result, model: r.provenance.model ?? null };
+  });
+  s.post('/api/arcade/builder/worlds/from-proposal', async (req) => {
+    const b = parse(Proposal, req.body, 'world');
+    return createWorldFromProposal(app, b);
   });
 }

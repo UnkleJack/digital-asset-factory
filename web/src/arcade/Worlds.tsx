@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { api, errorText, useApi } from '../api.ts';
 import { useFocusMainWhenReady } from './input.ts';
+import { WorldIdeas, TaskIdeas, WorldGenerator } from './Ai.tsx';
 
 // HAPPY DAFFY milestone 2: Worlds, World Detail and the World Builder.
 
@@ -198,6 +199,8 @@ export function BuilderScreen({ onOpen, onBack }: { onOpen: (id: string) => void
     <div className="scr builder">
       <h2 className="screen-title">WORLD BUILDER</h2>
       <p className="fine center-text">Start from scratch. A world shows up for a character once that character has an open task in it.</p>
+      <WorldGenerator onSaved={onOpen} />
+      <WorldIdeas onPick={(i) => { setName(i.name); setDescription(i.description); setMilestones(i.milestones.join('\n')); }} />
       <form className="arc-form" onSubmit={create}>
         <h3 className="form-title">NEW WORLD</h3>
         <label>Name<input data-nav value={name} onChange={(e) => setName(e.target.value)} maxLength={80} required placeholder="e.g. Mandala empire" /></label>
@@ -314,6 +317,7 @@ export function BuilderWorldScreen({ worldId, defaultCharacter, onBack }: { worl
       {data.milestones.length ? (
         <form className="arc-form" onSubmit={addTask}>
           <h3 className="form-title">ADD TASK</h3>
+          <TaskIdeas worldId={worldId} milestoneId={milestoneId} onPick={(i) => setTask({ ...task, title: i.title, description: i.description, characterId: i.characterId, taskType: i.taskType, difficulty: i.difficulty, estimatedEffort: String(i.estimatedEffort) })} />
           <label>Title<input data-nav value={task.title} onChange={(e) => setTask({ ...task, title: e.target.value })} maxLength={120} required placeholder="e.g. 30 intricate mandalas" /></label>
           <label>Details<textarea data-nav value={task.description} onChange={(e) => setTask({ ...task, description: e.target.value })} rows={2} maxLength={4000} placeholder="Optional: what done looks like" /></label>
           <div className="form-grid">
