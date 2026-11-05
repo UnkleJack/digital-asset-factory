@@ -119,6 +119,7 @@ Adopted 2026-11-03.
 | AI providers (10 text, 8 image) and pacing | `src/engine/generation/providers.ts`, `pacing.ts` |
 | QA, packaging, listings, approval, publishing | `src/engine/qa/`, `packaging/`, `listing/`, `approval/`, `publishing/` |
 | Packs ("factory floor") | `src/engine/packing/` |
+| Opportunity sample previews | `src/engine/research/preview.ts` (stored under `research/previews/` in the asset folder) |
 | Arcade engine and API | `src/engine/arcade/service.ts`, `src/server/routes/arcade.ts` (`GET /api/arcade`) |
 | Arcade screens | `web/src/arcade/` (`Arcade.tsx`, `input.ts`, `arcade.css`) |
 | Back-office screens | `web/src/pages/` |
@@ -134,7 +135,7 @@ Adopted 2026-11-03.
 
 ## Article 8: Current state
 
-As of 2026-11-04, `main` after pull request #12, plus the Mac Dock app (pull request #16).
+As of 2026-11-05, `main` after pull request #15, plus the Mac Dock app (pull request #16).
 
 **Working**
 - All 17 product types produce offline with the built-in content library: QA, packaging, listings, batch approval and export packages.
@@ -146,7 +147,8 @@ As of 2026-11-04, `main` after pull request #12, plus the Mac Dock app (pull req
 - HAPPY DAFFY milestone 2a (pull request #10): Worlds the owner builds by hand. The World Builder creates worlds, milestones and tasks. Each task belongs to one character, has a task type (any of the 17 product types except imports, or Custom), a difficulty and effort points the owner sets. The Worlds list shows only worlds where the chosen character has an open task (open, in progress or blocked), sorted by the fewest effort points left before the next milestone. A milestone completes by itself when all its tasks are complete and reopens if one is reopened. World Detail lists that character's open tasks. The Task Workspace behind OPEN TASK is milestone 3.
 - HAPPY DAFFY milestones 2b and 2c: AI suggestions and AI-written worlds in the World Builder. NEED AN IDEA? gives clickable world ideas and task ideas that fill the forms. LET THE AI BUILD A WORLD takes a goal, the number of milestones, tasks per milestone, a difficulty mix, optional product types and an optional character, then shows a review screen. Nothing is saved until the owner presses SAVE WORLD, and the owner can remove tasks and milestones first. The owner's rule (2026-11-03): this part is AI-first. With no working AI provider it says so, and it never uses the built-in content library. Totals, ordering, progress and validation stay rule-based. Only tested against a stand-in AI so far, because no real provider key has been tried.
 - Backup models at each AI text provider (2026-11-04). Every free-tier text provider has a list of backup models that it tries in order, on the same key, before the app moves on to the next provider. It moves to the next model when a model is retired or unknown, times out, has a server error or refuses. It does not when the key is rejected, the host can't be reached or the key is rate-limited, so backups don't spend more of a capped key. The owner's text setup: NVIDIA first, with Nemotron 3 Ultra (`nvidia/nemotron-3-ultra-550b-a55b`) and MiniMax (`minimaxai/minimax-m3.1-flash`) behind it. Groq is a late backup and never the first one. The old NVIDIA default, `meta/llama-3.1-70b-instruct`, was retired (HTTP 410). Tested against stand-in servers only; no real NVIDIA call has been made with these models yet.
-- Tests: 142 tests, 142 pass, 0 skipped, 0 fail.
+- Sample previews on Research & opportunities (2026-11-04). Each idea can get a picture of what it describes: the first two pages (the cover and the first inside page) of its product type, drawn offline with the idea's title, audience and theme and the built-in sample content. It's free and needs no AI key. Owner's choices: it is made only when the owner presses Make preview (in the opened idea) or Make sample previews (for the whole list), the list shows a small picture on each row, and an AI-drawn picture is a later addition. Every picture is labelled SAMPLE, and the idea's own extras (its differentiation) are not drawn. Previews are kept under `research/previews/` in the asset folder and marked out of date when the idea's title, type, audience or theme changes. Illustrated coloring ideas get no free sample, because their pages need an AI image provider.
+- Tests: 147 tests, 147 pass, 0 skipped, 0 fail.
 
 **Built but not proven live**
 - AI text and image providers have only been tested against stand-in servers, never with real keys.
@@ -169,6 +171,7 @@ As of 2026-11-04, `main` after pull request #12, plus the Mac Dock app (pull req
 2. **Try the AI with the real NVIDIA key.** In Settings → AI providers, press Test text provider and check that Nemotron 3 Ultra (or MiniMax behind it) answers. Then re-run the `prepare_listings` jobs that failed on 2026-11-04, and use NEED AN IDEA? and LET THE AI BUILD A WORLD in the World Builder. Until then they only run against a test stand-in.
 3. **HAPPY DAFFY milestone 3, the Task Workspace** (the screen behind OPEN TASK). Its questions are the spec's section H.
 4. **Factory upgrades from the 2026-10-28 plan:** mandala engine expansion, then geometric pattern art.
+5. **AI-drawn opportunity pictures** (the owner's "later" choice, 2026-11-04): a Draw with AI button beside the free sample preview, once an image provider key works. It costs credits per idea and must be labelled as an AI impression, not the product.
 
 **Undecided**
 - **A.** Answered 2026-11-03 and built: both. The owner builds from scratch, and the AI suggests and writes worlds. Possible later additions: more settings to tune, and effort points the AI estimates from past work.
@@ -187,4 +190,5 @@ As of 2026-11-04, `main` after pull request #12, plus the Mac Dock app (pull req
 | 2026-11-03 | Constitution expanded to Articles 1 to 9. HAPPY DAFFY named as the arcade game. One source of truth set: GitHub `main` plus the Mac folder. |
 | 2026-11-03 | Articles 8 and 9 updated for milestone 2a (owner-built Worlds) and the character naming question. |
 | 2026-11-04 | Articles 8 and 9 updated for backup models per AI text provider and the owner's NVIDIA-first text setup. |
+| 2026-11-04 | Articles 7, 8 and 9 updated for sample previews on Research & opportunities. |
 | 2026-11-04 | Articles 7, 8 and 9 updated for the Mac Dock app (`npm run make-mac-app`). |
