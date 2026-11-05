@@ -119,6 +119,7 @@ Adopted 2026-11-03.
 | AI providers (10 text, 8 image) and pacing | `src/engine/generation/providers.ts`, `pacing.ts` |
 | QA, packaging, listings, approval, publishing | `src/engine/qa/`, `packaging/`, `listing/`, `approval/`, `publishing/` |
 | Packs ("factory floor") | `src/engine/packing/` |
+| Opportunity sample previews | `src/engine/research/preview.ts` (stored under `research/previews/` in the asset folder) |
 | Arcade engine and API | `src/engine/arcade/` (`service.ts` characters and credits, `worlds.ts`, `suggest.ts` AI suggestions and TIDY MY NOTES, `drafts.ts` World Builder drafts, `ticker.ts` hub stats), `src/server/routes/arcade.ts` (`/api/arcade/...`) |
 | Arcade screens | `web/src/arcade/` (`Arcade.tsx` cabinet and Hub, `Worlds.tsx`, `Ai.tsx`, `Ticker.tsx`, `input.ts`, `arcade.css`) |
 | Back-office screens | `web/src/pages/` |
@@ -133,7 +134,7 @@ Adopted 2026-11-03.
 
 ## Article 8: Current state
 
-As of 2026-11-05: `main` after pull request #11, plus two unmerged branches. `claude/backup-models-per-provider` adds backup models per AI text provider. `claude/arcade-start-flow` is stacked on it and adds the Hub, World Builder drafts, smarter AI help and the stats ticker.
+As of 2026-11-05: `main` after pull requests #12 (backup AI models) and #15 (sample previews), plus the Hub, the stats ticker, World Builder drafts, smarter AI help and the test-data cleanup on branch `claude/arcade-start-flow` (pull request #13, not merged yet).
 
 **Working**
 - All 17 product types produce offline with the built-in content library: QA, packaging, listings, batch approval and export packages.
@@ -160,11 +161,12 @@ As of 2026-11-05: `main` after pull request #11, plus two unmerged branches. `cl
 - HAPPY DAFFY milestone 2a (pull request #10): Worlds the owner builds by hand. The World Builder creates worlds, milestones and tasks. Each task belongs to one character, has a task type (any of the 17 product types except imports, or Custom), a difficulty and effort points the owner sets. The Worlds list shows only worlds where the chosen character has an open task (open, in progress or blocked), sorted by the fewest effort points left before the next milestone. A milestone completes by itself when all its tasks are complete and reopens if one is reopened. World Detail lists that character's open tasks. The Task Workspace behind OPEN TASK is milestone 3.
 - HAPPY DAFFY milestones 2b and 2c: AI suggestions and AI-written worlds in the World Builder. NEED AN IDEA? gives clickable world ideas and task ideas that fill the forms. LET THE AI BUILD A WORLD takes a goal, the number of milestones, tasks per milestone, a difficulty mix, optional product types and an optional character, then shows a review screen. Nothing is saved until the owner presses SAVE WORLD, and the owner can remove tasks and milestones first. The owner's rule (2026-11-03): this part is AI-first. With no working AI provider it says so, and it never uses the built-in content library. Totals, ordering, progress and validation stay rule-based. Only tested against a stand-in AI so far, because no real provider key has been tried.
 - Backup models at each AI text provider (2026-11-04). Every free-tier text provider has a list of backup models that it tries in order, on the same key, before the app moves on to the next provider. It moves to the next model when a model is retired or unknown, times out, has a server error or refuses. It does not when the key is rejected, the host can't be reached or the key is rate-limited, so backups don't spend more of a capped key. The owner's text setup: NVIDIA first, with Nemotron 3 Ultra (`nvidia/nemotron-3-ultra-550b-a55b`) and MiniMax (`minimaxai/minimax-m3.1-flash`) behind it. Groq is a late backup and never the first one. The old NVIDIA default, `meta/llama-3.1-70b-instruct`, was retired (HTTP 410). **First live success, 2026-11-05:** with the owner's real NVIDIA key, Nemotron 3 Ultra wrote a whole world in the World Builder in 76 seconds. MiniMax as the backup has not been seen answering live yet.
+- Sample previews on Research & opportunities (2026-11-04). Each idea can get a picture of what it describes: the first two pages (the cover and the first inside page) of its product type, drawn offline with the idea's title, audience and theme and the built-in sample content. It's free and needs no AI key. Owner's choices: it is made only when the owner presses Make preview (in the opened idea) or Make sample previews (for the whole list), the list shows a small picture on each row, and an AI-drawn picture is a later addition. Every picture is labelled SAMPLE, and the idea's own extras (its differentiation) are not drawn. Previews are kept under `research/previews/` in the asset folder and marked out of date when the idea's title, type, audience or theme changes. Illustrated coloring ideas get no free sample, because their pages need an AI image provider.
 - **Cleanup of old test data** (owner request, 2026-11-05).
   - `npm run clean-verification` lists folders inside `verification-output/` (the throwaway copies used for browser checks) that have not changed for 7 days. `-- --apply` removes them. This is the same pattern as `tidy-folders`, chosen by the owner.
   - It never removes `verification-output/` itself, loose files or links, and never touches anything outside it, `data/` above all. It skips any folder a running copy of the app is using, and checks again just before deleting.
   - The app runs it once a week while open. Turn that off in Settings → Scheduler → `cleanVerificationWeekly`. The last run is noted in `verification-output/.last-cleanup`.
-- Tests: 145 tests, 145 pass, 0 skipped, 0 fail (branch `claude/arcade-start-flow`, 2026-11-05).
+- Tests: 150 tests, 150 pass, 0 skipped, 0 fail (branch `claude/arcade-start-flow` with `main` merged in, 2026-11-05).
 
 **Built but not proven live**
 - Of the AI providers, only NVIDIA text has worked with a real key (2026-11-05). On 2026-11-04 and 2026-11-05 the log showed the others failing:
@@ -196,6 +198,7 @@ As of 2026-11-05: `main` after pull request #11, plus two unmerged branches. `cl
 3. **A guide in each area** (owner request, 2026-11-05). A HOW THIS WORKS button on each arcade area opens a short guide for just that screen, describing only what exists (Art. 5.2). The owner reviews the wording. Order: Hub, World Detail, World Builder (including the AI parts).
 4. **HAPPY DAFFY milestone 3, the Task Workspace** (the screen behind OPEN TASK). Its questions are the spec's section H.
 5. **Factory upgrades from the 2026-10-28 plan:** mandala engine expansion, then geometric pattern art.
+6. **AI-drawn opportunity pictures** (the owner's "later" choice, 2026-11-04): a Draw with AI button beside the free sample preview, once an image provider key works. It costs credits per idea and must be labelled as an AI impression, not the product.
 
 **Undecided**
 - **A.** Answered 2026-11-03 and built: both. The owner builds from scratch, and the AI suggests and writes worlds. Possible later additions: more settings to tune, and effort points the AI estimates from past work.
@@ -218,4 +221,5 @@ As of 2026-11-05: `main` after pull request #11, plus two unmerged branches. `cl
 | 2026-11-03 | Constitution expanded to Articles 1 to 9. HAPPY DAFFY named as the arcade game. One source of truth set: GitHub `main` plus the Mac folder. |
 | 2026-11-03 | Articles 8 and 9 updated for milestone 2a (owner-built Worlds) and the character naming question. |
 | 2026-11-04 | Articles 8 and 9 updated for backup models per AI text provider and the owner's NVIDIA-first text setup. |
+| 2026-11-04 | Articles 7, 8 and 9 updated for sample previews on Research & opportunities. |
 | 2026-11-05 | Articles 7, 8 and 9 updated for the Hub, the stats ticker, World Builder drafts, smarter AI help and the first live NVIDIA success. Undecided items F to I added. The UX spec is amended for the Hub, with the owner's approval. |

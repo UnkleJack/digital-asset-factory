@@ -22,14 +22,15 @@ export function Research() {
       <Tabs value={tab} onChange={setTab} tabs={[{ id: 'opps', label: 'Opportunities' }, { id: 'obs', label: 'Research data' }, { id: 'rules', label: 'How scoring works' }]} />
       {tab === 'opps' && (
         <>
-          <div className="row" style={{ marginBottom: 12 }}><select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status filter"><option value="">Open (not archived)</option>{['new', 'evaluating', 'approved', 'produced', 'rejected', 'archived'].map((s) => <option key={s} value={s}>{label(s)}</option>)}</select></div>
+          <div className="row" style={{ marginBottom: 12 }}><select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status filter"><option value="">Open (not archived)</option>{['new', 'evaluating', 'approved', 'produced', 'rejected', 'archived'].map((s) => <option key={s} value={s}>{label(s)}</option>)}</select>
+            {opps.data && <MakePreviewsButton list={opps.data} onDone={opps.reload} />}</div>
           <Card>
             <Async state={opps}>{(list) => list.length === 0 ? <Empty title="No opportunities" action={<button className="primary" onClick={() => setAdding(true)}>Add one</button>}>Add ideas by hand, import keyword research, or ask the AI for idea suggestions (stored as hypotheses).</Empty> : (
               <table className="t">
                 <thead><tr><th>Opportunity</th><th>Type</th><th>Status</th><th>Score</th><th>Evidence confidence</th><th>Outcome</th><th>Origin</th></tr></thead>
                 <tbody>{list.map((o) => (
                   <tr key={o.id} className="click" onClick={() => setSp({ open: o.id })}>
-                    <td><b>{o.title}</b><div className="small muted">{o.keywords.slice(0, 4).join(', ')}{o.seasonal_months.length ? ` · season ${o.seasonal_months.map((m: number) => MONTHS[m - 1]).join(', ')}` : ''}</div></td>
+                    <td><div className="row-title"><PreviewThumb o={o} /><div><b>{o.title}</b><div className="small muted">{o.keywords.slice(0, 4).join(', ')}{o.seasonal_months.length ? ` · season ${o.seasonal_months.map((m: number) => MONTHS[m - 1]).join(', ')}` : ''}</div></div></div></td>
                     <td className="small">{label(o.product_type)}</td>
                     <td><Pill value={o.status} /></td>
                     <td>{o.score?.score ?? '—'}</td>
@@ -48,6 +49,62 @@ export function Research() {
       {adding && <OpportunityForm onClose={() => setAdding(false)} onSaved={(id) => { setAdding(false); opps.reload(); setSp({ open: id }); }} />}
       {suggesting && <SuggestModal onClose={() => setSuggesting(false)} onDone={() => { setSuggesting(false); opps.reload(); }} />}
       {open && <OpportunityDrawer id={open} onClose={() => { setSp({}); opps.reload(); }} />}
+    </div>
+  );
+}
+
+// Sample previews: page 1 of the idea's product type, drawn offline from the built-in content.
+// Always labelled as a sample (Constitution 5.2): it is not the finished product and doesn't show the idea's own extras.
+
+function PreviewThumb({ o }: { o: any }) {
+  if (!o.preview) return <div className="opp-thumb none" title={o.previewBlocker ?? 'No preview yet. Open the idea and press Make preview.'} />;
+  return (
+    <div className={`opp-thumb${o.preview.stale ? ' stale' : ''}`} title={o.preview.stale ? 'Sample preview, out of date: made before this idea was edited' : 'Sample preview, not the final product'}>
+      <img src={o.preview.url} alt={`Sample preview for ${o.title}`} loading="lazy" />
+      <span className="tag">SAMPLE</span>
+    </div>
+  );
+}
+
+function MakePreviewsButton({ list, onDone }: { list: any[]; onDone: () => void }) {
+  const toast = useToast();
+  const [progress, setProgress] = useState<string | null>(null);
+  const todo = list.filter((o) => !o.previewBlocker && (!o.preview || o.preview.stale));
+  if (!todo.length && !progress) return null;
+  const run = async () => {
+    let failed = 0;
+    for (let i = 0; i < todo.length; i++) {
+      setProgress(`Making previews… ${i + 1} of ${todo.length}`);
+      try { await api(`/opportunities/${todo[i].id}/preview`, { body: {} }); } catch { failed++; }
+    }
+    setProgress(null);
+    toast(failed ? `Made ${todo.length - failed} previews, ${failed} failed` : `Made ${todo.length} previews`);
+    onDone();
+  };
+  return <button className="small" disabled={!!progress} onClick={run} title="Draws a free sample page for each idea in this list that has no preview or an out-of-date one">{progress ?? `Make sample previews (${todo.length})`}</button>;
+}
+
+function OpportunityPreview({ o, onChange }: { o: any; onChange: () => void }) {
+  const p = o.preview;
+  const typeName = label(o.product_type);
+  if (o.previewBlocker && !p) return <p className="small muted" style={{ margin: 0 }}>No sample preview: {o.previewBlocker}</p>;
+  return (
+    <div className="opp-preview">
+      {p ? p.pages.map((url: string, i: number) => (
+        <a key={url} className={`frame${p.stale ? ' stale' : ''}`} href={url} target="_blank" rel="noreferrer" title={`Page ${i + 1}: open full size`}>
+          <img src={url} alt={`Sample preview, page ${i + 1} of a ${typeName} titled ${o.title}`} />
+          <span className="banner">SAMPLE · PAGE {i + 1}</span>
+        </a>
+      )) : <div className="frame none small">No preview yet</div>}
+      <div className="about">
+        <div className="small"><b>Sample preview, not the final product.</b> {p ? (p.pages.length > 1 ? 'These are the first pages' : 'This is page 1') : 'Make preview draws the first pages'} of a {typeName} with this idea's title, audience and theme, using the factory's built-in sample content. It's made offline, so it's free and needs no AI key.</div>
+        <div className="small muted">It shows what this kind of product looks like. The idea's own extras, like its differentiation, aren't drawn, and the real product's content is written when you produce it.</div>
+        {p?.stale && <div className="small" style={{ color: 'var(--warn)' }}>Out of date: made before this idea's title, type, audience or theme changed.</div>}
+        {p && <div className="small muted">Made {fmtDate(p.madeAt)}</div>}
+        <div className="row">
+          {o.previewBlocker ? <span className="small muted">{o.previewBlocker}</span> : <ActionButton className="small" onClick={async () => { await api(`/opportunities/${o.id}/preview`, { body: {} }); onChange(); }} successText="Preview made">{p ? 'Remake preview' : 'Make preview'}</ActionButton>}
+        </div>
+      </div>
     </div>
   );
 }
@@ -120,6 +177,7 @@ function OpportunityDrawer({ id, onClose }: { id: string; onClose: () => void })
               </div></div>
             {o.description && <p style={{ margin: 0 }}>{o.description}</p>}
             {o.differentiation_note && <p className="small" style={{ margin: 0 }}><b>Differentiation:</b> {o.differentiation_note}</p>}
+            <OpportunityPreview o={o} onChange={st.reload} />
             <Card title={latest ? <>Score {latest.score ?? '—'} <Pill value={latest.outcome} /> <span className="small muted">confidence {pct(latest.confidence)} · {fmtDate(latest.created_at)}</span></> : 'Not scored yet'}>
               {latest ? latest.factors.map((f: any) => (
                 <div key={f.factor} className="factor" style={{ marginBottom: 8 }}>
