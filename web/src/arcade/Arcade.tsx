@@ -6,11 +6,15 @@ import '@fontsource/press-start-2p/400.css';
 import './arcade.css';
 import { api, errorText, useApi } from '../api.ts';
 import { useArcadeInput, type Direction } from './input.ts';
-import { WorldsScreen, WorldDetail, BuilderScreen, BuilderWorldScreen } from './Worlds.tsx';
+import { WorldList, WorldDetail, BuilderScreen, BuilderWorldScreen, ArcadeTabs } from './Worlds.tsx';
+import { StatsTicker } from './Ticker.tsx';
 import { ARCADE_GAME_NAME, ARCADE_TAGLINE, ENGINE_NAME } from '../../../src/core/brand.ts';
 
-// HAPPY DAFFY: the arcade front end of Asset Foundry, from the UX spec, milestone 1 (entry flow + navigation skeleton).
-// Insert Coin → Start Gate → Title → Character Select → Worlds → World Detail / World Builder.
+// HAPPY DAFFY: the arcade front end of Asset Foundry.
+// Owner's change, 2026-11-05: the opening screens (Insert Coin, Start Gate, Title, Character Select) became
+// one HUB: pick a player, pick one of that player's worlds, and see your stats. The HUB button in the
+// cabinet header returns to it from anywhere. Locked rules kept: always dark, Insert Coin never changes
+// credits (it is cabinet flair only), and at 0 credits ENTER WORLD stays locked and says why.
 
 interface Character {
   id: string;
@@ -33,9 +37,9 @@ interface ArcadeData {
 
 const TITLE_WORDS = ARCADE_GAME_NAME.split(' ');
 
-type Screen = 'attract' | 'gate' | 'title' | 'select' | 'worlds' | 'world' | 'builder' | 'builderWorld';
-const SCREEN_TITLES: Record<Screen, string> = { attract: 'INSERT COIN', gate: 'START GATE', title: 'TITLE', select: 'CHARACTER SELECT', worlds: 'WORLDS', world: 'WORLD DETAIL', builder: 'WORLD BUILDER', builderWorld: 'WORLD BUILDER' };
-const BACK: Partial<Record<Screen, Screen>> = { gate: 'attract', select: 'title', worlds: 'select', world: 'worlds', builder: 'worlds', builderWorld: 'builder' };
+type Screen = 'hub' | 'world' | 'builder' | 'builderWorld';
+const SCREEN_TITLES: Record<Screen, string> = { hub: 'HUB', world: 'WORLD DETAIL', builder: 'WORLD BUILDER', builderWorld: 'WORLD BUILDER' };
+const BACK: Partial<Record<Screen, Screen>> = { world: 'hub', builder: 'hub', builderWorld: 'builder' };
 const CHARACTER_KEY = 'daf.arcade.character';
 const MOTION_KEY = 'daf.arcade.reducedMotion';
 
@@ -73,12 +77,14 @@ function useReducedMotion(): [boolean, () => void] {
 
 export function Arcade() {
   const { data, error, loading, reload } = useApi<ArcadeData>('/arcade', { poll: 15000 });
-  const [screen, setScreen] = useState<Screen>('attract');
-  const [character, setCharacter] = useState<string | null>(() => readStore('session', CHARACTER_KEY));
+  const [screen, setScreen] = useState<Screen>('hub');
+  // The last player is remembered on this computer (it used to last only for the browser tab).
+  const [character, setCharacter] = useState<string | null>(() => readStore('local', CHARACTER_KEY) ?? readStore('session', CHARACTER_KEY));
   const [highlight, setHighlight] = useState<string | null>(character);
   const [reduced, toggleMotion] = useReducedMotion();
   const [stick, setStick] = useState<Direction | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [coin, setCoin] = useState(false);
   const [worldId, setWorldId] = useState<string | null>(null);
   const [builderWorldId, setBuilderWorldId] = useState<string | null>(null);
   const screenRef = useRef<HTMLDivElement>(null);
@@ -87,6 +93,7 @@ export function Arcade() {
   const creditsKnown = !!credits && !error;
   const startAllowed = creditsKnown && !!data?.startAllowed;
   const active = data?.characters.find((c) => c.id === character) ?? null;
+  const lockText = creditsKnown ? 'ENTER LOCKED: NO AVAILABLE CREDITS' : 'ENTER LOCKED: CREDITS UNAVAILABLE';
 
   const go = useCallback((s: Screen) => {
     setNotice(null);
@@ -97,19 +104,29 @@ export function Arcade() {
     if (to) go(to);
   }, [screen, go]);
   const insertCoin = useCallback(() => {
-    // Thematic only (owner confirmed 2026-11-03): it never changes the credit balance.
-    if (screen === 'attract') go('gate');
-  }, [screen, go]);
+    // Cabinet flair only (owner confirmed 2026-11-03): it never changes the credit balance.
+    setCoin(true);
+    window.setTimeout(() => setCoin(false), 700);
+  }, []);
+  const enterWorld = useCallback((id: string) => {
+    // Locked rule (spec B2): nothing starts at 0 credits. Entering a world is the "start".
+    if (!startAllowed) return setNotice(lockText);
+    setWorldId(id);
+    go('world');
+  }, [startAllowed, lockText, go]);
   const pressStart = useCallback(() => {
-    if (screen === 'attract') return insertCoin();
-    if (screen !== 'gate') return;
-    if (startAllowed) go('title');
-    else setNotice(creditsKnown ? 'START LOCKED: NO AVAILABLE CREDITS' : 'START LOCKED: CREDITS UNAVAILABLE');
-  }, [screen, startAllowed, creditsKnown, go, insertCoin]);
+    if (screen !== 'hub') return;
+    // Start enters the world in focus, or the top one (closest to its next milestone).
+    const focused = document.activeElement as HTMLElement | null;
+    const target = focused?.matches('[data-enter-world]') ? focused : screenRef.current?.querySelector<HTMLElement>('[data-enter-world]');
+    if (target) target.click();
+    else setNotice(active ? `${active.displayName} HAS NO OPEN WORLDS YET: TRY THE WORLD BUILDER` : 'PICK A PLAYER FIRST');
+  }, [screen, active]);
   const choose = useCallback((id: string) => {
     setCharacter(id);
     setHighlight(id);
-    writeStore('session', CHARACTER_KEY, id);
+    setNotice(null);
+    writeStore('local', CHARACTER_KEY, id);
   }, []);
 
   useArcadeInput(screenRef, { onBack: back, onStart: pressStart, onSelect: insertCoin, onMove: (d) => { setStick(d); window.setTimeout(() => setStick(null), 160); } });
@@ -130,14 +147,28 @@ export function Arcade() {
 
   let body: ReactNode;
   if (loading && !data) body = <Loading />;
-  else if (screen === 'attract') body = <Attract onCoin={insertCoin} />;
-  else if (screen === 'gate') body = <StartGate allowed={startAllowed} known={creditsKnown} notice={notice} onStart={pressStart} onBack={back} />;
-  else if (screen === 'title') body = <Title data={data} reduced={reduced} zero={credits?.state === 'zero'} onStart={() => go('select')} />;
-  else if (screen === 'select') body = <CharacterSelect characters={data?.characters ?? []} chosen={character} highlight={highlight} onHighlight={setHighlight} onChoose={choose} onEnter={() => go('worlds')} onBack={back} onPortraitChanged={() => void reload()} />;
-  else if (screen === 'worlds') body = <WorldsScreen character={active} onOpen={(id) => { setWorldId(id); go('world'); }} onBuilder={() => go('builder')} onSwitch={() => go('select')} />;
-  else if (screen === 'world' && worldId) body = <WorldDetail worldId={worldId} character={active} onBack={() => go('worlds')} />;
-  else if (screen === 'builderWorld' && builderWorldId) body = <BuilderWorldScreen worldId={builderWorldId} defaultCharacter={character} onBack={() => go('builder')} />;
-  else body = <BuilderScreen onOpen={(id) => { setBuilderWorldId(id); go('builderWorld'); }} onBack={() => go('worlds')} />;
+  else if (screen === 'world' && worldId) body = <WorldDetail worldId={worldId} character={active} onBack={() => go('hub')} />;
+  else if (screen === 'builder') body = <BuilderScreen onOpen={(id) => { setBuilderWorldId(id); go('builderWorld'); }} onBack={() => go('hub')} />;
+  else if (screen === 'builderWorld' && builderWorldId) body = <BuilderWorldScreen worldId={builderWorldId} defaultCharacter={character} onBack={() => go('builder')} onHub={() => go('hub')} />;
+  else {
+    body = (
+      <Hub
+        data={data}
+        chosen={character}
+        highlight={highlight}
+        onHighlight={setHighlight}
+        onChoose={choose}
+        onPortraitChanged={() => void reload()}
+        locked={!startAllowed}
+        lockText={lockText}
+        notice={notice}
+        reduced={reduced}
+        onEnterWorld={enterWorld}
+        onBuilder={() => go('builder')}
+        onSoon={(d) => setNotice(`${d} UNLOCKS IN A LATER BUILD`)}
+      />
+    );
+  }
 
   return (
     <div className={`arcade-room${reduced ? ' reduced' : ''}`}>
@@ -155,6 +186,9 @@ export function Arcade() {
             <span className={`led-value${active ? '' : ' dim'}`}>{active ? active.displayName : 'NO PLAYER'}</span>
           </div>
           <div className="cab-tools">
+            <button type="button" className="cab-switch hub-switch" onClick={() => go('hub')} aria-current={screen === 'hub' ? 'page' : undefined} title="Back to the hub: pick a player, a world, or check your stats">
+              ◀ HUB
+            </button>
             <button type="button" className="cab-switch" onClick={toggleMotion} aria-pressed={reduced} title="Reduce CRT flicker, scrolling and other movement">
               MOTION: {reduced ? 'LOW' : 'FULL'}
             </button>
@@ -186,15 +220,15 @@ export function Arcade() {
           </div>
           <div className="panel-small">
             <PanelButton label="1P" hint="START" tone="gold" small onPress={pressStart} />
-            <button type="button" className={`coin-door${screen === 'attract' ? ' live' : ''}`} tabIndex={-1} onMouseDown={(e) => e.preventDefault()} onClick={insertCoin} aria-label="Insert coin">
+            <button type="button" className={`coin-door${coin ? ' live' : ''}`} tabIndex={-1} onMouseDown={(e) => e.preventDefault()} onClick={insertCoin} aria-label="Insert coin (for fun: credits don't change)">
               <span className="coin-slot" />
-              <span className="coin-text">INSERT COIN</span>
+              <span className="coin-text">{coin ? 'CLINK!' : 'INSERT COIN'}</span>
             </button>
           </div>
         </div>
         <div className="kick-plate" aria-hidden="true"><span>DAF</span></div>
       </div>
-      <p className="arcade-help">Arrows or WASD move · Enter or Space select · Esc back · controllers work too</p>
+      <p className="arcade-help">Arrows or WASD move · Enter or Space select · Esc back · Start enters a world · controllers work too</p>
     </div>
   );
 }
@@ -241,55 +275,17 @@ function InitError({ message, onRetry }: { message: string; onRetry: () => void 
   );
 }
 
-function Attract({ onCoin }: { onCoin: () => void }) {
-  return (
-    <div className="scr center attract">
-      <p className="attract-kicker">PLAYER 1</p>
-      <h2 className="screen-title giant">{TITLE_WORDS.map((w, i) => <span key={w}>{i ? <br /> : null}{w}</span>)}</h2>
-      <button type="button" className="arc-btn primary coin-btn" data-nav data-autofocus onClick={onCoin}>
-        <span className="blink">INSERT COIN</span>
-      </button>
-      <p className="hint-line">INSERT COIN TO CONTINUE</p>
-    </div>
-  );
-}
-
-function StartGate({ allowed, known, notice, onStart, onBack }: { allowed: boolean; known: boolean; notice: string | null; onStart: () => void; onBack: () => void }) {
-  return (
-    <div className="scr center">
-      <h2 className="screen-title">READY PLAYER 1</h2>
-      <button type="button" className={`arc-btn primary${allowed ? '' : ' locked'}`} data-nav data-autofocus aria-disabled={!allowed} onClick={onStart}>
-        {allowed ? <span className="blink">PRESS START</span> : <span>PRESS START</span>}
-      </button>
-      {!allowed ? <p className="lock-line" role="status"><span className="lock-icon" aria-hidden="true">■</span> {known ? 'START LOCKED: NO AVAILABLE CREDITS' : 'START LOCKED: CREDITS UNAVAILABLE'}</p> : null}
-      {notice && allowed ? <p className="lock-line">{notice}</p> : null}
-      <button type="button" className="arc-btn" data-nav onClick={onBack}>BACK</button>
-    </div>
-  );
-}
-
-function Title({ data, reduced, zero, onStart }: { data: ArcadeData | null; reduced: boolean; zero: boolean; onStart: () => void }) {
-  const scores = data?.hiScores ?? [];
+function HiScoreBanner({ scores, reduced }: { scores: ArcadeData['hiScores']; reduced: boolean }) {
   const text = scores.length
     ? scores.map((s, i) => `${i + 1}. ${s.label} ${s.score}`).join('   ★   ')
     : 'NO HIGH SCORES YET   ★   SHIP A FINISHED PACK TO GET ON THE BOARD';
   return (
-    <div className="scr center title-screen">
-      <div className={`hiscore-banner${reduced ? ' static' : ''}`} aria-label={scores.length ? 'High scores' : 'No high scores yet'}>
-        <span className="hiscore-label">HI-SCORE</span>
-        <div className="hiscore-track">
-          <span className="hiscore-text">{text}</span>
-          {!reduced ? <span className="hiscore-text" aria-hidden="true">{text}</span> : null}
-        </div>
+    <div className={`hiscore-banner${reduced ? ' static' : ''}`} aria-label={scores.length ? 'High scores' : 'No high scores yet'}>
+      <span className="hiscore-label">HI-SCORE</span>
+      <div className="hiscore-track">
+        <span className="hiscore-text">{text}</span>
+        {!reduced ? <span className="hiscore-text" aria-hidden="true">{text}</span> : null}
       </div>
-      <h2 className="screen-title giant">{TITLE_WORDS.map((w, i) => <span key={w}>{i ? <br /> : null}{w}</span>)}</h2>
-      <p className="title-sub">THE HUSTLE NEVER CLOCKS OUT</p>
-      {zero ? <p className="lock-line" role="status">CREDITS: 0 · NO CREDITS LEFT</p> : null}
-      <button type="button" className="arc-btn primary" data-nav data-autofocus onClick={onStart}>
-        <span className="blink">START</span>
-      </button>
-      <p className="hint-line">SELECT CHARACTER TO CONTINUE</p>
-      <p className="copyright">© 2026 DAF · ALL RIGHTS HUSTLED</p>
     </div>
   );
 }
@@ -349,60 +345,85 @@ function PortraitControls({ character, onChanged }: { character: Character; onCh
   );
 }
 
-function CharacterSelect({ characters, chosen, highlight, onHighlight, onChoose, onEnter, onBack, onPortraitChanged }: {
-  characters: Character[]; chosen: string | null; highlight: string | null;
-  onHighlight: (id: string) => void; onChoose: (id: string) => void; onEnter: () => void; onBack: () => void; onPortraitChanged: () => void;
+/** The opening screen: pick a player, pick one of their worlds, check the stats. */
+function Hub({ data, chosen, highlight, onHighlight, onChoose, onPortraitChanged, locked, lockText, notice, reduced, onEnterWorld, onBuilder, onSoon }: {
+  data: ArcadeData | null; chosen: string | null; highlight: string | null;
+  onHighlight: (id: string) => void; onChoose: (id: string) => void; onPortraitChanged: () => void;
+  locked: boolean; lockText: string; notice: string | null; reduced: boolean;
+  onEnterWorld: (id: string) => void; onBuilder: () => void; onSoon: (name: string) => void;
 }) {
+  const characters = data?.characters ?? [];
+  const player = characters.find((c) => c.id === chosen) ?? null;
   const shown = characters.find((c) => c.id === (highlight ?? chosen)) ?? characters[0];
+  const [extras, setExtras] = useState(false);
   return (
-    <div className="scr select-screen">
-      <h2 className="screen-title">CHOOSE CHARACTER</h2>
-      <div className="char-grid" role="radiogroup" aria-label="Characters">
-        {characters.map((c, i) => (
-          <button
-            key={c.id}
-            type="button"
-            role="radio"
-            aria-checked={chosen === c.id}
-            className={`char-card char-${c.id}${chosen === c.id ? ' chosen' : ''}`}
-            data-nav
-            {...(chosen ? (chosen === c.id ? { 'data-autofocus': true } : {}) : i === 0 ? { 'data-autofocus': true } : {})}
-            onFocus={() => onHighlight(c.id)}
-            onMouseEnter={() => onHighlight(c.id)}
-            onClick={() => onChoose(c.id)}
-          >
-            <span className="char-portrait" aria-hidden="true">
-              {c.portraitUrl ? <img className="char-photo" src={c.portraitUrl} alt="" /> : <CharacterSprite type={c.type} />}
-            </span>
-            <span className="char-name">{c.displayName}</span>
-            <span className="char-tag">{c.role === c.displayName ? c.tagline : `${c.role} · ${c.tagline}`}</span>
-            {chosen === c.id ? <span className="char-picked">SELECTED</span> : null}
-          </button>
-        ))}
-      </div>
-      {shown ? (
-        <div className="char-info">
-          <p className="crt-text">{shown.bio}</p>
-          <p className="fine">{shown.role}: {shown.scope}</p>
-          <PortraitControls character={shown} onChanged={onPortraitChanged} />
-          <dl className="stat-panel" aria-label={`${shown.displayName} stats`}>
-            {STAT_NAMES.map(([k, label]) => (
-              <div key={k} className="stat">
-                <dt>{label}</dt>
-                <dd>{shown.stats[k] ?? '--'}</dd>
-              </div>
-            ))}
-          </dl>
-          <p className="fine">Stats stay blank until the XP rules are decided.</p>
+    <div className="scr hub">
+      <HiScoreBanner scores={data?.hiScores ?? []} reduced={reduced} />
+
+      <section className="hub-zone" aria-labelledby="hub-player">
+        <h2 id="hub-player" className="zone-title">PLAYER</h2>
+        <div className="char-grid compact" role="radiogroup" aria-label="Characters">
+          {characters.map((c, i) => (
+            <button
+              key={c.id}
+              type="button"
+              role="radio"
+              aria-checked={chosen === c.id}
+              className={`char-card char-${c.id}${chosen === c.id ? ' chosen' : ''}`}
+              data-nav
+              {...(chosen ? (chosen === c.id ? { 'data-autofocus': true } : {}) : i === 0 ? { 'data-autofocus': true } : {})}
+              onFocus={() => onHighlight(c.id)}
+              onMouseEnter={() => onHighlight(c.id)}
+              onClick={() => onChoose(c.id)}
+            >
+              <span className="char-portrait" aria-hidden="true">
+                {c.portraitUrl ? <img className="char-photo" src={c.portraitUrl} alt="" /> : <CharacterSprite type={c.type} />}
+              </span>
+              <span className="char-name">{c.displayName}</span>
+              <span className="char-tag">{c.role === c.displayName ? c.tagline : `${c.role} · ${c.tagline}`}</span>
+              {chosen === c.id ? <span className="char-picked">PLAYING</span> : null}
+            </button>
+          ))}
         </div>
-      ) : null}
-      <div className="row-actions">
-        <button type="button" className="arc-btn" data-nav onClick={onBack}>BACK</button>
-        <button type="button" className={`arc-btn primary${chosen ? '' : ' locked'}`} data-nav aria-disabled={!chosen} onClick={() => chosen && onEnter()}>
-          ENTER WORLDS
-        </button>
-      </div>
-      {!chosen ? <p className="hint-line">PICK A CHARACTER FIRST</p> : null}
+        {shown ? (
+          <div className="char-info">
+            <p className="fine">{shown.displayName}: {shown.scope}</p>
+            <button type="button" className="arc-btn small" data-nav aria-expanded={extras} onClick={() => setExtras((x) => !x)}>{extras ? 'HIDE BIO & PORTRAIT' : 'BIO, PORTRAIT & STATS'}</button>
+            {extras ? (
+              <>
+                <p className="crt-text">{shown.bio}</p>
+                <PortraitControls character={shown} onChanged={onPortraitChanged} />
+                <dl className="stat-panel" aria-label={`${shown.displayName} stats`}>
+                  {STAT_NAMES.map(([k, label]) => (
+                    <div key={k} className="stat">
+                      <dt>{label}</dt>
+                      <dd>{shown.stats[k] ?? '--'}</dd>
+                    </div>
+                  ))}
+                </dl>
+                <p className="fine">Stats stay blank until the XP rules are decided.</p>
+              </>
+            ) : null}
+          </div>
+        ) : null}
+      </section>
+
+      <section className="hub-zone" aria-labelledby="hub-worlds">
+        <h2 id="hub-worlds" className="zone-title">{player ? `${player.displayName}'S WORLDS` : 'WORLDS'}</h2>
+        {player ? <WorldList character={player} locked={locked} onOpen={onEnterWorld} /> : <p className="hint-line center-text">PICK A PLAYER TO SEE THEIR WORLDS</p>}
+        {locked ? <p className="lock-line center-text" role="status"><span className="lock-icon" aria-hidden="true">■</span> {lockText}</p> : null}
+        {notice && notice !== lockText ? <p className="lock-line center-text" role="status">{notice}</p> : null}
+        <div className="row-actions">
+          <button type="button" className="arc-btn" data-nav onClick={onBuilder}>WORLD BUILDER</button>
+        </div>
+      </section>
+
+      <section className="hub-zone" aria-labelledby="hub-stats">
+        <h2 id="hub-stats" className="zone-title">STATS</h2>
+        <StatsTicker character={chosen} reduced={reduced} />
+      </section>
+
+      <ArcadeTabs onSoon={onSoon} />
     </div>
   );
 }

@@ -7,6 +7,9 @@ import { buildServer } from '../src/server/app.ts';
 import { createWorker } from '../src/jobs/handlers.ts';
 import type { Worker } from '../src/jobs/worker.ts';
 import { CHARACTERS, arcadeState, canStart } from '../src/engine/arcade/service.ts';
+import { getDraft, INTERRUPTED } from '../src/engine/arcade/drafts.ts';
+import { createProduct } from '../src/engine/specification/service.ts';
+import { addPerformance } from '../src/engine/analytics/service.ts';
 import { tempDir } from './helpers.ts';
 
 // Spec milestone 1 acceptance: Start opens Title only when N > 0, zero credits lock Start,
@@ -132,43 +135,65 @@ async function withStandInAi<T>(answer: (purpose: string, prompt: string) => unk
 }
 const worldCount = async () => ((await server.inject({ method: 'GET', url: '/api/arcade/builder', headers: H })).json() as { worlds: unknown[] }).worlds.length;
 const GEN = { goal: 'Launch a mandala coloring shop', milestones: 2, tasksPerMilestone: 2, difficulty: 'balanced' };
+const post = (url: string, payload: unknown) => server.inject({ method: 'POST', url, headers: H, payload: payload as Record<string, unknown> });
+const getJson = async (url: string) => (await server.inject({ method: 'GET', url, headers: H })).json();
+/** Slow AI work runs as a draft in the background; wait until the stand-in has answered. */
+async function waitDraft(id: string) {
+  for (let i = 0; i < 400; i++) {
+    const d = await getJson(`/api/arcade/builder/drafts/${id}`);
+    if (d.status !== 'writing') return d;
+    await new Promise((r) => setTimeout(r, 5));
+  }
+  throw new Error(`draft ${id} never finished`);
+}
 
-test('AI generation with no AI provider says so and never falls back to the built-in library', async () => {
+test('AI generation with no AI provider says so at once, never falls back to the built-in library, and starts no draft', async () => {
   const before = await worldCount();
   for (const [url, payload] of [
     ['/api/arcade/builder/generate', GEN],
     ['/api/arcade/builder/suggest/worlds', {}],
+    ['/api/arcade/builder/tidy', { notes: 'some notes' }],
   ] as const) {
-    const r = await server.inject({ method: 'POST', url, headers: H, payload });
+    const r = await post(url, payload);
     assert.equal(r.statusCode, 409, r.body);
     assert.match(r.body, /never made from the built-in library/);
   }
   assert.equal(await worldCount(), before, 'nothing was created');
+  assert.deepEqual((await getJson('/api/arcade/builder/drafts')).drafts, [], 'no draft waits for an AI that is not there');
 });
 
-test('AI generation: a reviewable proposal that follows the settings, saved only when accepted', async () => {
+test('AI generation: a draft that survives leaving the page, follows the settings, and becomes a world only when saved', async () => {
   const task = (title: string, characterId = 'ide') => ({ title, description: 'd', characterId, taskType: 'mandala-coloring', difficulty: 'MEDIUM', estimatedEffort: 3 });
   // The stand-in over-delivers on purpose: 3 milestones with 3 tasks each, tasks given to other characters.
   const wide = { name: 'Mandala shop', description: 'Sell coloring packs.', milestones: [1, 2, 3].map((n) => ({ name: `Stage ${n}`, tasks: [task(`T${n}a`), task(`T${n}b`, 'ai-chatbot'), task(`T${n}c`)] })) };
   await withStandInAi(() => wide, async (seen) => {
     const before = await worldCount();
-    const r = await server.inject({ method: 'POST', url: '/api/arcade/builder/generate', headers: H, payload: { ...GEN, characterId: 'daf', productTypes: ['mandala-coloring'] } });
+    const r = await post('/api/arcade/builder/generate', { ...GEN, characterId: 'daf', productTypes: ['mandala-coloring'] });
     assert.equal(r.statusCode, 200, r.body);
-    const { proposal, model } = r.json();
-    assert.equal(model, 'stand-in-model');
+    const { draft } = r.json();
+    assert.equal(draft.kind, 'world');
+    assert.equal(draft.status, 'writing', 'the request returns before the AI answers');
+
+    // The page can be left now: the answer lands on the draft, not on the page.
+    const done = await waitDraft(draft.id);
+    assert.equal(done.status, 'ready', done.error ?? '');
+    assert.equal(done.model, 'stand-in-model');
+    const proposal = done.result;
     assert.equal(proposal.milestones.length, 2, 'trimmed to the milestone count asked for');
     assert.ok(proposal.milestones.every((m: { tasks: unknown[] }) => m.tasks.length === 2), 'trimmed to the task count asked for');
     assert.ok(proposal.milestones.flatMap((m: { tasks: { characterId: string }[] }) => m.tasks).every((t: { characterId: string }) => t.characterId === 'daf'), 'every task goes to the chosen character');
     assert.match(seen[0]!.prompt, /Launch a mandala coloring shop/);
     assert.match(seen[0]!.prompt, /- mandala-coloring:/);
     assert.doesNotMatch(seen[0]!.prompt, /- word-search:/, 'only the chosen product types are offered');
-    assert.equal(await worldCount(), before, 'a proposal alone saves nothing');
+    assert.equal(await worldCount(), before, 'a draft alone saves nothing');
+    assert.ok((await getJson('/api/arcade/builder/drafts?kind=world')).drafts.some((d: { id: string }) => d.id === draft.id), 'the draft is listed for when the owner comes back');
 
-    const saved = await server.inject({ method: 'POST', url: '/api/arcade/builder/worlds/from-proposal', headers: H, payload: proposal });
+    const saved = await post('/api/arcade/builder/worlds/from-proposal', { ...proposal, draftId: draft.id });
     assert.equal(saved.statusCode, 200, saved.body);
     assert.equal(await worldCount(), before + 1);
-    const visible = (await server.inject({ method: 'GET', url: '/api/arcade/worlds?character=daf', headers: H })).json().worlds;
+    const visible = (await getJson('/api/arcade/worlds?character=daf')).worlds;
     assert.ok(visible.some((w: { name: string }) => w.name === 'Mandala shop'), 'the character sees the new world');
+    assert.equal((await server.inject({ method: 'GET', url: `/api/arcade/builder/drafts/${draft.id}`, headers: H })).statusCode, 404, 'a saved draft leaves the drafts list');
   });
 
   // One bad task saves nothing at all.
@@ -201,4 +226,130 @@ test('AI suggestions: world ideas and task ideas, nothing saved', async () => {
     assert.equal(missing.statusCode, 404);
   });
   assert.equal(await worldCount(), before, 'suggestions are not saved');
+});
+
+// ---------- Drafts (owner request, 2026-11-05: leaving the page must not lose the AI's work) ----------
+
+test('drafts: a failed AI call is kept with its reason, discard removes it, and a draft is never a world', async () => {
+  await withStandInAi(() => { throw new Error('stand-in AI is down'); }, async () => {
+    const before = await worldCount();
+    const r = await post('/api/arcade/builder/generate', GEN);
+    assert.equal(r.statusCode, 200, r.body);
+    const done = await waitDraft(r.json().draft.id);
+    assert.equal(done.status, 'failed');
+    assert.match(done.error, /stand-in AI is down/);
+    assert.equal(await worldCount(), before, 'a failed draft creates nothing');
+
+    const url = `/api/arcade/builder/drafts/${done.id}`;
+    assert.equal((await server.inject({ method: 'DELETE', url, headers: H })).statusCode, 200);
+    assert.equal((await server.inject({ method: 'GET', url, headers: H })).statusCode, 404);
+    assert.equal((await server.inject({ method: 'DELETE', url, headers: H })).statusCode, 404);
+  });
+});
+
+test('drafts: one still writing when the app stopped is marked failed, not left waiting forever', async () => {
+  const dir = tempDir();
+  const first = bootstrap({ dataDir: dir, secrets: new MemorySecretStore(), logConsole: false, pacing: false });
+  const now = new Date().toISOString();
+  first.db.insert('world_drafts', { id: 'wdr_cut_off', kind: 'world', status: 'writing', request: '{}', created_at: now, updated_at: now });
+  await first.close();
+  const second = bootstrap({ dataDir: dir, secrets: new MemorySecretStore(), logConsole: false, pacing: false });
+  try {
+    const d = getDraft(second, 'wdr_cut_off');
+    assert.equal(d.status, 'failed');
+    assert.equal(d.error, INTERRUPTED);
+  } finally {
+    await second.close();
+  }
+});
+
+// ---------- TIDY MY NOTES ----------
+
+test('tidy my notes: the same ideas in a fixed structure, questions kept apart, nothing invented, stored as a draft', async () => {
+  const tidy = {
+    title: 'Teacher planners', goal: 'Sell planners to teachers.', scope: ['Weekly planner'],
+    milestones: [{ name: 'First pack', tasks: [{ title: 'Weekly planner', characterId: 'daf', taskType: 'weekly-planner' }] }],
+    constraints: ['No dated pages'], doneWhen: ['Listed on Etsy'], questions: ['Which grade levels?'],
+  };
+  const notes = 'ok so teachers... planners, maybe weekly? NO dated pages!! put it on etsy';
+  await withStandInAi(() => tidy, async (seen) => {
+    const r = await post('/api/arcade/builder/tidy', { notes });
+    assert.equal(r.statusCode, 200, r.body);
+    const done = await waitDraft(r.json().draft.id);
+    assert.equal(done.kind, 'notes');
+    assert.equal(done.status, 'ready', done.error ?? '');
+    assert.deepEqual(done.request, { notes }, 'the original notes are kept as written');
+    assert.deepEqual(done.result.questions, ['Which grade levels?'], 'unclear things come back as questions');
+    assert.equal(done.result.milestones[0].tasks[0].taskType, 'weekly-planner');
+    const call = seen.at(-1)!;
+    assert.match(call.prompt, /NO dated pages!!/, 'the notes go to the AI unchanged');
+    assert.match(call.system, /Do not add numbers, dates, prices/);
+    assert.match(call.system, /do not guess or decide/);
+    const listed = await getJson('/api/arcade/builder/drafts?kind=notes');
+    assert.ok(listed.drafts.some((d: { id: string }) => d.id === done.id));
+    assert.ok(!(await getJson('/api/arcade/builder/drafts?kind=world')).drafts.some((d: { id: string }) => d.id === done.id), 'notes drafts are not world drafts');
+  });
+  assert.equal((await post('/api/arcade/builder/tidy', { notes: '   ' })).statusCode, 422);
+});
+
+// ---------- Suggestions that know what the factory already has ----------
+
+test('AI suggestions can build on what exists or look for unexplored ground, from real facts only', async () => {
+  const { product } = createProduct(app, { productType: 'word-search', title: 'Spooky word search' });
+  const idea = { name: 'Next idea', description: 'd', milestones: ['One', 'Two', 'Three'] };
+  await withStandInAi(() => ({ suggestions: [idea] }), async (seen) => {
+    const b = await post('/api/arcade/builder/suggest/worlds', { mode: 'build-on' });
+    assert.equal(b.statusCode, 200, b.body);
+    const buildOn = seen.at(-1)!.prompt;
+    assert.match(buildOn, /build on what the owner already has/);
+    assert.match(buildOn, /Mandala shop/, 'existing worlds are described');
+    assert.match(buildOn, /No sales are recorded/, 'with no sales recorded, the AI is told not to claim any');
+
+    const u = await post('/api/arcade/builder/suggest/worlds', { mode: 'unexplored' });
+    assert.equal(u.statusCode, 200, u.body);
+    const unexplored = seen.at(-1)!.prompt;
+    const never = unexplored.split('Product types never used')[1]!.split('\n\n')[0]!;
+    assert.doesNotMatch(never, /- word-search /, 'a type with a product is not unexplored');
+    assert.doesNotMatch(never, /- mandala-coloring /, 'a type with world tasks is not unexplored');
+    assert.match(never, /- invoice-template /, 'a type never touched is unexplored');
+
+    addPerformance(app, { productId: product.id, metric: 'orders', value: 4, periodStart: '2026-10-01', periodEnd: '2026-10-31', sourceKind: 'manual_entry' });
+    await post('/api/arcade/builder/suggest/worlds', { mode: 'unexplored' });
+    assert.match(seen.at(-1)!.prompt, /word-search: 4 orders \(manual_entry\)/, 'recorded sales are passed with their source');
+  });
+  assert.equal((await post('/api/arcade/builder/suggest/worlds', { mode: 'sideways' })).statusCode, 422);
+});
+
+// ---------- Stats ticker on the hub ----------
+
+test('stats ticker: every stat listed once, the owner picks and orders them, unknown ids ignored, NO DATA instead of invented numbers, sources kept apart', async () => {
+  const cat = await getJson('/api/arcade/ticker/catalog');
+  const ids = cat.stats.map((s: { id: string }) => s.id);
+  assert.equal(new Set(ids).size, ids.length, 'no stat is listed twice');
+  assert.equal(cat.chosen.length, 8, 'every default stat exists');
+  assert.ok(cat.chosen.every((id: string) => ids.includes(id)));
+  assert.ok(cat.stats.every((s: { help: string }) => s.help.length > 10), 'each stat says what it means');
+
+  const pick = ['arcade.worlds', 'not.a.stat', 'sales.refunds.manual_entry', 'sales.refunds.marketplace_api', 'sales.refunds.estimate', 'listings.published.etsy', 'arcade.openTasks', 'arcade.credits'];
+  assert.equal((await server.inject({ method: 'PATCH', url: '/api/settings/arcade', headers: H, payload: JSON.stringify({ tickerStats: pick }) })).statusCode, 200);
+
+  const { product } = createProduct(app, { productType: 'habit-tracker', title: 'Ticker test tracker' });
+  addPerformance(app, { productId: product.id, metric: 'refunds', value: 2, periodStart: '2026-10-01', periodEnd: '2026-10-31', sourceKind: 'manual_entry' });
+  addPerformance(app, { productId: product.id, metric: 'refunds', value: 5, periodStart: '2026-10-01', periodEnd: '2026-10-31', sourceKind: 'estimate' });
+
+  const items = (await getJson('/api/arcade/ticker?character=daf')).items as { id: string; value: number | null; note?: string; test?: boolean }[];
+  assert.deepEqual(items.map((i) => i.id), pick.filter((id) => id !== 'not.a.stat'), 'chosen order kept, unknown id dropped');
+  const v = (id: string) => items.find((i) => i.id === id)!;
+  assert.ok((v('arcade.worlds').value ?? 0) >= 1);
+  assert.equal(v('sales.refunds.manual_entry').value, 2);
+  assert.equal(v('sales.refunds.estimate').value, 5, 'estimates are their own stat');
+  assert.equal(v('sales.refunds.estimate').note, 'estimate');
+  assert.equal(v('sales.refunds.marketplace_api').value, null, 'nothing from the shop is NO DATA, not 0');
+  assert.equal(v('listings.published.etsy').value, null, 'no recorded Etsy listings is NO DATA, not 0');
+  assert.ok((v('arcade.openTasks').value ?? 0) >= 1, 'SPARKS has open tasks in the saved world');
+  assert.equal(v('arcade.credits').test, true, 'test credits are marked as test');
+
+  const noPlayer = (await getJson('/api/arcade/ticker')).items as { id: string; value: number | null; note?: string }[];
+  assert.equal(noPlayer.find((i) => i.id === 'arcade.openTasks')!.value, null);
+  assert.equal(noPlayer.find((i) => i.id === 'arcade.openTasks')!.note, 'pick a character');
 });

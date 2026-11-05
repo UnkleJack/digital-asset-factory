@@ -375,6 +375,13 @@ export const SettingsSchema = z.object({
     // (spec milestone 6). The arcade always labels it TEST so it is never mistaken for live data.
     // 0 locks PRESS START, which is how the zero-credit lock is tried out.
     testCredits: z.number().int().min(0).max(99).default(3),
+    // The stats ticker on the arcade hub: which stats show at a glance, in order (ids from
+    // src/engine/arcade/ticker.ts). The owner picks them with EDIT on the ticker. Ids that no longer
+    // exist are ignored when read. Sales stats are one per source, because sources are never added together.
+    tickerStats: z.array(z.string().min(1).max(80)).max(16).default(() => [
+      'arcade.openTasks', 'listings.published.etsy', 'listings.published.gumroad',
+      'sales.orders.marketplace_api', 'sales.orders.csv_import', 'sales.revenue_cents.marketplace_api', 'sales.revenue_cents.csv_import', 'ai.cost30',
+    ]),
   }).prefault({}),
   email: z.object({
     // Gmail's SMTP relay: the Gmail address you send from goes here; its app password is the smtp_password secret.

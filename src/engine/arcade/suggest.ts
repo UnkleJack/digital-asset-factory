@@ -30,7 +30,7 @@ export interface AiResult<T> {
   provenance: Provenance;
 }
 
-async function requireAi(app: AppContext): Promise<void> {
+export async function requireAi(app: AppContext): Promise<void> {
   try {
     if ((await textMode(app)).mode === 'ai') return;
   } catch {
@@ -78,12 +78,22 @@ const MIX_TEXT: Record<DifficultyMix, string> = {
   hard: 'mostly MEDIUM and HIGH, few LOW',
 };
 
+/**
+ * Everything that can make a world request fail before the AI is asked: an empty goal, an unknown
+ * character or product type, or no working AI provider. Checked up front so the World Builder hears
+ * about it at once instead of in a failed draft.
+ */
+export async function checkGenerate(app: AppContext, p: GenerateParams): Promise<void> {
+  if (!p.goal.trim()) throw validation('Tell the factory what the world is for.', [{ field: 'goal', message: 'Required' }]);
+  if (p.characterId && !CHARACTERS.some((c) => c.id === p.characterId)) throw validation(`Unknown character "${p.characterId}"`, [{ field: 'characterId', message: 'Pick a character.' }]);
+  taskTypeChoices(p.productTypes);
+  await requireAi(app);
+}
+
 /** 2c: a whole world from a goal and a few settings. Nothing is saved; the owner reviews it first. */
 export async function generateWorld(app: AppContext, p: GenerateParams): Promise<AiResult<ProposedWorld>> {
+  await checkGenerate(app, p);
   const goal = p.goal.trim();
-  if (!goal) throw validation('Tell the factory what the world is for.', [{ field: 'goal', message: 'Required' }]);
-  if (p.characterId && !CHARACTERS.some((c) => c.id === p.characterId)) throw validation(`Unknown character "${p.characterId}"`, [{ field: 'characterId', message: 'Pick a character.' }]);
-  await requireAi(app);
   const { ids, listing } = taskTypeChoices(p.productTypes);
   const task = taskSchema(ids);
   const schema = z.object({
@@ -111,16 +121,82 @@ export async function generateWorld(app: AppContext, p: GenerateParams): Promise
 
 export interface WorldIdea { name: string; description: string; milestones: string[] }
 
-/** 2b: world ideas to click on. Optional hint steers them. */
-export async function suggestWorlds(app: AppContext, hint?: string): Promise<AiResult<WorldIdea[]>> {
+// ---------- What the factory already has, for suggestions (owner request, 2026-11-05) ----------
+// Built only from real rows. Nothing here is estimated or filled in.
+
+export const SUGGEST_MODES = ['fresh', 'build-on', 'unexplored'] as const;
+export type SuggestMode = (typeof SUGGEST_MODES)[number];
+
+export interface FactorySummary {
+  /** One line per world: name, status, milestones with their state, open tasks per character. */
+  worlds: string[];
+  /** Product types with products or tasks, and how many of each. */
+  usedTypes: string[];
+  /** Product types with no products and no tasks at all: ground not explored yet. */
+  unusedTypes: string[];
+  /** Characters with no open task anywhere. */
+  idleCharacters: string[];
+  /** Product types with recorded orders, per source (never added across sources). Empty when nothing is recorded. */
+  sales: string[];
+}
+
+export function factorySummary(app: AppContext): FactorySummary {
+  const makeable = productTypes().filter((t) => !t.importOnly);
+  const products = new Map(app.db.all<{ t: string; n: number }>("SELECT product_type AS t, count(*) AS n FROM products WHERE status = 'active' GROUP BY product_type").map((r) => [r.t, r.n]));
+  const tasks = new Map(app.db.all<{ t: string; n: number }>('SELECT task_type AS t, count(*) AS n FROM world_tasks GROUP BY task_type').map((r) => [r.t, r.n]));
+  const usedTypes = makeable
+    .filter((t) => products.has(t.id) || tasks.has(t.id))
+    .map((t) => `${t.id} (${t.name}): ${products.get(t.id) ?? 0} products, ${tasks.get(t.id) ?? 0} world tasks`);
+  const unusedTypes = makeable.filter((t) => !products.has(t.id) && !tasks.has(t.id)).map((t) => `${t.id} (${t.name}): ${t.description}`);
+
+  const worlds = listAllWorlds(app).slice(0, 25).map((w) => {
+    const { milestones } = worldForBuilder(app, w.id);
+    const ms = milestones.map((m) => `${m.sequence}. ${m.name}${m.status === 'completed' ? ' (done)' : ''}`).join(', ');
+    const open = CHARACTERS.map((c) => [c.id, milestones.flatMap((m) => m.taskList).filter((t) => t.character_id === c.id && t.status !== 'COMPLETE').length] as const)
+      .filter(([, n]) => n > 0).map(([id, n]) => `${id} ${n}`).join(', ');
+    return `${w.name}${w.status === 'archived' ? ' (archived)' : ''}${w.description ? `: ${w.description.slice(0, 160)}` : ''} | milestones: ${ms || 'none'} | open tasks: ${open || 'none'}`;
+  });
+
+  const idleCharacters = CHARACTERS.filter((c) => !app.db.value<number>("SELECT count(*) FROM world_tasks t JOIN worlds w ON w.id = t.world_id WHERE w.status = 'active' AND t.character_id = ? AND t.status <> 'COMPLETE'", c.id))
+    .map((c) => `${c.id}: ${c.scope}`);
+
+  const sales = app.db.all<{ t: string; src: string; orders: number }>(
+    "SELECT p.product_type AS t, o.source_kind AS src, sum(o.value) AS orders FROM performance_observations o JOIN products p ON p.id = o.product_id WHERE o.metric = 'orders' GROUP BY p.product_type, o.source_kind ORDER BY orders DESC LIMIT 12",
+  ).map((r) => `${r.t}: ${r.orders} orders (${r.src === 'estimate' ? 'estimate, not real sales' : r.src})`);
+
+  return { worlds, usedTypes, unusedTypes, idleCharacters, sales };
+}
+
+/** 2b: world ideas to click on. Optional hint steers them; the mode says what to base them on. */
+export async function suggestWorlds(app: AppContext, hint?: string, mode: SuggestMode = 'fresh'): Promise<AiResult<WorldIdea[]>> {
+  const summary = mode === 'fresh' ? null : factorySummary(app);
+  if (mode === 'build-on' && !summary!.worlds.length) {
+    throw validation('There are no worlds to build on yet. Use SUGGEST WORLDS, or build a world first.', [{ field: 'mode', message: 'No worlds yet' }]);
+  }
   await requireAi(app);
   const schema = z.object({
     suggestions: z.array(z.object({ name: z.string().min(2).max(80), description: z.string().max(400), milestones: z.array(z.string().min(2).max(80)) })),
   });
   const existing = listAllWorlds(app).map((w) => w.name);
+  const ask: Record<SuggestMode, string> = {
+    fresh: 'Suggest 5 different worlds (projects) the owner could start next.',
+    'build-on': 'Suggest 5 worlds that build on what the owner already has: the next stage of an existing world, a follow-up, a bundle or spin-off, or the work that would help an existing world sell. Say in each description which existing world it builds on.',
+    unexplored: 'Suggest 5 worlds on ground the owner has not explored yet: product types they have never made, characters with nothing to do, and kinds of work missing from their worlds. Say in each description what new ground it covers.',
+  };
+  const facts = summary
+    ? [
+        `Worlds that exist now:\n${summary.worlds.map((w) => `- ${w}`).join('\n') || '- none'}`,
+        `Product types already used:\n${summary.usedTypes.map((t) => `- ${t}`).join('\n') || '- none'}`,
+        `Product types never used (no products, no tasks):\n${summary.unusedTypes.map((t) => `- ${t}`).join('\n') || '- none'}`,
+        `Characters with no open tasks:\n${summary.idleCharacters.map((c) => `- ${c}`).join('\n') || '- none'}`,
+        summary.sales.length ? `Recorded orders by product type (each source separate):\n${summary.sales.map((s) => `- ${s}`).join('\n')}` : 'No sales are recorded in the factory yet, so do not claim anything has sold.',
+      ]
+    : [];
   const prompt = [
-    'Suggest 5 different worlds (projects) the owner could start next. Each needs a short name, a one or two sentence description, and 3 to 5 milestone names in order.',
-    hint?.trim() ? `The owner is leaning toward: ${hint.trim()}` : 'The owner has not given a direction, so cover different kinds of work.',
+    `${ask[mode]} Each needs a short name, a one or two sentence description, and 3 to 5 milestone names in order.`,
+    hint?.trim() ? `The owner is leaning toward: ${hint.trim()}` : mode === 'fresh' ? 'The owner has not given a direction, so cover different kinds of work.' : '',
+    ...facts,
+    'Use only the facts given here. Do not invent sales, numbers or past results.',
     existing.length ? `Worlds that already exist (do not repeat): ${existing.join('; ')}` : '',
   ].filter(Boolean).join('\n\n');
   const { data, provenance } = await structuredCall(app, { purpose: 'arcade:suggest-worlds', schema, system: SYSTEM_BASE, prompt, maxTokens: 3000, trace: {} });
@@ -147,4 +223,69 @@ export async function suggestTasks(app: AppContext, input: { worldId: string; mi
   ].filter(Boolean).join('\n\n');
   const { data, provenance } = await structuredCall(app, { purpose: 'arcade:suggest-tasks', schema, system: SYSTEM_BASE, prompt, maxTokens: 3000, trace: {} });
   return { result: data.suggestions.slice(0, 6).map((t) => cleanTask(t)), provenance };
+}
+
+// ---------- TIDY MY NOTES (owner request, 2026-11-05) ----------
+// The owner pastes a brain dump; the AI returns the same ideas in a fixed structure, plus a separate list of
+// questions for anything unclear. It must not add facts. The owner sees the original beside the tidy version
+// and decides what to use; nothing replaces the original.
+
+export const NOTES_MAX = 20_000;
+
+export interface TidyNotes {
+  title: string;
+  goal: string;
+  scope: string[];
+  milestones: { name: string; tasks: { title: string; characterId: string; taskType: string }[] }[];
+  constraints: string[];
+  doneWhen: string[];
+  questions: string[];
+}
+
+const TIDY_RULES = `
+You are tidying the owner's own notes, not planning new work.
+- Keep every idea, example and reason the owner gave. Drop only repetition and filler.
+- Do not add numbers, dates, prices, names, platforms or features the owner did not write.
+- Where something is unclear, missing or contradictory, do not guess or decide: add a short question to "questions".
+- Use the owner's words where you can. Short, plain sentences.
+- Only make milestones and tasks the notes actually describe or clearly imply; it is fine to have none.`;
+
+export async function tidyNotes(app: AppContext, notes: string): Promise<AiResult<TidyNotes>> {
+  const text = notes.trim();
+  if (!text) throw validation('Paste or type some notes first.', [{ field: 'notes', message: 'Required' }]);
+  if (text.length > NOTES_MAX) throw validation(`Notes can be up to ${NOTES_MAX} characters.`, [{ field: 'notes', message: 'Too long' }]);
+  await requireAi(app);
+  const { ids, listing } = taskTypeChoices();
+  const line = z.string().min(1).max(400);
+  const schema = z.object({
+    title: z.string().min(2).max(80),
+    goal: z.string().min(1).max(800),
+    scope: z.array(line),
+    milestones: z.array(z.object({
+      name: z.string().min(2).max(80),
+      tasks: z.array(z.object({ title: z.string().min(2).max(120), characterId: z.enum(CHARACTERS.map((c) => c.id) as [string, ...string[]]), taskType: z.enum(ids) })),
+    })),
+    constraints: z.array(line),
+    doneWhen: z.array(line),
+    questions: z.array(line),
+  });
+  const prompt = [
+    'Tidy these notes into: a short title; the goal in one to three sentences; scope (what is in); milestones in order, each with its tasks (give each task the character it suits and a task type); constraints (limits, must-haves, must-nots); "done when" (how the owner will know it is finished); and questions for the owner.',
+    `Allowed task types (use the id):\n${listing}`,
+    `The owner's notes, between the lines:\n-----\n${text}\n-----`,
+  ].join('\n\n');
+  const { data, provenance } = await structuredCall(app, { purpose: 'arcade:tidy-notes', schema, system: SYSTEM_BASE + TIDY_RULES, prompt, maxTokens: 6000, trace: {} });
+  const trimList = (xs: string[], n: number) => xs.map((x) => x.trim()).filter(Boolean).slice(0, n);
+  return {
+    result: {
+      title: data.title.trim(),
+      goal: data.goal.trim(),
+      scope: trimList(data.scope, 15),
+      milestones: data.milestones.slice(0, 8).map((m) => ({ name: m.name.trim(), tasks: m.tasks.slice(0, 10).map((t) => ({ title: t.title.trim(), characterId: t.characterId, taskType: t.taskType })) })),
+      constraints: trimList(data.constraints, 15),
+      doneWhen: trimList(data.doneWhen, 10),
+      questions: trimList(data.questions, 15),
+    },
+    provenance,
+  };
 }
