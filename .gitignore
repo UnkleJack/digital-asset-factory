@@ -9,3 +9,4 @@ desktop/node_modules/
 .DS_Store
 verification-output/
 .claude/
+dist-mac/

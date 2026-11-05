@@ -126,6 +126,7 @@ Adopted 2026-11-03.
 | Settings schema | `src/config/settings.ts` |
 | Database migrations | `src/db/migrations/` (001 to 007 on `main`; 008, World Builder drafts, is new on branch `claude/arcade-start-flow`) |
 | Tests | `tests/` (`npm test`) |
+| Mac Dock app (`npm run make-mac-app`) | `src/ops/macApp.ts` (bundle and launcher), `src/ops/macIcon.ts` (GAGE icon), `scripts/make-mac-app.ts`; built into `dist-mac/` (not in git) |
 | Setup and daily use | `README.md`, `docs/GETTING_STARTED.md`, `docs/WINDOWS.md` |
 | Architecture and data model | `docs/ARCHITECTURE.md`, `docs/DATA_MODEL.md` |
 | Arcade UX spec | `docs/ASSET_FOUNDRY_UX_SPEC.md` |
@@ -134,13 +135,14 @@ Adopted 2026-11-03.
 
 ## Article 8: Current state
 
-As of 2026-11-05: `main` after pull requests #12 (backup AI models) and #15 (sample previews), plus the Hub, the stats ticker, World Builder drafts, smarter AI help and the test-data cleanup on branch `claude/arcade-start-flow` (pull request #13, not merged yet).
+As of 2026-11-05: `main` after pull requests #12 (backup AI models), #15 (sample previews) and #16 (the Mac Dock app), plus the Hub, the stats ticker, World Builder drafts, smarter AI help and the test-data cleanup on branch `claude/arcade-start-flow` (pull request #13, not merged yet).
 
 **Working**
 - All 17 product types produce offline with the built-in content library: QA, packaging, listings, batch approval and export packages.
 - Imports of outside images and text. Readable product folder names.
 - Pack carts and the bundle builder. Production plans, which run while the app is open.
 - Portable copy: `npm run portable`.
+- Mac Dock app (2026-11-04): `npm run make-mac-app` makes `dist-mac/Asset Foundry.app`, a small app bundle and not Electron. One click starts the app if it isn't running and opens the arcade (`/arcade`, the owner's choice) in its own Chrome window. It records the full path of Node and of this folder when it is made, because the Dock doesn't load the Terminal's PATH, so it must be made again if either moves. If Node or the folder is missing, or the app doesn't start, it shows a Mac alert saying why and where the log is (`~/Library/Logs/Asset Foundry.log`). The icon is GAGE, the ninja, drawn from the arcade's own pixel art. It has been started the way the Dock starts it, but not yet double-clicked from Finder.
 - HAPPY DAFFY milestone 1: the cabinet, the zero-credit lock, keyboard, WASD and controller input, and a motion switch.
 - **The Hub** (owner's change, 2026-11-05; branch `claude/arcade-start-flow`).
   - Insert Coin, Start Gate, Title, Character Select and Worlds are one opening screen. It holds the character picker, the chosen character's worlds and a stats area (a ticker plus a STATS button). Opening `/arcade` to a world is now 1 click, down from 6.
@@ -166,7 +168,7 @@ As of 2026-11-05: `main` after pull requests #12 (backup AI models) and #15 (sam
   - `npm run clean-verification` lists folders inside `verification-output/` (the throwaway copies used for browser checks) that have not changed for 7 days. `-- --apply` removes them. This is the same pattern as `tidy-folders`, chosen by the owner.
   - It never removes `verification-output/` itself, loose files or links, and never touches anything outside it, `data/` above all. It skips any folder a running copy of the app is using, and checks again just before deleting.
   - The app runs it once a week while open. Turn that off in Settings → Scheduler → `cleanVerificationWeekly`. The last run is noted in `verification-output/.last-cleanup`.
-- Tests: 150 tests, 150 pass, 0 skipped, 0 fail (branch `claude/arcade-start-flow` with `main` merged in, 2026-11-05).
+- Tests: 157 tests, 157 pass, 0 skipped, 0 fail (branch `claude/arcade-start-flow` with `main` merged in, 2026-11-05).
 
 **Built but not proven live**
 - Of the AI providers, only NVIDIA text has worked with a real key (2026-11-05). On 2026-11-04 and 2026-11-05 the log showed the others failing:
@@ -190,7 +192,7 @@ As of 2026-11-05: `main` after pull requests #12 (backup AI models) and #15 (sam
 ## Article 9: What comes next, and what's undecided
 
 **Next, in order**
-1. **On the Mac:** `git pull`, `npm ci`, `npm run backup`, then `npm run restore-products` (dry run), then `-- --apply`. Then try `/arcade`.
+1. **On the Mac:** `git pull`, `npm ci`, `npm run backup`, then `npm run restore-products` (dry run), then `-- --apply`. Then try `/arcade`. To get the Dock app, run `npm run make-mac-app`, drag `dist-mac/Asset Foundry.app` into Applications and keep it in the Dock.
 2. **Try the new AI help with the real NVIDIA key.** LET THE AI BUILD A WORLD already worked live on 2026-11-05. Still to try live:
    - TIDY MY NOTES, BUILD ON WHAT I HAVE and SHOW ME UNEXPLORED GROUND.
    - Starting a world, leaving the page and finding the draft waiting.
@@ -222,4 +224,5 @@ As of 2026-11-05: `main` after pull requests #12 (backup AI models) and #15 (sam
 | 2026-11-03 | Articles 8 and 9 updated for milestone 2a (owner-built Worlds) and the character naming question. |
 | 2026-11-04 | Articles 8 and 9 updated for backup models per AI text provider and the owner's NVIDIA-first text setup. |
 | 2026-11-04 | Articles 7, 8 and 9 updated for sample previews on Research & opportunities. |
+| 2026-11-04 | Articles 7, 8 and 9 updated for the Mac Dock app (`npm run make-mac-app`). |
 | 2026-11-05 | Articles 7, 8 and 9 updated for the Hub, the stats ticker, World Builder drafts, smarter AI help and the first live NVIDIA success. Undecided items F to I added. The UX spec is amended for the Hub, with the owner's approval. |
