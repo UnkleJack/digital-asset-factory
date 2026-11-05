@@ -125,6 +125,7 @@ Adopted 2026-11-03.
 | Settings schema | `src/config/settings.ts` |
 | Database migrations | `src/db/migrations/` (001 to 006 applied) |
 | Tests | `tests/` (`npm test`) |
+| Mac Dock app (`npm run make-mac-app`) | `src/ops/macApp.ts` (bundle and launcher), `src/ops/macIcon.ts` (GAGE icon), `scripts/make-mac-app.ts`; built into `dist-mac/` (not in git) |
 | Setup and daily use | `README.md`, `docs/GETTING_STARTED.md`, `docs/WINDOWS.md` |
 | Architecture and data model | `docs/ARCHITECTURE.md`, `docs/DATA_MODEL.md` |
 | Arcade UX spec | `docs/ASSET_FOUNDRY_UX_SPEC.md` |
@@ -140,10 +141,11 @@ As of 2026-11-03, `main` after pull request #9, plus milestone 2a on branch `cla
 - Imports of outside images and text. Readable product folder names.
 - Pack carts and the bundle builder. Production plans, which run while the app is open.
 - Portable copy: `npm run portable`.
+- Mac Dock app (2026-11-04): `npm run make-mac-app` makes `dist-mac/Asset Foundry.app`, a small app bundle and not Electron. One click starts the app if it isn't running and opens the arcade (`/arcade`, the owner's choice) in its own Chrome window. It records the full path of Node and of this folder when it is made, because the Dock doesn't load the Terminal's PATH, so it must be made again if either moves. If Node or the folder is missing, or the app doesn't start, it shows a Mac alert saying why and where the log is (`~/Library/Logs/Asset Foundry.log`). The icon is GAGE, the ninja, drawn from the arcade's own pixel art. It has been started the way the Dock starts it, but not yet double-clicked from Finder.
 - HAPPY DAFFY milestone 1: Insert Coin, Start Gate with the zero-credit lock, Title, Character Select, the cabinet, keyboard, WASD and controller input, and a motion switch.
 - HAPPY DAFFY milestone 2a (pull request #10): Worlds the owner builds by hand. The World Builder creates worlds, milestones and tasks. Each task belongs to one character, has a task type (any of the 17 product types except imports, or Custom), a difficulty and effort points the owner sets. The Worlds list shows only worlds where the chosen character has an open task (open, in progress or blocked), sorted by the fewest effort points left before the next milestone. A milestone completes by itself when all its tasks are complete and reopens if one is reopened. World Detail lists that character's open tasks. The Task Workspace behind OPEN TASK is milestone 3.
 - HAPPY DAFFY milestones 2b and 2c: AI suggestions and AI-written worlds in the World Builder. NEED AN IDEA? gives clickable world ideas and task ideas that fill the forms. LET THE AI BUILD A WORLD takes a goal, the number of milestones, tasks per milestone, a difficulty mix, optional product types and an optional character, then shows a review screen. Nothing is saved until the owner presses SAVE WORLD, and the owner can remove tasks and milestones first. The owner's rule (2026-11-03): this part is AI-first. With no working AI provider it says so, and it never uses the built-in content library. Totals, ordering, progress and validation stay rule-based. Only tested against a stand-in AI so far, because no real provider key has been tried.
-- Tests: 129 tests, 127 pass, 2 skipped, 0 fail.
+- Tests: 136 tests, 136 pass, 0 skipped, 0 fail.
 
 **Built but not proven live**
 - AI text and image providers have only been tested against stand-in servers, never with real keys.
@@ -162,7 +164,7 @@ As of 2026-11-03, `main` after pull request #9, plus milestone 2a on branch `cla
 ## Article 9: What comes next, and what's undecided
 
 **Next, in order**
-1. **On the Mac:** `git pull`, `npm ci`, `npm run backup`, then `npm run restore-products` (dry run), then `-- --apply`. Then try `/arcade`.
+1. **On the Mac:** `git pull`, `npm ci`, `npm run backup`, then `npm run restore-products` (dry run), then `-- --apply`. Then try `/arcade`. To get the Dock app, run `npm run make-mac-app`, drag `dist-mac/Asset Foundry.app` into Applications and keep it in the Dock.
 2. **Try the AI suggestions with a real key.** Add a text provider key in Settings, then use NEED AN IDEA? and LET THE AI BUILD A WORLD in the World Builder. Until then they only run against a test stand-in.
 3. **HAPPY DAFFY milestone 3, the Task Workspace** (the screen behind OPEN TASK). Its questions are the spec's section H.
 4. **Factory upgrades from the 2026-10-28 plan:** mandala engine expansion, then geometric pattern art.
@@ -183,3 +185,4 @@ As of 2026-11-03, `main` after pull request #9, plus milestone 2a on branch `cla
 | 2026-11-03 | Article 1 adopted (Asset Foundry / the factory). |
 | 2026-11-03 | Constitution expanded to Articles 1 to 9. HAPPY DAFFY named as the arcade game. One source of truth set: GitHub `main` plus the Mac folder. |
 | 2026-11-03 | Articles 8 and 9 updated for milestone 2a (owner-built Worlds) and the character naming question. |
+| 2026-11-04 | Articles 7, 8 and 9 updated for the Mac Dock app (`npm run make-mac-app`). |

@@ -51,6 +51,17 @@ To open it in its own window (a Chrome app window with a separate profile):
 npm run app
 ```
 
+On a Mac you can also make a Dock app, so one click starts Asset Foundry and opens the arcade
+in its own window, with no Terminal:
+
+```bash
+npm run make-mac-app
+```
+
+It writes `dist-mac/Asset Foundry.app`. Drag it into Applications, open it once, and keep it in
+the Dock. Run the command again if Node or this folder moves. If it can't start, it shows an
+alert that says why (details in `~/Library/Logs/Asset Foundry.log`).
+
 Optional settings live in `.env` (copy [.env.example](.env.example)). API keys go in
 **Settings → AI providers**, which stores them in the macOS Keychain — never in `.env`, the
 database, logs or exports.
@@ -139,6 +150,7 @@ has no record of are listed and left alone.
 | `npm start` | Build the web UI and start the app |
 | `npm run serve` | Start without rebuilding the web UI |
 | `npm run app` | Start the app if needed and open it in an app window |
+| `npm run make-mac-app` | Mac only: make `dist-mac/Asset Foundry.app` for the Dock (opens the arcade) |
 | `npm run dev` + `npm run dev:web` | Development: server restarts on change; Vite UI on :5173 (set `DAF_DEV=1`) |
 | `npm test` | Run the automated tests (about 2 minutes; renders real PDFs with Chrome) |
 | `npm run typecheck` | Type-check server and web code |
