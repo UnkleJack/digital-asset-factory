@@ -25,7 +25,8 @@
     "restore-products": "node --env-file-if-exists=.env scripts/restore-products.ts",
     "samples": "node scripts/generate-samples.ts",
     "portable": "node --env-file-if-exists=.env scripts/make-portable.ts",
-    "tidy-folders": "node --env-file-if-exists=.env scripts/tidy-folders.ts"
+    "tidy-folders": "node --env-file-if-exists=.env scripts/tidy-folders.ts",
+    "clean-verification": "node scripts/clean-verification.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.1.0",

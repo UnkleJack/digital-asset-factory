@@ -10,6 +10,7 @@ import { syncGumroadSales } from './engine/publishing/gumroad.ts';
 import { runDigest, isDigestDue } from './engine/digest/service.ts';
 import { buildServer } from './server/app.ts';
 import { SUITE_NAME } from './core/brand.ts';
+import { verificationRoot, verificationCleanupDue, planVerificationCleanup, applyVerificationCleanup } from './ops/cleanVerification.ts';
 
 const port = Number(process.env.DAF_PORT ?? 4317);
 const paths = resolvePaths();
@@ -67,6 +68,23 @@ const checkDigest = () => {
 };
 const digestTimer = setInterval(checkDigest, 3_600_000);
 setTimeout(checkDigest, 60_000);
+// Weekly cleanup of old test folders in verification-output/ (Settings → Scheduler → cleanVerificationWeekly).
+// The last run is noted in verification-output/.last-cleanup, so restarts and days off just mean it runs at the next check.
+const checkVerificationCleanup = () => {
+  try {
+    const root = verificationRoot();
+    if (!app.settings.get('scheduler').cleanVerificationWeekly || !verificationCleanupDue(root)) return;
+    const plan = planVerificationCleanup(root);
+    const r = applyVerificationCleanup(plan);
+    if (r.removed.length || r.failed.length || plan.skipped.length) {
+      app.log.info('Weekly cleanup of old test folders in verification-output', { removed: r.removed, notRemoved: r.failed, leftAlone: plan.skipped });
+    }
+  } catch (err) {
+    app.log.warn('Weekly cleanup of verification-output failed', { err: (err as Error).message });
+  }
+};
+const cleanupTimer = setInterval(checkVerificationCleanup, 3_600_000);
+setTimeout(checkVerificationCleanup, 120_000);
 app.log.info(`${SUITE_NAME} is running at http://127.0.0.1:${port}`, { dataDir: paths.dataDir, chrome: app.renderer.available() });
 if (!app.renderer.available()) app.log.warn('Google Chrome or Microsoft Edge was not found; rendering jobs will fail until one is installed or Settings → Rendering → Chrome path is set.');
 
@@ -77,6 +95,7 @@ async function shutdown(signal: string) {
   app.log.info('Shutting down', { signal });
   clearInterval(recTimer);
   clearInterval(digestTimer);
+  clearInterval(cleanupTimer);
   scheduler.stop();
   await server.close().catch(() => undefined);
   await worker.stop(20_000);

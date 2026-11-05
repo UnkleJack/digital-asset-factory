@@ -271,6 +271,10 @@ export const SettingsSchema = z.object({
     jobMaxAttempts: z.number().int().min(1).max(10).default(3),
     retryBaseSeconds: z.number().int().min(1).max(3600).default(15),
     leaseSeconds: z.number().int().min(30).max(3600).default(300),
+    // Once a week, while the app is open, remove test folders in verification-output/ that have not changed
+    // for 7 days (browser-check copies of the app). Never touches data/. Turn off here; run it by hand with
+    // npm run clean-verification (add -- --dry-run to only list what it would remove).
+    cleanVerificationWeekly: z.boolean().default(true),
     concurrency: z.object({
       ai: z.number().int().min(1).max(8).default(2),
       render: z.number().int().min(1).max(6).default(2),
