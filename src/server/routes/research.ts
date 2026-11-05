@@ -7,6 +7,7 @@ import { createProduct } from '../../engine/specification/service.ts';
 import { startPipeline } from '../../jobs/pipeline.ts';
 import { createBatch, addToBatch } from '../../engine/approval/batches.ts';
 import { conflict } from '../../core/errors.ts';
+import { makeOpportunityPreview, offlinePreviewBlocker, previewInfo, previewPng } from '../../engine/research/preview.ts';
 import { int, parse, type Q, type P } from './util.ts';
 
 export function registerResearchRoutes(s: FastifyInstance, { app }: ServerDeps): void {
@@ -16,15 +17,16 @@ export function registerResearchRoutes(s: FastifyInstance, { app }: ServerDeps):
     return rows.map((r) => {
       const o = getOpportunity(app, r.id);
       const sc = latestScore(app, r.id);
-      return { ...o, category: app.db.value('SELECT name FROM categories WHERE id = ?', o.category_id), score: sc ? { score: sc.score, confidence: sc.confidence, outcome: sc.outcome, at: sc.created_at } : null, products: app.db.value<number>('SELECT count(*) FROM products WHERE opportunity_id = ?', r.id) };
+      return { ...o, category: app.db.value('SELECT name FROM categories WHERE id = ?', o.category_id), score: sc ? { score: sc.score, confidence: sc.confidence, outcome: sc.outcome, at: sc.created_at } : null, products: app.db.value<number>('SELECT count(*) FROM products WHERE opportunity_id = ?', r.id), preview: previewInfo(app, o), previewBlocker: offlinePreviewBlocker(o.product_type) };
     });
   });
 
   s.post('/api/opportunities', async (req) => ({ id: createOpportunity(app, req.body) }));
   s.get('/api/opportunities/:id', async (req) => {
     const id = (req.params as P).id;
+    const opportunity = getOpportunity(app, id);
     return {
-      opportunity: getOpportunity(app, id),
+      opportunity: { ...opportunity, preview: previewInfo(app, opportunity), previewBlocker: offlinePreviewBlocker(opportunity.product_type) },
       observations: observationsFor(app, id),
       scores: app.db.all<Record<string, unknown>>('SELECT * FROM opportunity_scores WHERE opportunity_id = ? ORDER BY id DESC LIMIT 20', id).map((r) => ({ ...r, factors: JSON.parse(String(r.factors)), weights: JSON.parse(String(r.weights)), thresholds: JSON.parse(String(r.thresholds)) })),
       products: app.db.all('SELECT id, title, status, created_at FROM products WHERE opportunity_id = ? ORDER BY created_at DESC', id),
@@ -33,6 +35,14 @@ export function registerResearchRoutes(s: FastifyInstance, { app }: ServerDeps):
   s.patch('/api/opportunities/:id', async (req) => {
     updateOpportunity(app, (req.params as P).id, req.body);
     return { ok: true };
+  });
+  // Sample-page preview: made only on request, then kept (see engine/research/preview.ts).
+  s.post('/api/opportunities/:id/preview', async (req) => makeOpportunityPreview(app, (req.params as P).id));
+  s.get('/api/opportunities/:id/preview.png', async (req, reply) => {
+    const png = previewPng(app, (req.params as P).id, int((req.query as Q).page, 1, 1, 2));
+    reply.header('Content-Type', 'image/png');
+    reply.header('Cache-Control', 'private, max-age=31536000, immutable');
+    return reply.send(png);
   });
   s.post('/api/opportunities/:id/score', async (req) => scoreOpportunity(app, (req.params as P).id));
   s.post('/api/opportunities/:id/produce', async (req) => {
