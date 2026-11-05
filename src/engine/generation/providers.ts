@@ -220,7 +220,7 @@ export class OpenAICompatibleTextProvider implements TextProvider {
     let lastErr: ProviderError | null = null;
     for (const [i, model] of models.entries()) {
       try {
-        const res = await this.withRetries(key, { ...cfg, model }, req);
+        const res = await this.withRetries(key, { ...cfg, model }, req, i < models.length - 1);
         return i > 0 ? { ...res, servedByFallback: true } : res;
       } catch (err) {
         lastErr = err instanceof ProviderError ? err : new ProviderError(this.id, 'server', String(err), err);
@@ -234,7 +234,8 @@ export class OpenAICompatibleTextProvider implements TextProvider {
   /** Called when one model fails and the next model at this provider is tried. */
   onModelFallback: (model: string, err: ProviderError) => void = () => {};
 
-  private async withRetries<T>(key: string, cfg: OpenAICompatibleConfig, req: StructuredRequest<T>): Promise<StructuredResult<T>> {
+  /** `hasNextModel`: a backup model is waiting, so a timeout moves on to it instead of waiting on this model again. */
+  private async withRetries<T>(key: string, cfg: OpenAICompatibleConfig, req: StructuredRequest<T>, hasNextModel = false): Promise<StructuredResult<T>> {
     let lastErr: ProviderError | null = null;
     let jsonMode = true;
     for (let attempt = 0; attempt <= cfg.maxRetries; attempt++) {
@@ -251,6 +252,7 @@ export class OpenAICompatibleTextProvider implements TextProvider {
         }
         lastErr = err instanceof ProviderError ? err : new ProviderError(this.id, 'server', String(err), err);
         if (lastErr.errorClass !== 'transient' || lastErr.kind === 'invalid_output') break;
+        if (lastErr.kind === 'timeout' && hasNextModel) break;
       }
     }
     throw lastErr!;

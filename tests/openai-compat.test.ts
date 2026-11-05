@@ -304,3 +304,14 @@ test('owner defaults: NVIDIA Nemotron 3 Ultra first with MiniMax behind it, Groq
   assert.ok(backups.indexOf('groq') > backups.indexOf('gemini'));
   assert.deepEqual(g.groq.backupModels, []);
 });
+
+test('a model that times out is not retried when a backup model is waiting', async () => {
+  const srv = await mockServer((body) => body.model === 'slow/model'
+    ? { delayMs: 800, json: chatCompletion('{}') }
+    : { json: chatCompletion(JSON.stringify({ title: 'fast', items: ['a', 'b'] }), { model: body.model }) });
+  servers.push(srv);
+  const p = new OpenAICompatibleTextProvider('nvidia', async () => KEY, () => cfg(srv.url, { model: 'slow/model', backupModels: ['fast/model'], timeoutMs: 300, maxRetries: 2 }), async () => {});
+  const res = await p.generateStructured({ schema: Schema, system: 's', prompt: 'p' });
+  assert.equal(res.model, 'fast/model');
+  assert.deepEqual(srv.calls.map((c) => c.body.model), ['slow/model', 'fast/model']);
+});
