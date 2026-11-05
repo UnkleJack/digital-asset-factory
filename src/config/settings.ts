@@ -4,6 +4,9 @@ import { validation } from '../core/errors.ts';
 import { SUITE_NAME } from '../core/brand.ts';
 
 const effort = z.enum(['low', 'medium', 'high', 'xhigh', 'max']);
+// More models to try at the same provider, in order, before moving on to the next provider.
+// They share that provider's key, so a provider can answer from a second model when the first is retired or busy.
+const backupModels = z.array(z.string().trim().min(1)).max(10).default(() => []);
 
 export const ListingRulesSchema = z.object({
   titleMin: z.number().int().min(1).default(10),
@@ -57,11 +60,12 @@ export const SettingsSchema = z.object({
     machineName: z.string().trim().max(60).default(''),
   }).prefault({}),
   generation: z.object({
-    textProvider: z.enum(['anthropic', 'openrouter', 'groq', 'nvidia', 'cerebras', 'together', 'gemini', 'mistral', 'github', 'huggingface', 'deterministic']).default('groq'),
+    textProvider: z.enum(['anthropic', 'openrouter', 'groq', 'nvidia', 'cerebras', 'together', 'gemini', 'mistral', 'github', 'huggingface', 'deterministic']).default('nvidia'),
     // Backup providers. Every AI call tries textProvider first, then these in order, moving on
     // when one is rate-limited, down, or has no key — so one capped free tier doesn't stop
     // production. Free-tier providers first; Anthropic last since it's pay-per-use.
-    fallbackOrder: z.array(z.enum(['anthropic', 'openrouter', 'groq', 'nvidia', 'cerebras', 'together', 'gemini', 'mistral', 'github', 'huggingface'])).default(['groq', 'gemini', 'openrouter', 'cerebras', 'mistral', 'github', 'huggingface', 'together', 'nvidia', 'anthropic']),
+    // Owner's order (2026-11-04): NVIDIA first, and Groq is a late backup, never the first one.
+    fallbackOrder: z.array(z.enum(['anthropic', 'openrouter', 'groq', 'nvidia', 'cerebras', 'together', 'gemini', 'mistral', 'github', 'huggingface'])).default(['nvidia', 'gemini', 'openrouter', 'cerebras', 'mistral', 'github', 'together', 'groq', 'huggingface', 'anthropic']),
     imageProvider: z.enum(['openai', 'gemini', 'together', 'huggingface', 'pollinations', 'replicate', 'fal', 'grok', 'none']).default('openai'),
     imageFallbackOrder: z.array(z.enum(['openai', 'gemini', 'together', 'huggingface', 'pollinations', 'replicate', 'fal', 'grok'])).default(['gemini', 'together', 'huggingface', 'pollinations', 'openai', 'replicate', 'fal', 'grok']),
     allowPaidFallback: z.boolean().default(false),
@@ -88,30 +92,37 @@ export const SettingsSchema = z.object({
     // The model name is just a setting — swap it for any model the provider serves.
     openrouter: z.object({
       model: z.string().min(1).default('meta-llama/llama-3.3-70b-instruct:free'),
+      backupModels,
       baseUrl: z.url().default('https://openrouter.ai/api/v1'),
       timeoutMs: z.number().int().min(5000).max(600000).default(180000),
       maxRetries: z.number().int().min(0).max(6).default(2),
     }).prefault({}),
     groq: z.object({
       model: z.string().min(1).default('llama-3.3-70b-versatile'),
+      backupModels,
       baseUrl: z.url().default('https://api.groq.com/openai/v1'),
       timeoutMs: z.number().int().min(5000).max(600000).default(120000),
       maxRetries: z.number().int().min(0).max(6).default(2),
     }).prefault({}),
     nvidia: z.object({
-      model: z.string().min(1).default('meta/llama-3.1-70b-instruct'),
+      // The old default, meta/llama-3.1-70b-instruct, was retired (HTTP 410). IDs checked against
+      // https://integrate.api.nvidia.com/v1/models on 2026-11-04.
+      model: z.string().min(1).default('nvidia/nemotron-3-ultra-550b-a55b'),
+      backupModels: backupModels.unwrap().default(() => ['minimaxai/minimax-m3.1-flash']),
       baseUrl: z.url().default('https://integrate.api.nvidia.com/v1'),
       timeoutMs: z.number().int().min(5000).max(600000).default(180000),
       maxRetries: z.number().int().min(0).max(6).default(2),
     }).prefault({}),
     cerebras: z.object({
       model: z.string().min(1).default('llama-3.3-70b'),
+      backupModels,
       baseUrl: z.url().default('https://api.cerebras.ai/v1'),
       timeoutMs: z.number().int().min(5000).max(600000).default(120000),
       maxRetries: z.number().int().min(0).max(6).default(2),
     }).prefault({}),
     together: z.object({
       model: z.string().min(1).default('meta-llama/Llama-3.3-70B-Instruct-Turbo-Free'),
+      backupModels,
       baseUrl: z.url().default('https://api.together.xyz/v1'),
       timeoutMs: z.number().int().min(5000).max(600000).default(180000),
       maxRetries: z.number().int().min(0).max(6).default(2),
@@ -119,24 +130,28 @@ export const SettingsSchema = z.object({
     // Added later; endpoints from each provider's docs, models are editable. Unverified until a real key is tested.
     gemini: z.object({
       model: z.string().min(1).default('gemini-2.5-flash'),
+      backupModels,
       baseUrl: z.url().default('https://generativelanguage.googleapis.com/v1beta/openai'),
       timeoutMs: z.number().int().min(5000).max(600000).default(180000),
       maxRetries: z.number().int().min(0).max(6).default(2),
     }).prefault({}),
     mistral: z.object({
       model: z.string().min(1).default('mistral-small-latest'),
+      backupModels,
       baseUrl: z.url().default('https://api.mistral.ai/v1'),
       timeoutMs: z.number().int().min(5000).max(600000).default(180000),
       maxRetries: z.number().int().min(0).max(6).default(2),
     }).prefault({}),
     github: z.object({
       model: z.string().min(1).default('openai/gpt-4.1-mini'),
+      backupModels,
       baseUrl: z.url().default('https://models.github.ai/inference'),
       timeoutMs: z.number().int().min(5000).max(600000).default(180000),
       maxRetries: z.number().int().min(0).max(6).default(2),
     }).prefault({}),
     huggingface: z.object({
       model: z.string().min(1).default('meta-llama/Llama-3.3-70B-Instruct'),
+      backupModels,
       baseUrl: z.url().default('https://router.huggingface.co/v1'),
       timeoutMs: z.number().int().min(5000).max(600000).default(180000),
       maxRetries: z.number().int().min(0).max(6).default(2),

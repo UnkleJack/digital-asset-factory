@@ -163,6 +163,8 @@ export const SECRET_KEY_LINKS: Partial<Record<SecretName, { url: string; free: b
 
 export interface OpenAICompatibleConfig {
   model: string;
+  /** Tried in order at this same provider (same key) after `model` fails, before the router moves on. */
+  backupModels?: readonly string[];
   baseUrl: string;
   timeoutMs: number;
   maxRetries: number;
@@ -200,10 +202,40 @@ export class OpenAICompatibleTextProvider implements TextProvider {
     return this.cfg().model;
   }
 
+  /** The main model, then the backup models, each once. */
+  models(): string[] {
+    const cfg = this.cfg();
+    return [...new Set([cfg.model, ...(cfg.backupModels ?? [])])];
+  }
+
+  async candidateModels(): Promise<string[]> {
+    return this.models();
+  }
+
   async generateStructured<T>(req: StructuredRequest<T>): Promise<StructuredResult<T>> {
     const key = await this.getKey();
     if (!key) throw new ProviderError(this.id, 'unconfigured', `No ${this.label} API key is configured (Settings → AI providers).`);
     const cfg = this.cfg();
+    const models = this.models();
+    let lastErr: ProviderError | null = null;
+    for (const [i, model] of models.entries()) {
+      try {
+        const res = await this.withRetries(key, { ...cfg, model }, req, i < models.length - 1);
+        return i > 0 ? { ...res, servedByFallback: true } : res;
+      } catch (err) {
+        lastErr = err instanceof ProviderError ? err : new ProviderError(this.id, 'server', String(err), err);
+        if (i === models.length - 1 || !shouldTryNextModel(lastErr)) break;
+        this.onModelFallback(model, lastErr);
+      }
+    }
+    throw lastErr!;
+  }
+
+  /** Called when one model fails and the next model at this provider is tried. */
+  onModelFallback: (model: string, err: ProviderError) => void = () => {};
+
+  /** `hasNextModel`: a backup model is waiting, so a timeout moves on to it instead of waiting on this model again. */
+  private async withRetries<T>(key: string, cfg: OpenAICompatibleConfig, req: StructuredRequest<T>, hasNextModel = false): Promise<StructuredResult<T>> {
     let lastErr: ProviderError | null = null;
     let jsonMode = true;
     for (let attempt = 0; attempt <= cfg.maxRetries; attempt++) {
@@ -220,6 +252,7 @@ export class OpenAICompatibleTextProvider implements TextProvider {
         }
         lastErr = err instanceof ProviderError ? err : new ProviderError(this.id, 'server', String(err), err);
         if (lastErr.errorClass !== 'transient' || lastErr.kind === 'invalid_output') break;
+        if (lastErr.kind === 'timeout' && hasNextModel) break;
       }
     }
     throw lastErr!;
@@ -284,6 +317,32 @@ export class OpenAICompatibleTextProvider implements TextProvider {
   }
 }
 
+/**
+ * After one model at a provider has failed (its own retries already used up), should the next
+ * model at the SAME provider, with the SAME key, be tried? `true` tries the next model; `false`
+ * gives up on this provider, and the router moves on to the next provider in fallbackOrder.
+ *
+ * err.kind is one of: 'auth' (key rejected), 'rate_limit' (HTTP 429), 'timeout', 'connection'
+ * (could not reach the host), 'server' (HTTP 5xx), 'bad_request' (other 4xx, including a retired
+ * or unknown model: 404/410), 'invalid_output' (bad JSON or failed the schema), 'refusal',
+ * 'unconfigured', 'budget_exceeded'.
+ */
+export function shouldTryNextModel(err: ProviderError): boolean {
+  switch (err.kind) {
+    // Problems with this one model: another model on the same key may well answer.
+    case 'bad_request': // retired or unknown model (404/410), or a request this model can't take
+    case 'timeout': // a big model can be slow when a smaller one answers quickly
+    case 'server': // one model's servers down
+    case 'refusal':
+      return true;
+    // Problems with the key or the connection: every model here would fail the same way.
+    // rate_limit stays here to protect the key: where a free tier counts calls per key, more
+    // models only spend more of it. The router cools this provider down and moves on.
+    default:
+      return false;
+  }
+}
+
 /** Some OpenAI-compatible models wrap JSON mode output in ```json fences despite instructions; strip it. */
 function stripCodeFence(s: string): string {
   const m = s.trim().match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
@@ -328,7 +387,7 @@ export class RoutedTextProvider implements TextProvider {
   /** Models of every configured provider a call could land on, for worst-case cost checks. */
   async candidateModels(): Promise<string[]> {
     const out: string[] = [];
-    for (const p of this.chain()) if (await p.isConfigured()) out.push(p.model());
+    for (const p of this.chain()) if (await p.isConfigured()) out.push(...(p.candidateModels ? await p.candidateModels() : [p.model()]));
     return out;
   }
 
