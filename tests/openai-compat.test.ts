@@ -5,7 +5,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { z } from 'zod';
-import { OpenAICompatibleTextProvider, RoutedTextProvider, AnthropicTextProvider, type TextProvider, type AiTextProviderId } from '../src/engine/generation/providers.ts';
+import { OpenAICompatibleTextProvider, RoutedTextProvider, AnthropicTextProvider, shouldTryNextModel, type TextProvider, type AiTextProviderId } from '../src/engine/generation/providers.ts';
 import { structuredCall, generateContent } from '../src/engine/generation/service.ts';
 import { ProviderError } from '../src/core/errors.ts';
 import { MemorySecretStore } from '../src/config/secrets.ts';
@@ -13,13 +13,13 @@ import { bootstrap } from '../src/app/bootstrap.ts';
 import { productType } from '../src/engine/producttypes/registry.ts';
 import { mockServer, anthropicMessage } from './mockServers.ts';
 import { tempDir, makeContext } from './helpers.ts';
-import type { Settings } from '../src/config/settings.ts';
+import { SettingsSchema, type Settings } from '../src/config/settings.ts';
 
 const KEY = 'test-openrouter-key-1234567890';
 const Schema = z.object({ title: z.string(), items: z.array(z.string()).min(2) });
 
 function cfg(url: string, over: Partial<Settings['generation']['openrouter']> = {}): Settings['generation']['openrouter'] {
-  return { model: 'meta-llama/llama-3.3-70b-instruct:free', baseUrl: url, timeoutMs: 5000, maxRetries: 0, ...over };
+  return { model: 'meta-llama/llama-3.3-70b-instruct:free', backupModels: [], baseUrl: url, timeoutMs: 5000, maxRetries: 0, ...over };
 }
 
 function chatCompletion(content: string, extra: Record<string, unknown> = {}) {
@@ -238,4 +238,69 @@ test('pacing: a provider at its daily limit or cooling down after a rate limit i
   assert.equal((await structuredCall(app, { purpose: 'test', schema: Schema, system: 's', prompt: 'p', trace: {} })).data.title, 'cerebras');
   assert.equal(groqSrv.calls.length, 1);
   await app.close();
+});
+
+// Backup models at one provider (2026-11-04): a provider tries its main model, then each backup
+// model on the same key, before the router moves on to the next provider.
+test('a retired model falls through to the backup model at the same provider, on the same key', async () => {
+  const srv = await mockServer((body) => body.model === 'retired/model'
+    ? { status: 410, json: { error: { message: 'model retired' } } }
+    : { json: chatCompletion(JSON.stringify({ title: 'from backup', items: ['a', 'b'] }), { model: body.model }) });
+  servers.push(srv);
+  const switched: string[] = [];
+  const p = new OpenAICompatibleTextProvider('nvidia', async () => KEY, () => cfg(srv.url, { model: 'retired/model', backupModels: ['backup/model'] }));
+  p.onModelFallback = (model) => switched.push(model);
+  const res = await p.generateStructured({ schema: Schema, system: 's', prompt: 'p' });
+  assert.equal(res.data.title, 'from backup');
+  assert.equal(res.model, 'backup/model');
+  assert.equal(res.servedByFallback, true);
+  assert.deepEqual(srv.calls.map((c) => c.body.model), ['retired/model', 'backup/model']);
+  assert.ok(srv.calls.every((c) => c.headers.authorization === `Bearer ${KEY}`));
+  assert.deepEqual(switched, ['retired/model']);
+  assert.deepEqual(await p.candidateModels(), ['retired/model', 'backup/model']);
+});
+
+test('a rejected key or a rate limit does not spend calls on the backup models', async () => {
+  for (const status of [401, 429]) {
+    const srv = await mockServer(() => ({ status, json: { error: { message: 'no' } } }));
+    servers.push(srv);
+    const p = new OpenAICompatibleTextProvider('nvidia', async () => KEY, () => cfg(srv.url, { model: 'main/model', backupModels: ['backup/one', 'backup/two'] }));
+    await assert.rejects(p.generateStructured({ schema: Schema, system: 's', prompt: 'p' }), (e: unknown) => e instanceof ProviderError);
+    assert.equal(srv.calls.length, 1, `HTTP ${status} should stop after the first model`);
+  }
+});
+
+test('when every model at a provider fails, the router moves on to the next provider', async () => {
+  const nv = await mockServer(() => ({ status: 410, json: { error: { message: 'gone' } } }));
+  const gm = await mockServer(() => ({ json: chatCompletion(JSON.stringify({ title: 'gemini', items: ['a', 'b'] })) }));
+  servers.push(nv, gm);
+  const router = new RoutedTextProvider(
+    {
+      nvidia: new OpenAICompatibleTextProvider('nvidia', async () => KEY, () => cfg(nv.url, { model: 'a', backupModels: ['b'] })),
+      gemini: new OpenAICompatibleTextProvider('gemini', async () => KEY, () => cfg(gm.url)),
+    },
+    () => 'nvidia',
+    () => ['gemini'],
+  );
+  const res = await router.generateStructured({ schema: Schema, system: 's', prompt: 'p' });
+  assert.equal(res.data.title, 'gemini');
+  assert.equal(res.provider, 'gemini');
+  assert.equal(nv.calls.length, 2);
+});
+
+test('which failures try the next model at the same provider', () => {
+  const next = (kind: ConstructorParameters<typeof ProviderError>[1]) => shouldTryNextModel(new ProviderError('nvidia', kind, 'x'));
+  for (const k of ['bad_request', 'timeout', 'server', 'refusal'] as const) assert.equal(next(k), true, k);
+  for (const k of ['auth', 'rate_limit', 'connection', 'invalid_output', 'unconfigured', 'budget_exceeded'] as const) assert.equal(next(k), false, k);
+});
+
+test('owner defaults: NVIDIA Nemotron 3 Ultra first with MiniMax behind it, Groq never the first backup', () => {
+  const g = SettingsSchema.parse({}).generation;
+  assert.equal(g.textProvider, 'nvidia');
+  assert.equal(g.nvidia.model, 'nvidia/nemotron-3-ultra-550b-a55b');
+  assert.deepEqual(g.nvidia.backupModels, ['minimaxai/minimax-m3.1-flash']);
+  const backups = g.fallbackOrder.filter((id) => id !== g.textProvider);
+  assert.notEqual(backups[0], 'groq');
+  assert.ok(backups.indexOf('groq') > backups.indexOf('gemini'));
+  assert.deepEqual(g.groq.backupModels, []);
 });

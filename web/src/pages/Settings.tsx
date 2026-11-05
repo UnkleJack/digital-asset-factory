@@ -81,7 +81,7 @@ function ObjectFields({ value, onChange, path }: { value: any; onChange: (v: any
 }
 
 const SELECT_OPTIONS: Record<string, string[]> = {
-  textProvider: ['groq', 'gemini', 'openrouter', 'cerebras', 'mistral', 'github', 'huggingface', 'together', 'nvidia', 'anthropic', 'deterministic'],
+  textProvider: ['nvidia', 'gemini', 'openrouter', 'cerebras', 'mistral', 'github', 'together', 'groq', 'huggingface', 'anthropic', 'deterministic'],
   imageProvider: ['pollinations', 'together', 'huggingface', 'gemini', 'openai', 'replicate', 'fal', 'grok', 'none'],
   unconfiguredPolicy: ['deterministic', 'fail'],
   effort: ['low', 'medium', 'high', 'xhigh', 'max'],
@@ -188,7 +188,7 @@ function AiProviders({ onChanged }: { onChanged: () => void }) {
           const g = d.settings.generation;
           const activeCfg = g.textProvider === 'deterministic' ? null : g[g.textProvider];
           return <div className="kv" style={{ marginBottom: 12 }}>
-            <span>Text (first choice)</span><span>{g.textProvider === 'deterministic' ? 'Deterministic (no AI)' : providerLabel(g.textProvider)}{activeCfg ? ` · ${activeCfg.model}` : ' (turned off)'}</span>
+            <span>Text (first choice)</span><span>{g.textProvider === 'deterministic' ? 'Deterministic (no AI)' : providerLabel(g.textProvider)}{activeCfg ? ` · ${[activeCfg.model, ...(activeCfg.backupModels ?? [])].join(' → ')}` : ' (turned off)'}</span>
             <span>Backups, in order</span><span>{g.fallbackOrder.filter((x: string) => x !== g.textProvider).map(providerLabel).join(' → ') || 'none'}</span>
             <span>Images (first choice)</span><span>{g.imageProvider} · {g[g.imageProvider]?.model ?? g[g.imageProvider]?.imageModel ?? 'routed'}</span>
             <span>Image backups, in order</span><span>{(g.imageFallbackOrder ?? []).filter((x: string) => x !== g.imageProvider).join(' → ') || 'none'}</span>
