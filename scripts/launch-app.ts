@@ -8,6 +8,9 @@ import { SUITE_NAME } from '../src/core/brand.ts';
 
 const port = Number(process.env.DAF_PORT ?? 4317);
 const url = `http://127.0.0.1:${port}`;
+// Optional screen to open, such as /arcade (the Mac app passes this). Anything else opens the back office.
+const openPath = /^\/[A-Za-z0-9/_-]*$/.test(process.argv[2] ?? '') ? process.argv[2] : '/';
+const pageUrl = new URL(openPath, url).href;
 const root = fileURLToPath(new URL('../', import.meta.url));
 const paths = resolvePaths();
 
@@ -40,14 +43,14 @@ const chrome = resolveChromePath(process.env.DAF_CHROME_PATH ?? '');
 if (chrome && existsSync(chrome)) {
   const profile = join(paths.dataDir, 'chrome-app-profile');
   mkdirSync(profile, { recursive: true });
-  spawn(chrome, [`--app=${url}`, `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check'], { detached: true, stdio: 'ignore' }).unref();
-  console.log(`Opened ${SUITE_NAME} in its own window (${url}).`);
+  spawn(chrome, [`--app=${pageUrl}`, `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check'], { detached: true, stdio: 'ignore' }).unref();
+  console.log(`Opened ${SUITE_NAME} in its own window (${pageUrl}).`);
 } else {
-  const [cmd, args] = process.platform === 'win32' ? ['cmd', ['/c', 'start', '', url]] : process.platform === 'darwin' ? ['open', [url]] : ['xdg-open', [url]];
+  const [cmd, args] = process.platform === 'win32' ? ['cmd', ['/c', 'start', '', pageUrl]] : process.platform === 'darwin' ? ['open', [pageUrl]] : ['xdg-open', [pageUrl]];
   try {
     spawn(cmd, args, { detached: true, stdio: 'ignore' }).unref();
   } catch {
     // Opening a browser is a convenience; the address below always works.
   }
-  console.log(`${SUITE_NAME} is running. Open ${url} in your browser.`);
+  console.log(`${SUITE_NAME} is running. Open ${pageUrl} in your browser.`);
 }

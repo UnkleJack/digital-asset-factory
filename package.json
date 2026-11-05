@@ -24,6 +24,7 @@
     "restore": "node --env-file-if-exists=.env scripts/restore.ts",
     "restore-products": "node --env-file-if-exists=.env scripts/restore-products.ts",
     "samples": "node scripts/generate-samples.ts",
+    "make-mac-app": "node scripts/make-mac-app.ts",
     "portable": "node --env-file-if-exists=.env scripts/make-portable.ts",
     "tidy-folders": "node --env-file-if-exists=.env scripts/tidy-folders.ts"
   },
