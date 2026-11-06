@@ -8,6 +8,7 @@ import { ago, label } from '../format.ts';
 type Item = {
   versionId: string; productId: string; title: string; productType: string; category: string | null; versionNo: number; versions: number; current: boolean;
   status: string; reason: string; at: string; notes: string; marketplaces: string[]; checks: string[]; severity: 'hard' | 'warning' | null; error: string | null; thumb: string | null; fixedAt: string | null;
+  myNotes: { id: string; notes: string; at: string }[];
 };
 
 // Every sort uses something the app already records. Newest first is the default.
@@ -56,6 +57,7 @@ function Section({ title, help, items, reload, empty }: { title: string; help: s
   const [shown, setShown] = useState(50);
   const list = useMemo(() => sorted(items, by), [items, by]);
   const preview = usePreview();
+  const [noteFor, setNoteFor] = useState<string | null>(null);
   return (
     <Card className="rework-section" title={<>{title} <span className="small muted">({items.length})</span></>} actions={<select value={by} onChange={(e) => setBy(e.target.value)} aria-label={`Sort ${title}`}>{SORTS.map((s) => <option key={s.id} value={s.id}>{s.text}</option>)}</select>}>
       <p className="small muted" style={{ marginTop: 0 }}>{help}</p>
@@ -67,6 +69,7 @@ function Section({ title, help, items, reload, empty }: { title: string; help: s
               sub={[REASON[i.reason] ?? label(i.reason), ago(i.at), label(i.productType), i.category, i.marketplaces.map(label).join(', '), i.checks.length ? `QA: ${i.checks.map(label).join(', ')}` : null].filter(Boolean).join(' · ')}
               actions={<>
                 {i.severity && <Pill value={i.severity === 'hard' ? 'failed' : 'passed_with_warnings'} text={i.severity === 'hard' ? 'Hard failure' : 'Warnings'} />}
+                <button className="small" aria-expanded={noteFor === i.versionId} onClick={() => setNoteFor(noteFor === i.versionId ? null : i.versionId)}>{noteFor === i.versionId ? 'Cancel note' : 'Add note'}</button>
                 <PreviewButton open={preview.open === i.versionId} disabled={!i.thumb} onClick={() => preview.toggle(i.versionId)} />
                 <Link className="btn small" to={`/products/${i.productId}`}>Open</Link>
                 {i.fixedAt
@@ -74,6 +77,8 @@ function Section({ title, help, items, reload, empty }: { title: string; help: s
                   : <ActionButton className="small primary" onClick={async () => { await api(`/rework/${i.versionId}/fixed`, { body: {} }); reload(); }} successText="Marked fixed">Mark fixed</ActionButton>}
               </>}>
               {(i.notes || i.error) && <div className="small" style={{ marginTop: 4 }}>{i.notes ? <>Your notes: “{i.notes}”</> : <span style={{ color: 'var(--bad)' }}>{i.error}</span>}</div>}
+              {i.myNotes.map((n) => <div key={n.id} className="small" style={{ marginTop: 2 }}>Note {ago(n.at)}: “{n.notes}”</div>)}
+              {noteFor === i.versionId && <AddNote versionId={i.versionId} onSaved={() => { setNoteFor(null); reload(); }} />}
               {i.fixedAt && <div className="small muted">Marked fixed {ago(i.fixedAt)}</div>}
               {preview.open === i.versionId && <PreviewPane assets={[i.thumb]} alt={i.title} />}
             </CompactRow>
@@ -81,5 +86,16 @@ function Section({ title, help, items, reload, empty }: { title: string; help: s
         </CompactList>
       )}
     </Card>
+  );
+}
+
+/** A note for the AI about this item. It goes into the notes the AI reads for repeat problems (Notes for the AI page). */
+function AddNote({ versionId, onSaved }: { versionId: string; onSaved: () => void }) {
+  const [text, setText] = useState('');
+  return (
+    <div className="stack" style={{ marginTop: 6, gap: 6 }}>
+      <textarea rows={2} value={text} onChange={(e) => setText(e.target.value)} placeholder="What's wrong, or what you'd like next time. Be specific: the AI reads all your notes for repeat problems." maxLength={4000} />
+      <div className="row"><ActionButton className="small primary" disabled={text.trim().length < 3} onClick={async () => { await api(`/rework/${versionId}/note`, { body: { notes: text } }); onSaved(); }} successText="Note saved">Save note</ActionButton></div>
+    </div>
   );
 }
