@@ -127,6 +127,7 @@ Adopted 2026-11-03.
 | Database migrations | `src/db/migrations/` (001 to 010; 008 is World Builder drafts, from pull request #13, 009 is rework marks, and 010 is notes for the AI, from pull request #19) |
 | Tests | `tests/` (`npm test`) |
 | Mac Dock app (`npm run make-mac-app`) | `src/ops/macApp.ts` (bundle and launcher), `src/ops/macIcon.ts` (GAGE icon), `scripts/make-mac-app.ts`; built into `dist-mac/` (not in git) |
+| Security policy (how to report a problem privately) | `SECURITY.md` |
 | Setup and daily use | `README.md`, `docs/GETTING_STARTED.md`, `docs/WINDOWS.md` |
 | Architecture and data model | `docs/ARCHITECTURE.md`, `docs/DATA_MODEL.md` |
 | Arcade UX spec | `docs/ASSET_FOUNDRY_UX_SPEC.md` |
