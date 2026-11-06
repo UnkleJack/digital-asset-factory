@@ -22,7 +22,8 @@ export function createBundle(app: AppContext, input: { productIds: string[]; tit
     if (p.product_type === 'bundle') throw validation('Bundles cannot contain other bundles');
     if (!p.current_version_id) throw validation(`"${p.title}" has no version`);
     const v = getVersion(app.db, p.current_version_id);
-    if (!['passed', 'passed_with_warnings'].includes(v.qa_status) || !['ready', 'approved'].includes(v.status)) throw validation(`"${p.title}" must pass QA (and not be rejected) before it can be bundled`);
+    if (!['passed', 'passed_with_warnings'].includes(v.qa_status)) throw validation(`"${p.title}" must pass QA before it can be bundled`);
+    if (v.status !== 'approved') throw validation(`"${p.title}" must be approved in batch review before it can be bundled (any QA warnings have to be accepted first)`);
     const files = app.assets.forVersion(v.id, 'deliverable').filter((a) => !['package_zip', 'license', 'instructions'].includes(a.kind));
     const pdf = files.find((a) => a.kind === 'pdf');
     return { productId: p.id, versionId: v.id, title: p.title, productType: p.product_type, pageCount: pdf?.page_count ?? 0, files: files.map((f) => f.rel_path.split('/').pop()!) };

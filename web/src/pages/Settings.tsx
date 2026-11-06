@@ -13,7 +13,7 @@ const TABS = [
 ];
 
 const HELP: Record<string, string> = {
-  packing: 'How the Factory floor sorts finished products into packs: how many carts are open at once (default 6), pack size, how closely tags must match to join a cart (the backlog pass uses the relaxed value), how many carts and packs one product may be in, and the cooldown before a product goes into another pack with mostly the same tags.',
+  packing: 'How the Factory floor sorts approved products into packs (only items you approved in batch review, with any warnings accepted, are packed): how many carts are open at once (default 6), pack size, how closely tags must match to join a cart (the backlog pass uses the relaxed value), how many carts and packs one product may be in, and the cooldown before a product goes into another pack with mostly the same tags.',
   general: 'Shop name appears on every product footer and in the license. The timezone controls when production plans run.',
   generation: 'Which text and image providers to use. Text can be Anthropic, one of five OpenAI-compatible free-tier providers (OpenRouter, Groq, NVIDIA NIM, Cerebras, Together AI), or turned off ("deterministic"). "unconfiguredPolicy" decides what happens when AI is selected but no key is set: use the built-in content library, or fail.',
   rendering: 'Chrome is used to render PDFs and previews. Changing these restarts the renderer.',
@@ -62,11 +62,13 @@ function SectionEditor({ section, value, onSaved }: { section: string; value: an
 }
 
 const JSON_KEYS = new Set(['textPrices', 'imagePricePerImageUsd', 'defaultPriceCents']);
+// Settings that are kept only so old saved settings still load. feedOn: packing always waits for your approval now.
+const HIDDEN_KEYS = new Set(['feedOn']);
 // Price tables for AI calls. Only used to estimate cost and enforce the budget limit, so they sit under "Advanced".
 const ADVANCED_KEYS = new Set(['textPrices', 'imagePricePerImageUsd']);
 
 function ObjectFields({ value, onChange, path }: { value: any; onChange: (v: any) => void; path: string[] }) {
-  const prims = Object.entries(value).filter(([k, v]) => (typeof v !== 'object' || v === null || Array.isArray(v)) && !JSON_KEYS.has(k));
+  const prims = Object.entries(value).filter(([k, v]) => (typeof v !== 'object' || v === null || Array.isArray(v)) && !JSON_KEYS.has(k) && !HIDDEN_KEYS.has(k));
   const nested = Object.entries(value).filter(([k, v]) => typeof v === 'object' && v !== null && !Array.isArray(v) && !JSON_KEYS.has(k));
   const jsons = Object.entries(value).filter(([k]) => JSON_KEYS.has(k) && !ADVANCED_KEYS.has(k));
   const advanced = Object.entries(value).filter(([k]) => ADVANCED_KEYS.has(k));

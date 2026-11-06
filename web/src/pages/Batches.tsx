@@ -77,6 +77,47 @@ function ItemPreviews({ it }: { it: any }) {
   );
 }
 
+/** Yellow flags: each warning with an optional AI explanation, then the "I accept these warnings" tick. */
+function WarningReview({ it, accept, setAccept, note, setNote }: { it: any; accept: boolean; setAccept: (v: boolean) => void; note: string; setNote: (v: string) => void }) {
+  const done = it.version.status === 'approved';
+  const last = it.acceptedWarnings?.[0];
+  return (
+    <div className="warn-review">
+      <h3 style={{ margin: 0 }}>{it.qa.warnings.length || 'Some'} warning{it.qa.warnings.length === 1 ? '' : 's'} to review</h3>
+      <p className="small muted" style={{ margin: '4px 0 8px' }}>Yellow flags have to be looked at before this can be approved or packed. Fix them (Edit, Return for revision, Regenerate), or accept them as they are.</p>
+      <div className="stack" style={{ gap: 6 }}>
+        {it.qa.warnings.map((w: any) => <WarningRow key={w.check_code} versionId={it.version.id} w={w} />)}
+        {!it.qa.warnings.length && <p className="small muted" style={{ margin: 0 }}>QA marked this version "passed with warnings" but the details aren't in the newest run. Check the QA page for this product.</p>}
+      </div>
+      {last && <p className="small" style={{ margin: '8px 0 0' }}>You accepted {last.warnings?.length ?? 0} warning(s) {ago(last.at)}{last.notes ? ` — “${last.notes}”` : ''}.</p>}
+      {!done && <>
+        <label className="check" style={{ marginTop: 8 }}><input type="checkbox" checked={accept} onChange={(e) => setAccept(e.target.checked)} /><b>I accept these warnings</b></label>
+        {accept && <input type="text" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note (optional): why it's fine, or what you'll do about it" maxLength={2000} style={{ marginTop: 6, width: '100%' }} />}
+      </>}
+    </div>
+  );
+}
+
+function WarningRow({ versionId, w }: { versionId: string; w: any }) {
+  const [help, setHelp] = useState<null | { meaning: string; fix: string; acceptIf: string }>(null);
+  return (
+    <div className="warn-row">
+      <div className="spread" style={{ alignItems: 'flex-start', gap: 8 }}>
+        <CheckList results={[w]} />
+        {!help && <ActionButton className="small" onClick={async () => setHelp(await api(`/versions/${versionId}/warning-help`, { body: { check: w.check_code } }))}>Help me with this</ActionButton>}
+      </div>
+      {help && (
+        <div className="kv small" style={{ marginTop: 6 }}>
+          <span>What it means</span><span>{help.meaning}</span>
+          <span>How to fix it</span><span>{help.fix}</span>
+          <span>OK to accept if</span><span>{help.acceptIf}</span>
+          <span /><span className="muted">AI suggestion only. Nothing was changed.</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ItemCard({ it, reload }: { it: any; reload: () => void }) {
   const toast = useToast();
   const [markets, setMarkets] = useState<string[]>(it.listings.filter((l: any) => !l.validation.issues.length).map((l: any) => l.marketplace));
@@ -87,6 +128,10 @@ function ItemCard({ it, reload }: { it: any; reload: () => void }) {
   const busy = v.status === 'in_progress';
   const canApprove = it.current && ['ready', 'approved'].includes(v.status) && ['passed', 'passed_with_warnings'].includes(it.qa.status);
   const qaBlocked = ['failed'].includes(it.qa.status);
+  const hasWarnings = it.qa.warnings.length > 0 || it.qa.status === 'passed_with_warnings';
+  const [accept, setAccept] = useState(false);
+  const [warningNote, setWarningNote] = useState('');
+  const warnBlocked = hasWarnings && !accept;
   const decide = async (decision: string, extra: Record<string, unknown> = {}) => {
     await api(`/batch-items/${it.item.id}/decision`, { body: { decision, ...extra } });
     toast(decision === 'approved' ? 'Approved' : decision === 'rejected' ? 'Rejected' : 'New version is being produced');
@@ -114,9 +159,10 @@ function ItemCard({ it, reload }: { it: any; reload: () => void }) {
             <span>History</span><span className="small">{it.history.map((h: any) => `v${h.version_no} ${label(h.origin)} (${label(h.status)})`).join(' → ')}</span>
           </div>
 
-          {(it.qa.failures.length > 0 || it.qa.warnings.length > 0) && (
-            <details open={it.qa.failures.length > 0}><summary>{it.qa.failures.length} QA failure(s), {it.qa.warnings.length} warning(s) / policy risks</summary><div style={{ marginTop: 8 }}><CheckList results={[...it.qa.failures, ...it.qa.warnings]} /></div></details>
+          {it.qa.failures.length > 0 && (
+            <details open><summary>{it.qa.failures.length} QA failure(s)</summary><div style={{ marginTop: 8 }}><CheckList results={it.qa.failures} /></div></details>
           )}
+          {hasWarnings && <WarningReview it={it} accept={accept} setAccept={setAccept} note={warningNote} setNote={setWarningNote} />}
 
           <div>
             <h3>Listings — choose where to approve</h3>
@@ -139,13 +185,14 @@ function ItemCard({ it, reload }: { it: any; reload: () => void }) {
           {it.decisions.some((x: any) => x.invalidated_at) && <div className="small muted">Earlier approvals were withdrawn: {it.decisions.filter((x: any) => x.invalidated_at).map((x: any) => x.invalidated_reason).join('; ')}</div>}
 
           <div className="row">
-            <ActionButton className="primary" disabled={!canApprove || !markets.length || qaBlocked} title={qaBlocked ? 'QA failed — this version cannot be approved' : !markets.length ? 'Choose at least one marketplace' : ''} onClick={() => decide('approved', { marketplaces: markets })}>Approve {markets.length ? `for ${markets.map(label).join(' & ')}` : ''}</ActionButton>
+            <ActionButton className="primary" disabled={!canApprove || !markets.length || qaBlocked || warnBlocked} title={qaBlocked ? 'QA failed — this version cannot be approved' : warnBlocked ? 'Review the warnings and tick "I accept these warnings" first' : !markets.length ? 'Choose at least one marketplace' : ''} onClick={() => decide('approved', { marketplaces: markets, ...(hasWarnings && { acceptWarnings: accept, warningNote }) })}>Approve {markets.length ? `for ${markets.map(label).join(' & ')}` : ''}</ActionButton>
             <button disabled={!it.current || busy} onClick={() => setModal('revise')}>Return for revision</button>
             <button disabled={!it.current || busy} onClick={() => setModal('regen')}>Regenerate</button>
             <button className="danger" disabled={!it.current || busy || v.status === 'rejected'} onClick={() => setModal('reject')}>Reject</button>
             <Link className="btn" to={`/products/${it.product.id}`}>Edit…</Link>
           </div>
           {qaBlocked && <p className="small" style={{ color: 'var(--bad)', margin: 0 }}>This version failed a hard QA check, so it cannot be approved. Edit or regenerate it.</p>}
+          {!qaBlocked && warnBlocked && canApprove && <p className="small" style={{ color: 'var(--warn)', margin: 0 }}>Approve unlocks once you tick "I accept these warnings" above.</p>}
         </div>
       </div>
       {modal && (
