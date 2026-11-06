@@ -349,9 +349,10 @@ export const SettingsSchema = z.object({
     competitorShops: z.array(z.object({ platform: z.string().min(1).max(40), shopUrl: z.url(), label: z.string().max(80).optional() })).max(30).default([]),
   }).prefault({}),
   packing: z.object({
-    // Finished products go to the packer automatically: when they pass QA, or only once you approve them.
+    // Approved products go to the packer automatically. Nothing unapproved passes the packaging gate.
     autoFeed: z.boolean().default(true),
-    feedOn: z.enum(['qa_passed', 'approved']).default('qa_passed'),
+    // Kept so saved settings still load. Ignored: feeding always waits for approval ('qa_passed' no longer feeds).
+    feedOn: z.enum(['qa_passed', 'approved']).default('approved'),
     maxOpenCarts: z.number().int().min(1).max(12).default(6),
     targetSize: z.number().int().min(2).max(20).default(8),
     minSize: z.number().int().min(2).max(20).default(4),

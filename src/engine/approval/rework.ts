@@ -1,6 +1,7 @@
 import type { AppContext } from '../../app/context.ts';
 import { notFound } from '../../core/errors.ts';
 import { audit, type AuditActor } from '../../logging/logger.ts';
+import { reviewNotesFor } from '../generation/notes.ts';
 
 /** One line on the Rework page. */
 export type ReworkItem = {
@@ -26,6 +27,8 @@ export type ReworkItem = {
   /** First page preview, shown only when Preview is pressed. */
   thumb: string | null;
   fixedAt: string | null;
+  /** Extra notes written on the Rework page ("Add note"), newest first. */
+  myNotes: { id: string; notes: string; at: string }[];
 };
 
 const YOUR_DECISIONS = "'rejected','revision_requested','regenerate_requested'";
@@ -57,7 +60,7 @@ export function reworkList(app: AppContext, opts: { showFixed?: boolean } = {}):
   type Row = { version_id: string; product_id: string; version_no: number; status: string; error: string | null; updated_at: string; title: string; product_type: string; current_version_id: string | null; category: string | null; versions: number; thumb: string | null; marked_at: string | null };
   const shape = (r: Row, reason: string, at: string, notes: string, marketplaces: string[]): ReworkItem => ({
     versionId: r.version_id, productId: r.product_id, title: r.title, productType: r.product_type, category: r.category, versionNo: r.version_no, versions: r.versions,
-    current: r.current_version_id === r.version_id, status: r.status, reason, at, notes, marketplaces, ...qaFlags(app, r.version_id), error: r.error, thumb: r.thumb, fixedAt: r.marked_at,
+    current: r.current_version_id === r.version_id, status: r.status, reason, at, notes, marketplaces, ...qaFlags(app, r.version_id), error: r.error, thumb: r.thumb, fixedAt: r.marked_at, myNotes: reviewNotesFor(app, r.version_id),
   });
 
   const yours = app.db.all<Row & { decision: string; decided_at: string; notes: string; markets: string | null }>(

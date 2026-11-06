@@ -334,3 +334,9 @@ span.chip:not(.on) { border: 1px solid var(--border); }
 .rework-section + .rework-section { margin-top: 14px; }
 .cart-item { grid-template-columns: 1fr auto; } /* names only now; pictures open from the product */
 .clist > .stack { padding: 8px; }
+
+/* Warning gate (batch review) */
+.warn-review { border: 1px solid var(--warn); border-radius: 8px; padding: 10px 12px; background: var(--warn-soft); }
+.warn-row { border-top: 1px dashed var(--border); padding-top: 6px; }
+.warn-row:first-child { border-top: 0; padding-top: 0; }
+.warn-row .checks { flex: 1; min-width: 0; }
