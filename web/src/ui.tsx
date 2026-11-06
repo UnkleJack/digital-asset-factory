@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
-import { assetUrl, errorText } from './api.ts';
+import { assetUrl, errorText, thumbUrl } from './api.ts';
 import { label } from './format.ts';
 
 type Toast = { id: number; text: string; kind: 'ok' | 'bad' };
@@ -95,9 +95,10 @@ export function ActionButton({ onClick, children, className = '', confirm, disab
   );
 }
 
-export function AssetImg({ id, alt, className }: { id?: string | null; alt: string; className?: string }) {
+/** `thumb` loads a small copy that many px wide instead of the full image. */
+export function AssetImg({ id, alt, className, thumb }: { id?: string | null; alt: string; className?: string; thumb?: number }) {
   if (!id) return <span className="muted small">No preview</span>;
-  return <img src={assetUrl(id)} alt={alt} loading="lazy" className={className} />;
+  return <img src={thumb ? thumbUrl(id, thumb) : assetUrl(id)} alt={alt} loading="lazy" className={className} />;
 }
 
 export function Card({ title, actions, children, className = '' }: { title?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string }) {
@@ -129,4 +130,40 @@ export function CheckList({ results }: { results: { check_code: string; severity
 export function Evidence({ kind }: { kind: string }) {
   const text: Record<string, string> = { measured: 'Measured', external_estimate: 'External estimate', model_hypothesis: 'AI hypothesis', unknown: 'Unknown' };
   return <Pill value={kind === 'unknown' ? undefined : kind} text={text[kind] ?? kind} />;
+}
+
+/**
+ * "Clear view": hides a page's older rows from the screen without deleting anything.
+ * The moment of the last clear is remembered in this browser; rows from before it are hidden,
+ * rows that still need attention (passed as `keep`) always stay, and "Show cleared" brings the rest back.
+ */
+export function useClearView<T>(page: string, items: T[] | null | undefined, when: (item: T) => string | null | undefined, keep: (item: T) => boolean = () => false) {
+  const storeKey = `daf.clearedAt.${page}`;
+  const [clearedAt, setClearedAt] = useState<string | null>(() => { try { return localStorage.getItem(storeKey); } catch { return null; } });
+  const [showCleared, setShowCleared] = useState(false);
+  const save = (v: string | null) => {
+    setClearedAt(v);
+    setShowCleared(false);
+    try { if (v) localStorage.setItem(storeKey, v); else localStorage.removeItem(storeKey); } catch { /* private window: the clear lasts until reload */ }
+  };
+  const list = items ?? [];
+  const isHidden = (it: T) => { const t = when(it); return !!clearedAt && !keep(it) && !!t && t <= clearedAt; };
+  const hiddenCount = list.filter(isHidden).length;
+  const visible = showCleared ? list : list.filter((it) => !isHidden(it));
+  const clearable = list.filter((it) => !keep(it)).length - hiddenCount;
+  return { visible, hiddenCount, clearable, clearedAt, showCleared, setShowCleared, clear: () => save(new Date().toISOString()), restore: () => save(null), isHidden };
+}
+
+export function ClearViewControls({ view, noun = 'items' }: { view: ReturnType<typeof useClearView<any>>; noun?: string }) {
+  return (
+    <span className="row clear-view">
+      {view.hiddenCount > 0 && (
+        <label className="check small muted" title={`Cleared ${view.clearedAt ? new Date(view.clearedAt).toLocaleString() : ''}. Nothing was deleted.`}>
+          <input type="checkbox" checked={view.showCleared} onChange={(e) => view.setShowCleared(e.target.checked)} />Show {view.hiddenCount} cleared {noun}
+        </label>
+      )}
+      {view.hiddenCount > 0 && view.showCleared && <button className="small" onClick={view.restore}>Un-clear all</button>}
+      <button className="small" disabled={view.clearable === 0} onClick={view.clear} title="Hides everything currently on this list. Nothing is deleted, and new items still appear.">Clear view</button>
+    </span>
+  );
 }

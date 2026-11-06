@@ -77,7 +77,7 @@ function Spread({ types, onList }: { types: any[]; onList: () => void }) {
             <div className="product-cards">
               {l.items.map((p: any) => (
                 <Link key={p.id} to={`/products/${p.id}`} className="pcard">
-                  <div className="img">{p.thumb ? <AssetImg id={p.thumb} alt={`${p.title} preview`} /> : <span className="muted small">No preview</span>}</div>
+                  <div className="img">{p.thumb ? <AssetImg id={p.thumb} thumb={200} alt={`${p.title} preview`} /> : <span className="muted small">No preview</span>}</div>
                   <div className="body">
                     <div className="title">{p.title}</div>
                     <div className="small muted">v{p.version_no}{p.category ? ` · ${p.category}` : ''} · {ago(p.created_at)}</div>

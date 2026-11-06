@@ -332,7 +332,9 @@ span.chip:not(.on) { border: 1px solid var(--border); }
 .view-switch button.on { background: var(--primary); color: var(--surface); }
 .lane { margin-bottom: 14px; }
 .lane h3 { margin: 0 0 8px; display: flex; gap: 8px; align-items: baseline; }
-.lane .product-cards { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+.lane .product-cards { grid-template-columns: repeat(auto-fill, minmax(120px, 140px)); gap: 10px; }
+.lane .pcard .body { padding: 8px 10px; gap: 4px; }
+.lane .pcard .title { font-size: 13px; line-height: 1.3; }
 .made-strip { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
 .made-box { flex: 1 1 150px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
 .made-num { font-size: 28px; font-weight: 700; color: var(--primary); line-height: 1.1; }
