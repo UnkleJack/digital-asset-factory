@@ -160,3 +160,79 @@ test('hub mode: other computers need the access token; this computer does not; t
   assert.equal((await fromLaptop('POST', '/api/login', { host: LAN.host, 'content-type': 'application/x-www-form-urlencoded' }, `token=${token}`)).statusCode, 429, 'brute-force brake');
   await call('PATCH', '/api/settings/remote', { enabled: false });
 });
+
+test('public access: a tunnel on this computer (cloudflared) cannot skip the sign-in', async () => {
+  // cloudflared connects from 127.0.0.1, which server.inject also uses by default. Cloudflare stamps the visitor's address on.
+  const PUBLIC = 'daf.promptpimps.com';
+  const TUNNEL = { host: PUBLIC, 'x-daf-client': '1', 'content-type': 'application/json', 'cf-connecting-ip': '203.0.113.9', 'x-forwarded-for': '203.0.113.9', 'x-forwarded-proto': 'https' };
+  const viaTunnel = (method: string, url: string, headers: Record<string, string> = TUNNEL, payload?: string) => server.inject({ method: method as 'GET', url, headers, payload });
+  const form = (extra: Record<string, string> = {}) => ({ ...TUNNEL, 'content-type': 'application/x-www-form-urlencoded', ...extra });
+
+  // The address is saved as a bare host name however it is pasted, and junk is refused.
+  const savedHosts = await call('PATCH', '/api/settings/remote', { publicHosts: ['https://DAF.PromptPimps.com/'] });
+  assert.deepEqual(savedHosts.json().publicHosts, [PUBLIC]);
+  assert.equal((await call('PATCH', '/api/settings/remote', { publicHosts: ['not a host'] })).statusCode, 422);
+  assert.deepEqual(app.settings.get('remote').publicHosts, [PUBLIC]);
+
+  // Remote mode off: the tunnel gets nothing, even though it connects from this computer.
+  await call('PATCH', '/api/settings/remote', { enabled: false });
+  const off = await viaTunnel('GET', '/api/products');
+  assert.equal(off.statusCode, 403);
+  assert.equal(off.json().error.code, 'remote_off');
+  assert.equal((await viaTunnel('GET', '/api/products', { host: PUBLIC })).statusCode, 403, 'a listed address is remote even with no forwarding headers');
+
+  const token = (await call('POST', '/api/remote/token', {})).json().token as string;
+  await call('PATCH', '/api/settings/remote', { enabled: true });
+
+  // From loopback with the public Host and no token: the login page or a 401, never the app.
+  assert.equal((await viaTunnel('GET', '/api/products')).statusCode, 401);
+  assert.equal((await viaTunnel('GET', '/api/products', { host: PUBLIC })).statusCode, 401, 'Host alone is enough to be gated');
+  const page = await viaTunnel('GET', '/arcade');
+  assert.equal(page.statusCode, 303);
+  assert.equal(page.headers.location, '/login');
+  assert.equal((await viaTunnel('GET', '/login')).statusCode, 200);
+
+  // A forwarding header from loopback is gated even when the Host looks local (cloudflared's httpHostHeader trick).
+  for (const fwd of [{ 'cf-connecting-ip': '203.0.113.9' }, { 'x-forwarded-for': '203.0.113.9' }]) {
+    assert.equal((await call('GET', '/api/products', undefined, { ...H, ...fwd })).statusCode, 401, `gated with ${Object.keys(fwd)[0]}`);
+  }
+  // A plain request on this computer still needs no token.
+  assert.equal((await call('GET', '/api/products')).statusCode, 200);
+
+  // Signing in through the tunnel: the cookie is Secure because the visit was over https.
+  assert.equal((await viaTunnel('POST', '/api/login', form({ origin: 'https://evil.example' }), `token=${encodeURIComponent(token)}`)).statusCode, 403, 'login from another site is refused');
+  const good = await viaTunnel('POST', '/api/login', form({ origin: `https://${PUBLIC}` }), `token=${encodeURIComponent(token)}`);
+  assert.equal(good.statusCode, 303);
+  assert.match(String(good.headers['set-cookie']), /HttpOnly; SameSite=Strict; Max-Age=\d+; Secure$/);
+  const cookie = String(good.headers['set-cookie']).split(';')[0]!;
+  const signedIn = { ...TUNNEL, cookie };
+  assert.equal((await viaTunnel('GET', '/api/products', signedIn)).statusCode, 200, 'the same request with a valid token works');
+  assert.equal((await viaTunnel('GET', '/api/products', { ...TUNNEL, 'x-daf-token': token })).statusCode, 200, 'the token header works too');
+
+  // https:// is a same origin only for a listed address.
+  assert.equal((await viaTunnel('POST', '/api/packing/break', { ...signedIn, origin: `https://${PUBLIC}` }, '{}')).statusCode, 200, 'writes from the public address work');
+  assert.equal((await viaTunnel('POST', '/api/packing/break', { ...signedIn, origin: 'https://evil.example' }, '{}')).statusCode, 403);
+  const unlisted = { ...H, 'cf-connecting-ip': '203.0.113.9', cookie };
+  assert.equal((await call('POST', '/api/packing/break', {}, { ...unlisted, origin: `https://127.0.0.1:${PORT}` })).statusCode, 403, 'https origin refused for an unlisted host');
+  const lan = { host: `192.168.1.20:${PORT}`, 'x-daf-client': '1', 'content-type': 'application/json', cookie };
+  assert.equal((await server.inject({ method: 'POST', url: '/api/packing/break', headers: { ...lan, origin: `https://192.168.1.20:${PORT}` }, payload: '{}', remoteAddress: '192.168.1.46' })).statusCode, 403, 'https origin refused on the home network');
+  assert.equal((await server.inject({ method: 'POST', url: '/api/packing/break', headers: { ...lan, origin: `http://192.168.1.20:${PORT}` }, payload: '{}', remoteAddress: '192.168.1.46' })).statusCode, 200, 'home network hub mode unchanged');
+  const lanLogin = await server.inject({ method: 'POST', url: '/api/login', headers: { host: lan.host, 'content-type': 'application/x-www-form-urlencoded' }, payload: `token=${encodeURIComponent(token)}`, remoteAddress: '192.168.1.46' });
+  assert.doesNotMatch(String(lanLogin.headers['set-cookie']), /Secure/, 'plain http sign-in keeps a cookie the browser will send back');
+
+  // Only the computer itself, with no tunnel in between, can make a new token.
+  assert.equal((await viaTunnel('POST', '/api/remote/token', signedIn, '{}')).statusCode, 403);
+  assert.equal(app.settings.get('remote').enabled, true);
+  assert.equal((await viaTunnel('GET', '/api/products', signedIn)).statusCode, 200, 'the token still works');
+
+  // The wrong-token brake counts each visitor (CF-Connecting-IP), never the tunnel's own 127.0.0.1.
+  for (let i = 0; i < 10; i++) await viaTunnel('POST', '/api/login', form(), 'token=nope');
+  assert.equal((await viaTunnel('POST', '/api/login', form(), `token=${encodeURIComponent(token)}`)).statusCode, 429, 'that visitor is braked');
+  assert.equal((await viaTunnel('POST', '/api/login', form({ 'cf-connecting-ip': '198.51.100.7', 'x-forwarded-for': '198.51.100.7' }), `token=${encodeURIComponent(token)}`)).statusCode, 303, 'another visitor is not');
+  assert.equal((await call('GET', '/api/products')).statusCode, 200, 'this computer is never locked out');
+  // A home-network computer can't dodge the brake by making up forwarding headers.
+  for (let i = 0; i < 10; i++) await server.inject({ method: 'POST', url: '/api/login', headers: { host: lan.host, 'content-type': 'application/x-www-form-urlencoded', 'cf-connecting-ip': `10.0.0.${i}` }, payload: 'token=nope', remoteAddress: '192.168.1.47' });
+  assert.equal((await server.inject({ method: 'POST', url: '/api/login', headers: { host: lan.host, 'content-type': 'application/x-www-form-urlencoded', 'cf-connecting-ip': '10.0.0.99' }, payload: `token=${encodeURIComponent(token)}`, remoteAddress: '192.168.1.47' })).statusCode, 429);
+
+  await call('PATCH', '/api/settings/remote', { enabled: false, publicHosts: [] });
+});
