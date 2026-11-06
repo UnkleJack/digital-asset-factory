@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { api, errorText, useApi } from '../api.ts';
+import { CompactList } from '../compact.tsx';
 import { ActionButton, Async, Card, Empty, PageHead, Pill, Tabs, useToast } from '../ui.tsx';
 import { AI_PROVIDER_LABELS, bytes, fmtDate, label, providerLabel } from '../format.ts';
 
@@ -260,7 +261,7 @@ function Backups() {
   return (
     <Card title="Backups" actions={<ActionButton className="primary small" onClick={async () => { const b = await api('/backups', { body: {} }); toast(`Backup created (${bytes(b.bytes)})`); st.reload(); }}>Back up now</ActionButton>}>
       <p className="small muted" style={{ marginTop: 0 }}>A backup is a consistent copy of the database plus every generated file. API keys are not included (they stay in the Keychain). To restore, quit the app and run <code>npm run restore -- &lt;backup-name&gt;</code>; your current data is moved aside, not deleted.</p>
-      <Async state={st}>{(list) => list.length ? <table className="t"><thead><tr><th>Backup</th><th>Created</th><th>Products</th><th>Files</th><th>Size</th></tr></thead><tbody>{list.map((b) => <tr key={b.name}><td className="mono">{b.name}</td><td>{fmtDate(b.createdAt)}</td><td>{b.products}</td><td>{b.assets}</td><td>{bytes(b.bytes)}</td></tr>)}</tbody></table> : <Empty title="No backups yet" />}</Async>
+      <Async state={st}>{(list) => list.length ? <CompactList total={list.length} shown={list.length} noun="backups" height={320}><table className="t"><thead><tr><th>Backup</th><th>Created</th><th>Products</th><th>Files</th><th>Size</th></tr></thead><tbody>{list.map((b) => <tr key={b.name}><td className="mono">{b.name}</td><td>{fmtDate(b.createdAt)}</td><td>{b.products}</td><td>{b.assets}</td><td>{bytes(b.bytes)}</td></tr>)}</tbody></table></CompactList> : <Empty title="No backups yet" />}</Async>
     </Card>
   );
 }

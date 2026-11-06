@@ -20,6 +20,7 @@ import { Templates } from './pages/Templates.tsx';
 import { Jobs } from './pages/Jobs.tsx';
 import { QaPage } from './pages/Qa.tsx';
 import { Batches, BatchReview } from './pages/Batches.tsx';
+import { Rework } from './pages/Rework.tsx';
 import { Listings } from './pages/Listings.tsx';
 import { Publishing } from './pages/Publishing.tsx';
 import { Analytics } from './pages/Analytics.tsx';
@@ -29,7 +30,7 @@ import { Imports } from './pages/Imports.tsx';
 import { Arcade } from './arcade/Arcade.tsx';
 import { ARCADE_GAME_NAME, SUITE_NAME } from '../../src/core/brand.ts';
 
-const NAV_ICONS: Record<string, string> = { '/arcade': '◉', '/': '⌂', '/calendar': '⏲', '/digest': '✉', '/research': '⌕', '/library': '▦', '/imports': '⇩', '/packing': '⛭', '/templates': '✎', '/jobs': '⚙', '/qa': '⚖', '/batches': '⚔', '/listings': '☰', '/publishing': '⇪', '/analytics': '◔', '/settings': '⚒' };
+const NAV_ICONS: Record<string, string> = { '/arcade': '◉', '/': '⌂', '/calendar': '⏲', '/digest': '✉', '/research': '⌕', '/library': '▦', '/imports': '⇩', '/packing': '⛭', '/templates': '✎', '/jobs': '⚙', '/qa': '⚖', '/batches': '⚔', '/rework': '↺', '/listings': '☰', '/publishing': '⇪', '/analytics': '◔', '/settings': '⚒' };
 const NAV_HINTS: Record<string, string> = {
   '/arcade': 'The arcade cabinet: play your way through the suite (early build)',
   '/': 'What the factory is doing right now',
@@ -43,6 +44,7 @@ const NAV_HINTS: Record<string, string> = {
   '/jobs': 'Behind-the-scenes production steps',
   '/qa': 'Quality checks on every product',
   '/batches': 'Approve or reject what was made (do this daily)',
+  '/rework': 'Everything rejected or failed, in one place to fix',
   '/listings': 'Edit marketplace titles, prices and tags',
   '/publishing': 'Post to Gumroad or download upload packages',
   '/analytics': 'Sales, what sold when, and recommendations',
@@ -74,6 +76,7 @@ function Nav() {
       {link('/qa', 'QA results', c.qaFailed)}
       <div className="nav-section">Sell</div>
       {link('/batches', 'Batch approval', c.awaitingReview)}
+      {link('/rework', 'Rework', c.rework)}
       {link('/listings', 'Marketplace listings')}
       {link('/publishing', 'Publishing status', c.needsReconciliation)}
       {link('/analytics', 'Analytics')}
@@ -120,6 +123,7 @@ function BackOffice() {
           <Route path="/qa" element={<QaPage />} />
           <Route path="/batches" element={<Batches />} />
           <Route path="/batches/:id" element={<BatchReview />} />
+          <Route path="/rework" element={<Rework />} />
           <Route path="/listings" element={<Listings />} />
           <Route path="/publishing" element={<Publishing />} />
           <Route path="/analytics" element={<Analytics />} />

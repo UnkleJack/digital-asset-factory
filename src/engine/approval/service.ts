@@ -13,11 +13,15 @@ import { onProductFinished } from '../packing/service.ts';
 
 export type Decision = 'approved' | 'rejected' | 'revision_requested' | 'regenerate_requested';
 
-export function listBatches(app: AppContext, status?: string) {
+/** Batches, newest first. `open` hides batches that are fully decided, unless a status is chosen. */
+export function listBatches(app: AppContext, opts: { status?: string; open?: boolean; limit?: number } = {}) {
+  const where = opts.status ? 'WHERE b.status = ?' : opts.open ? "WHERE b.status IN ('collecting','ready_for_review')" : '';
+  const args = opts.status ? [opts.status] : [];
+  const total = app.db.value<number>(`SELECT count(*) FROM approval_batches b ${where}`, ...args) ?? 0;
   const rows = app.db.all<Record<string, unknown>>(`SELECT b.*, (SELECT count(*) FROM approval_items i WHERE i.batch_id = b.id) AS items,
       (SELECT count(*) FROM approval_items i JOIN product_versions v ON v.id = i.version_id WHERE i.batch_id = b.id AND v.status = 'ready') AS awaiting
-    FROM approval_batches b ${status ? 'WHERE b.status = ?' : ''} ORDER BY b.created_at DESC LIMIT 200`, ...(status ? [status] : []));
-  return rows;
+    FROM approval_batches b ${where} ORDER BY b.created_at DESC LIMIT ?`, ...args, opts.limit ?? 200);
+  return { rows, total };
 }
 
 export function itemDetail(app: AppContext, itemId: string) {

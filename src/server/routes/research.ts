@@ -8,12 +8,14 @@ import { startPipeline } from '../../jobs/pipeline.ts';
 import { createBatch, addToBatch } from '../../engine/approval/batches.ts';
 import { conflict } from '../../core/errors.ts';
 import { makeOpportunityPreview, offlinePreviewBlocker, previewInfo, previewPng } from '../../engine/research/preview.ts';
-import { int, parse, type Q, type P } from './util.ts';
+import { int, parse, LIST_MAX, totalHeader, type Q, type P } from './util.ts';
 
 export function registerResearchRoutes(s: FastifyInstance, { app }: ServerDeps): void {
-  s.get('/api/opportunities', async (req) => {
+  s.get('/api/opportunities', async (req, reply) => {
     const q = req.query as Q;
-    const rows = app.db.all<{ id: string }>(`SELECT o.id FROM opportunities o ${q.status ? 'WHERE o.status = ?' : "WHERE o.status <> 'archived'"} ORDER BY o.updated_at DESC LIMIT ?`, ...(q.status ? [q.status] : []), int(q.limit, 200, 1, 500));
+    const where = q.status ? 'WHERE o.status = ?' : "WHERE o.status <> 'archived'";
+    totalHeader(reply, app.db.value<number>(`SELECT count(*) FROM opportunities o ${where}`, ...(q.status ? [q.status] : [])));
+    const rows = app.db.all<{ id: string }>(`SELECT o.id FROM opportunities o ${where} ORDER BY o.updated_at DESC LIMIT ?`, ...(q.status ? [q.status] : []), int(q.limit, 200, 1, LIST_MAX));
     return rows.map((r) => {
       const o = getOpportunity(app, r.id);
       const sc = latestScore(app, r.id);
@@ -62,9 +64,10 @@ export function registerResearchRoutes(s: FastifyInstance, { app }: ServerDeps):
     return { ids: await suggestOpportunities(app, b) };
   });
 
-  s.get('/api/observations', async (req) => {
+  s.get('/api/observations', async (req, reply) => {
     const q = req.query as Q;
-    return app.db.all(`SELECT r.*, k.phrase AS keyword, o.title AS opportunity FROM research_observations r LEFT JOIN keywords k ON k.id = r.keyword_id LEFT JOIN opportunities o ON o.id = r.opportunity_id ORDER BY r.created_at DESC LIMIT ?`, int(q.limit, 200, 1, 1000));
+    totalHeader(reply, app.db.value<number>('SELECT count(*) FROM research_observations'));
+    return app.db.all(`SELECT r.*, k.phrase AS keyword, o.title AS opportunity FROM research_observations r LEFT JOIN keywords k ON k.id = r.keyword_id LEFT JOIN opportunities o ON o.id = r.opportunity_id ORDER BY r.created_at DESC LIMIT ?`, int(q.limit, 200, 1, LIST_MAX));
   });
   s.post('/api/observations', async (req) => ({ id: addObservation(app, req.body) }));
   s.post('/api/observations/import', async (req) => {

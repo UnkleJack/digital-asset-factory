@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { api, errorText, useApi } from '../api.ts';
+import { api, errorText, useApi, usePagedApi } from '../api.ts';
+import { CompactList } from '../compact.tsx';
 import { Async, Card, Empty, Modal, PageHead, Pill, useToast } from '../ui.tsx';
 import { ago, generatorLabel, label, money } from '../format.ts';
 
@@ -10,7 +11,7 @@ export function Listings() {
   const [status, setStatus] = useState('');
   const [current, setCurrent] = useState(true);
   const qs = new URLSearchParams({ ...(market && { marketplace: market }), ...(status && { status }), ...(current && { current: '1' }) });
-  const st = useApi<any[]>(`/listings?${qs}`, { poll: 10000 });
+  const st = usePagedApi<any[]>(`/listings?${qs}`, { poll: 10000 });
   const open = sp.get('open');
   return (
     <div className="page">
@@ -22,6 +23,7 @@ export function Listings() {
       </div>
       <Card>
         <Async state={st}>{(list) => list.length === 0 ? <Empty title="No listings">Listings are drafted automatically after a product is packaged.</Empty> : (
+          <CompactList total={st.total} shown={list.length} onMore={st.more} noun="listings">
           <table className="t">
             <thead><tr><th>Listing</th><th>Marketplace</th><th>Price</th><th>Status</th><th>Approval</th><th>Updated</th></tr></thead>
             <tbody>{list.map((l) => (
@@ -35,6 +37,7 @@ export function Listings() {
               </tr>
             ))}</tbody>
           </table>
+          </CompactList>
         )}</Async>
       </Card>
       {open && <ListingEditor id={open} onClose={() => { setSp({}); st.reload(); }} />}

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
-import { api, errorText, readFileText, useApi } from '../api.ts';
+import { api, errorText, readFileText, useApi, usePagedApi } from '../api.ts';
+import { CompactList } from '../compact.tsx';
 import { ActionButton, Async, Card, Empty, Evidence, Modal, PageHead, Pill, Tabs, useToast } from '../ui.tsx';
 import { fmtDate, label, pct } from '../format.ts';
 
@@ -12,7 +13,7 @@ export function Research() {
   const [sp, setSp] = useSearchParams();
   const [tab, setTab] = useState('opps');
   const [status, setStatus] = useState('');
-  const opps = useApi<any[]>(`/opportunities${status ? `?status=${status}` : ''}`, { poll: 15000 });
+  const opps = usePagedApi<any[]>(`/opportunities${status ? `?status=${status}` : ''}`, { poll: 15000 });
   const [adding, setAdding] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
   const open = sp.get('open');
@@ -26,6 +27,7 @@ export function Research() {
             {opps.data && <MakePreviewsButton list={opps.data} onDone={opps.reload} />}</div>
           <Card>
             <Async state={opps}>{(list) => list.length === 0 ? <Empty title="No opportunities" action={<button className="primary" onClick={() => setAdding(true)}>Add one</button>}>Add ideas by hand, import keyword research, or ask the AI for idea suggestions (stored as hypotheses).</Empty> : (
+              <CompactList total={opps.total} shown={list.length} onMore={opps.more} noun="opportunities">
               <table className="t">
                 <thead><tr><th>Opportunity</th><th>Type</th><th>Status</th><th>Score</th><th>Evidence confidence</th><th>Outcome</th><th>Origin</th></tr></thead>
                 <tbody>{list.map((o) => (
@@ -40,6 +42,7 @@ export function Research() {
                   </tr>
                 ))}</tbody>
               </table>
+              </CompactList>
             )}</Async>
           </Card>
         </>
@@ -202,7 +205,7 @@ function OpportunityDrawer({ id, onClose }: { id: string; onClose: () => void })
                 );
               })}
             </Card>
-            <Card title={`Research data (${d.observations.length})`}>{d.observations.length ? <table className="t"><tbody>{d.observations.map((r: any) => <tr key={r.id}><td>{r.keyword ?? '—'}</td><td>{label(r.metric)}</td><td>{r.value_num ?? r.value_text}</td><td><Evidence kind={r.evidence_kind} /></td><td className="small muted">{r.source} · {r.observed_at}</td></tr>)}</tbody></table> : <p className="muted small">No data yet. Add observations in the Research data tab, linked to this opportunity or its keywords.</p>}</Card>
+            <Card title={`Research data (${d.observations.length})`}>{d.observations.length ? <CompactList total={d.observations.length} shown={d.observations.length} noun="observations" height={320}><table className="t"><tbody>{d.observations.map((r: any) => <tr key={r.id}><td>{r.keyword ?? '—'}</td><td>{label(r.metric)}</td><td>{r.value_num ?? r.value_text}</td><td><Evidence kind={r.evidence_kind} /></td><td className="small muted">{r.source} · {r.observed_at}</td></tr>)}</tbody></table></CompactList> : <p className="muted small">No data yet. Add observations in the Research data tab, linked to this opportunity or its keywords.</p>}</Card>
             {d.products.length > 0 && <Card title="Products made from this">{d.products.map((p: any) => <div key={p.id}><Link to={`/products/${p.id}`}>{p.title}</Link> <span className="small muted">{fmtDate(p.created_at)}</span></div>)}</Card>}
             {editing && <OpportunityForm initial={o} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); st.reload(); }} />}
           </div>
@@ -213,7 +216,7 @@ function OpportunityDrawer({ id, onClose }: { id: string; onClose: () => void })
 }
 
 function Observations() {
-  const obs = useApi<any[]>('/observations');
+  const obs = usePagedApi<any[]>('/observations');
   const opps = useApi<any[]>('/opportunities');
   const rules = useApi<any>('/scoring/rules');
   const toast = useToast();
@@ -248,7 +251,7 @@ function Observations() {
         {importResult && <div style={{ marginTop: 10 }}><Pill value={importResult.rejected ? 'partial' : 'completed'} text={`${importResult.imported} imported, ${importResult.rejected} rejected`} />{importResult.errors.map((x: any) => <div key={x.row} className="small" style={{ color: 'var(--bad)' }}>Row {x.row}: {x.message}</div>)}</div>}
       </Card>
       <Card title="Recorded research data" className="" >
-        <Async state={obs}>{(list) => list.length ? <table className="t"><thead><tr><th>Keyword / opportunity</th><th>Metric</th><th>Value</th><th>Evidence</th><th>Source</th></tr></thead><tbody>{list.map((r) => <tr key={r.id}><td>{r.keyword ?? r.opportunity}</td><td>{label(r.metric)}</td><td>{r.value_num ?? r.value_text} {r.unit && <span className="muted small">{r.unit}</span>}</td><td><Evidence kind={r.evidence_kind} /></td><td className="small muted">{r.source} · {r.observed_at}</td></tr>)}</tbody></table> : <Empty title="No research data yet" />}</Async>
+        <Async state={obs}>{(list) => list.length ? <CompactList total={obs.total} shown={list.length} onMore={obs.more} noun="observations"><table className="t"><thead><tr><th>Keyword / opportunity</th><th>Metric</th><th>Value</th><th>Evidence</th><th>Source</th></tr></thead><tbody>{list.map((r) => <tr key={r.id}><td>{r.keyword ?? r.opportunity}</td><td>{label(r.metric)}</td><td>{r.value_num ?? r.value_text} {r.unit && <span className="muted small">{r.unit}</span>}</td><td><Evidence kind={r.evidence_kind} /></td><td className="small muted">{r.source} · {r.observed_at}</td></tr>)}</tbody></table></CompactList> : <Empty title="No research data yet" />}</Async>
       </Card>
     </div>
   );

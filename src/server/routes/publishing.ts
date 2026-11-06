@@ -8,7 +8,7 @@ import { adapters } from '../../engine/publishing/adapters.ts';
 import { adapterForApp, gumroadClientFor, syncGumroadSales } from '../../engine/publishing/gumroad.ts';
 import { runReleaseQa } from '../../engine/qa/service.ts';
 import { validation, errorMessage } from '../../core/errors.ts';
-import { int, parse, type Q, type P } from './util.ts';
+import { int, parse, type Q, type P, LIST_MAX, totalHeader } from './util.ts';
 
 export function registerPublishingRoutes(s: FastifyInstance, { app }: ServerDeps): void {
   s.get('/api/marketplaces', async () => {
@@ -27,17 +27,18 @@ export function registerPublishingRoutes(s: FastifyInstance, { app }: ServerDeps
   });
   s.post('/api/integrations/gumroad/sync-sales', async () => syncGumroadSales(app, { sinceDays: 90 }));
 
-  s.get('/api/listings', async (req) => {
+  s.get('/api/listings', async (req, reply) => {
     const q = req.query as Q;
     const where: string[] = [];
     const args: unknown[] = [];
     if (q.marketplace) { where.push('l.marketplace = ?'); args.push(q.marketplace); }
     if (q.status) { where.push('l.status = ?'); args.push(q.status); }
     if (q.current === '1') where.push('p.current_version_id = l.version_id');
+    totalHeader(reply, app.db.value<number>(`SELECT count(*) FROM listings l JOIN products p ON p.id = l.product_id ${where.length ? 'WHERE ' + where.join(' AND ') : ''}`, ...args));
     const rows = app.db.all<Record<string, unknown>>(`SELECT l.*, p.title AS product_title, v.version_no, v.status AS version_status, (p.current_version_id = l.version_id) AS is_current,
         (SELECT e.external_url FROM external_listings e WHERE e.listing_id = l.id LIMIT 1) AS external_url,
         (SELECT e.verification FROM external_listings e WHERE e.listing_id = l.id LIMIT 1) AS verification
-      FROM listings l JOIN products p ON p.id = l.product_id JOIN product_versions v ON v.id = l.version_id ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY l.updated_at DESC LIMIT ?`, ...args, int(q.limit, 200, 1, 500));
+      FROM listings l JOIN products p ON p.id = l.product_id JOIN product_versions v ON v.id = l.version_id ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY l.updated_at DESC LIMIT ?`, ...args, int(q.limit, 200, 1, LIST_MAX));
     return rows.map((r) => {
       const l = mapListing(r);
       return { ...l, product_title: r.product_title, version_no: r.version_no, version_status: r.version_status, is_current: !!r.is_current, external_url: r.external_url, verification: r.verification, approved: !!activeApproval(app, l) };
@@ -59,8 +60,10 @@ export function registerPublishingRoutes(s: FastifyInstance, { app }: ServerDeps
     return out;
   });
 
-  s.get('/api/publishing', async () => {
-    const rows = app.db.all<Record<string, unknown>>(`SELECT l.* FROM listings l JOIN products p ON p.id = l.product_id WHERE p.current_version_id = l.version_id OR l.status IN ('published_manual','published_verified','needs_reconciliation') ORDER BY l.updated_at DESC LIMIT 300`);
+  s.get('/api/publishing', async (req, reply) => {
+    const where = "WHERE p.current_version_id = l.version_id OR l.status IN ('published_manual','published_verified','needs_reconciliation')";
+    totalHeader(reply, app.db.value<number>(`SELECT count(*) FROM listings l JOIN products p ON p.id = l.product_id ${where}`));
+    const rows = app.db.all<Record<string, unknown>>(`SELECT l.* FROM listings l JOIN products p ON p.id = l.product_id ${where} ORDER BY l.updated_at DESC LIMIT ?`, int((req.query as Q).limit, 300, 1, LIST_MAX));
     return rows.map((r) => {
       const l = mapListing(r);
       const st = publicationStatus(app, l.id);
