@@ -10,6 +10,10 @@ import { createWorker } from '../src/jobs/handlers.ts';
 import { createBatch, addToBatch } from '../src/engine/approval/batches.ts';
 import { decide, itemDetail, openWarnings } from '../src/engine/approval/service.ts';
 import { warningHelp } from '../src/engine/approval/warningHelp.ts';
+import { unacceptedApprovals, warningsCleared } from '../src/engine/approval/warnings.ts';
+import { prepareExport } from '../src/engine/publishing/service.ts';
+import { feedProduct } from '../src/engine/packing/service.ts';
+import { listingsForVersion } from '../src/db/repos.ts';
 import { getVersion } from '../src/db/repos.ts';
 import { newId } from '../src/core/ids.ts';
 import type { Worker } from '../src/jobs/worker.ts';
@@ -78,4 +82,29 @@ test('AI help only works with a provider key, and only for a warning that is ope
   await assert.rejects(warningHelp(app, versionId, 'no_such_check'), /not found/i);
   await assert.rejects(warningHelp(app, versionId, 'image_quality'), /AI help needs an AI provider key/);
   assert.equal(getVersion(app.db, versionId).status, 'ready', 'asking for help changes nothing');
+});
+
+test('approvals made before the gate are held back from packing and publishing until the warnings are accepted', async () => {
+  const { itemId, versionId } = await readyItem();
+  app.db.run("DELETE FROM qa_results WHERE severity = 'warning' AND passed = 0 AND qa_run_id IN (SELECT id FROM qa_runs WHERE version_id = ?)", versionId);
+  app.db.run("UPDATE product_versions SET qa_status = 'passed' WHERE id = ?", versionId);
+  decide(app, itemId, { decision: 'approved' });
+  // The warning was there all along, but the old rules let it through without a tick.
+  addWarning(versionId, 'text_density', 'Page 2 is crowded');
+  const productId = getVersion(app.db, versionId).product_id;
+  const etsy = listingsForVersion(app.db, versionId).find((l) => l.marketplace === 'etsy')!;
+
+  assert.equal(warningsCleared(app, versionId), false);
+  assert.deepEqual(unacceptedApprovals(app).map((r) => r.versionId), [versionId]);
+  assert.equal(unacceptedApprovals(app)[0].itemId, itemId);
+  await assert.rejects(prepareExport(app, etsy.id), /warnings you haven't accepted/, 'no export or publishing');
+  assert.match(feedProduct(app, productId).backlog ?? '', /haven't accepted/, 'not packed');
+  assert.equal(getVersion(app.db, versionId).status, 'approved', 'the approval itself is kept');
+  assert.equal(itemDetail(app, itemId).warningsCleared, false);
+
+  decide(app, itemId, { decision: 'approved', acceptWarnings: true });
+  assert.equal(warningsCleared(app, versionId), true);
+  assert.equal(unacceptedApprovals(app).length, 0);
+  await prepareExport(app, etsy.id);
+  assert.equal(feedProduct(app, productId).backlog, null);
 });

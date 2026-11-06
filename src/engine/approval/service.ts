@@ -6,6 +6,7 @@ import { startPipeline } from '../../jobs/pipeline.ts';
 import { addToBatch, refreshBatch, batchesContaining } from './batches.ts';
 import { fingerprintFor, activeApproval } from '../publishing/service.ts';
 import { qaReport } from '../qa/service.ts';
+import { latestQaResults, openWarnings, warningsCleared } from './warnings.ts';
 import { newId } from '../../core/ids.ts';
 import { conflict, notFound, validation } from '../../core/errors.ts';
 import { audit, type AuditActor } from '../../logging/logger.ts';
@@ -24,20 +25,7 @@ export function listBatches(app: AppContext, opts: { status?: string; open?: boo
   return { rows, total };
 }
 
-type QaResult = { check_code: string; severity: string; passed: number; message: string; details?: string | null };
-
-/** QA results from the newest run of each kind (deliverable, release, ...), so older runs that were fixed don't count. */
-export function latestQaResults(app: AppContext, versionId: string): QaResult[] {
-  const qa = qaReport(app, versionId);
-  const latestByKind = new Map<string, (typeof qa)[number]>();
-  for (const r of qa) if (!latestByKind.has(r.kind)) latestByKind.set(r.kind, r);
-  return [...latestByKind.values()].flatMap((r) => r.results as QaResult[]);
-}
-
-/** Yellow flags still open on a version: failed warning-level checks in its newest QA runs. */
-export function openWarnings(app: AppContext, versionId: string): QaResult[] {
-  return latestQaResults(app, versionId).filter((r) => !r.passed && r.severity === 'warning');
-}
+export { latestQaResults, openWarnings, warningsCleared } from './warnings.ts';
 
 export function itemDetail(app: AppContext, itemId: string) {
   const item = app.db.get<{ id: string; batch_id: string; product_id: string; version_id: string; added_at: string }>('SELECT * FROM approval_items WHERE id = ?', itemId);
@@ -67,6 +55,7 @@ export function itemDetail(app: AppContext, itemId: string) {
     provenance: version.content_provenance,
     listings,
     decisions,
+    warningsCleared: warningsCleared(app, version.id),
     acceptedWarnings: app.db.all<{ at: string; details: string }>("SELECT at, details FROM audit_events WHERE action = 'approval.warnings_accepted' AND entity_id = ? ORDER BY at DESC", version.id)
       .map((r) => ({ at: r.at, ...json<{ warnings?: { check: string; message: string }[]; notes?: string }>(r.details, {}) })),
     history: app.db.all('SELECT id, version_no, origin, status, qa_status, change_note, revision_notes, created_at FROM product_versions WHERE product_id = ? ORDER BY version_no DESC', product.id),

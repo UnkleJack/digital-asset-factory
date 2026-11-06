@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useParams, useSearchParams } from 'react-router';
 import { api, assetUrl, useApi, usePagedApi } from '../api.ts';
 import { CompactList, CompactRow, PreviewButton, PreviewPane, ShowDone, usePreview, useReveal } from '../compact.tsx';
 import { ActionButton, Async, Card, CheckList, Empty, Modal, PageHead, Pill, useToast } from '../ui.tsx';
@@ -13,6 +13,7 @@ export function Batches() {
     <div className="page">
       <PageHead title="Batch approval" sub="Review finished products in batches. Nothing is exported or published without an approval recorded here for the exact version and marketplace listing." />
       <div className="row" style={{ marginBottom: 12 }}><select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status"><option value="">All batches</option><option value="ready_for_review">Ready for review</option><option value="collecting">Still producing</option><option value="closed">Closed</option></select>{!status && <ShowDone value={done} onChange={setDone} text="Show closed batches" />}</div>
+      <WarningsToAccept />
       <Card>
         <Async state={st}>{(list) => list.length === 0 ? <Empty title={status || done ? 'No batches yet' : 'Nothing waiting for review'}>{status || done ? 'Production plans create a batch per run; manually created products get their own batch.' : 'Closed batches are hidden. Tick “Show closed batches” to see them.'}</Empty> : (
           <CompactList total={st.total} shown={list.length} onMore={st.more} noun="batches">
@@ -24,6 +25,24 @@ export function Batches() {
         )}</Async>
       </Card>
     </div>
+  );
+}
+
+/** Items approved before the warning gate whose yellow flags were never accepted. They can't be packed or published yet. */
+function WarningsToAccept() {
+  const st = useApi<any[]>('/warnings-to-accept', { poll: 15000 });
+  const list = st.data ?? [];
+  if (!list.length) return null;
+  return (
+    <Card title={`${list.length} approved item${list.length === 1 ? '' : 's'} with warnings you haven't accepted`}>
+      <p className="small muted" style={{ marginTop: 0 }}>These were approved before the warning gate. They stay approved, but they can't be packed or published until you review the warnings and tick "I accept these warnings" (or fix them).</p>
+      <CompactList total={list.length} shown={list.length} noun="items" height={240}>
+        {list.map((r) => (
+          <CompactRow key={r.versionId} main={<><Link to={`/products/${r.productId}`}><b>{r.title}</b></Link> <span className="muted small">v{r.versionNo}</span></>} sub={`${r.warnings || 'Some'} warning${r.warnings === 1 ? '' : 's'}`}
+            actions={r.batchId ? <Link className="btn small primary" to={`/batches/${r.batchId}?item=${r.itemId}`}>Review</Link> : <span className="small muted">Not in a batch</span>} />
+        ))}
+      </CompactList>
+    </Card>
   );
 }
 
@@ -46,7 +65,8 @@ export function BatchReview() {
 /** Every item as one slim line. Opening a line shows today's full review card; only one is open at a time. */
 function BatchItems({ items, reload }: { items: any[]; reload: () => void }) {
   const { shown, total, more } = useReveal(items, 50);
-  const { open, toggle } = usePreview();
+  const [params] = useSearchParams();
+  const { open, toggle } = usePreview(params.get('item'));
   return (
     <CompactList total={total} shown={shown.length} onMore={more} noun="items" height={open ? 'none' : 640}>
       {shown.map((it: any) => {
@@ -79,11 +99,12 @@ function ItemPreviews({ it }: { it: any }) {
 
 /** Yellow flags: each warning with an optional AI explanation, then the "I accept these warnings" tick. */
 function WarningReview({ it, accept, setAccept, note, setNote }: { it: any; accept: boolean; setAccept: (v: boolean) => void; note: string; setNote: (v: string) => void }) {
-  const done = it.version.status === 'approved';
+  const done = it.version.status === 'approved' && it.warningsCleared;
   const last = it.acceptedWarnings?.[0];
   return (
     <div className="warn-review">
       <h3 style={{ margin: 0 }}>{it.qa.warnings.length || 'Some'} warning{it.qa.warnings.length === 1 ? '' : 's'} to review</h3>
+      {it.version.status === 'approved' && !it.warningsCleared && <p className="small" style={{ margin: '4px 0 0', color: 'var(--warn)' }}>Approved before the warning gate, so it's held back from packing and publishing until you accept these (press Approve again after ticking).</p>}
       <p className="small muted" style={{ margin: '4px 0 8px' }}>Yellow flags have to be looked at before this can be approved or packed. Fix them (Edit, Return for revision, Regenerate), or accept them as they are.</p>
       <div className="stack" style={{ gap: 6 }}>
         {it.qa.warnings.map((w: any) => <WarningRow key={w.check_code} versionId={it.version.id} w={w} />)}

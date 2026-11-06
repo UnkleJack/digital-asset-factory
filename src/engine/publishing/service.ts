@@ -10,6 +10,7 @@ import { AppError, approvalRequired, conflict, validation, errorMessage } from '
 import { audit, type AuditActor, redact } from '../../logging/logger.ts';
 import { toCsv } from '../producttypes/sheets.ts';
 import { invalidateApprovals } from '../listing/service.ts';
+import { warningsCleared } from '../approval/warnings.ts';
 
 export interface ApprovalDecision {
   id: string;
@@ -40,6 +41,8 @@ export function activeApproval(app: AppContext, listing: ListingRow): ApprovalDe
 export function requireApproval(app: AppContext, listing: ListingRow): ApprovalDecision {
   const a = activeApproval(app, listing);
   if (!a) throw approvalRequired(`"${listing.title}" on ${listing.marketplace} has no valid approval for its current files and listing text. Approve it in Batch approval first.`);
+  // Yellow flags must be accepted before anything goes onto a marketplace (covers approvals made before the warning gate).
+  if (!warningsCleared(app, listing.version_id)) throw approvalRequired(`"${listing.title}" has QA warnings you haven't accepted yet. Open it in Batch approval and tick "I accept these warnings" first.`);
   return a;
 }
 

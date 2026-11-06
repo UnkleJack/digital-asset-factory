@@ -6,6 +6,7 @@ import { listBatches, batchDetail, decide, itemDetail } from '../../engine/appro
 import { createBatch, addToBatch } from '../../engine/approval/batches.ts';
 import { reworkList, reworkCount, markFixed } from '../../engine/approval/rework.ts';
 import { warningHelp } from '../../engine/approval/warningHelp.ts';
+import { unacceptedApprovals } from '../../engine/approval/warnings.ts';
 import { listPlans, createPlan, updatePlan, deletePlan, runPlanNow, nextSlot, dueSlots } from '../../scheduler/scheduler.ts';
 import { textMode } from '../../engine/generation/service.ts';
 import { adapters } from '../../engine/publishing/adapters.ts';
@@ -108,6 +109,8 @@ export function registerOperationsRoutes(s: FastifyInstance, deps: ServerDeps): 
   });
   s.get('/api/batches/:id', async (req) => batchDetail(app, (req.params as P).id));
   s.get('/api/batch-items/:id', async (req) => itemDetail(app, (req.params as P).id));
+  // Approved items whose warnings were never accepted (approved before the warning gate). Blocked from packing and publishing.
+  s.get('/api/warnings-to-accept', async () => unacceptedApprovals(app));
   // Suggestion only: explains one open QA warning and how to fix it. Nothing is saved or approved.
   s.post('/api/versions/:id/warning-help', async (req) => {
     const b = parse(z.object({ check: z.string().min(1).max(200) }), req.body, 'warning');
