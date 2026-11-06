@@ -1,12 +1,13 @@
 import { Fragment, useState } from 'react';
 import { Link } from 'react-router';
-import { useApi } from '../api.ts';
+import { useApi, usePagedApi } from '../api.ts';
+import { CompactList } from '../compact.tsx';
 import { Async, Card, CheckList, Empty, PageHead, Pill } from '../ui.tsx';
 import { ago, label } from '../format.ts';
 
 export function QaPage() {
   const [status, setStatus] = useState('failed');
-  const runs = useApi<any[]>(`/qa?limit=100${status ? `&status=${status}` : ''}`, { poll: 8000 });
+  const runs = usePagedApi<any[]>(`/qa${status ? `?status=${status}` : ''}`, { poll: 8000 });
   const summary = useApi<any[]>('/qa/summary', { poll: 15000 });
   const [open, setOpen] = useState<string | null>(null);
   return (
@@ -24,6 +25,7 @@ export function QaPage() {
       </div>
       <Card title="Recent QA runs" actions={<select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Filter"><option value="failed">Failed</option><option value="passed_with_warnings">Passed with warnings</option><option value="passed">Passed</option><option value="">All</option></select>}>
         <Async state={runs}>{(list) => list.length === 0 ? <Empty title="Nothing to show" /> : (
+          <CompactList total={runs.total} shown={list.length} onMore={runs.more} noun="QA runs">
           <table className="t">
             <thead><tr><th>Product</th><th>Version</th><th>Checks</th><th>Result</th><th>When</th></tr></thead>
             <tbody>{list.map((r) => (
@@ -39,6 +41,7 @@ export function QaPage() {
               </Fragment>
             ))}</tbody>
           </table>
+          </CompactList>
         )}</Async>
       </Card>
     </div>

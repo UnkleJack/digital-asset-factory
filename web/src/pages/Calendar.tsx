@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { api, useApi } from '../api.ts';
+import { CompactList } from '../compact.tsx';
 import { ActionButton, Async, Card, Empty, Modal, PageHead, Pill, useToast } from '../ui.tsx';
 import { fmtDate, label, usd } from '../format.ts';
 
@@ -14,11 +15,25 @@ export function CalendarPage() {
   const cal = useApi<any>(`/calendar?from=${from.toISOString()}&to=${to.toISOString()}`, { poll: 15000 });
   const plans = useApi<any[]>('/plans', { poll: 15000 });
   const [editing, setEditing] = useState<any | null>(null);
+  // Start of today, this week (Sunday, like the grid) and this month, in this computer's time zone.
+  const since = useMemo(() => {
+    const n = new Date();
+    const day = new Date(n.getFullYear(), n.getMonth(), n.getDate());
+    const week = new Date(day); week.setDate(day.getDate() - day.getDay());
+    const month = new Date(n.getFullYear(), n.getMonth(), 1);
+    return [day, week, month].map((d) => d.toISOString()).join(',');
+  }, []);
+  const made = useApi<number[]>(`/made-counts?since=${encodeURIComponent(since)}`, { poll: 15000 });
+  const monthMade = (d: any) => (d.made as string[]).filter((iso) => { const x = new Date(iso); return x.getMonth() === cursor.getMonth() && x.getFullYear() === cursor.getFullYear(); }).length;
   return (
     <div className="page">
       <PageHead title="Production calendar" sub="Daily production plans, what ran, what was missed, and what is coming up." actions={<button className="primary" onClick={() => setEditing({})}>New production plan</button>} />
       <div className="banner info">Scheduled production only happens while the app is running. If the computer is off or asleep at a scheduled time, the run is recorded as missed and the most recent missed run is caught up when the app starts again.</div>
-      <Card title={`${MONTHS[cursor.getMonth()]} ${cursor.getFullYear()}`} actions={<><button className="small" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}>‹ Prev</button><button className="small" onClick={() => setCursor(new Date(new Date().getFullYear(), new Date().getMonth(), 1))}>Today</button><button className="small" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}>Next ›</button></>}>
+      <div className="made-strip" aria-label="Things made">
+        {['Made today', 'Made this week', 'Made this month'].map((t, i) => <div key={t} className="made-box"><div className="made-num">{made.data?.[i] ?? '…'}</div><div className="small muted">{t}</div></div>)}
+      </div>
+      <p className="small muted" style={{ marginTop: -6 }}>Counts everything the factory finished making, before review, including regenerations and versions that failed QA. Failed production is not counted.</p>
+      <Card title={<>{MONTHS[cursor.getMonth()]} {cursor.getFullYear()}{cal.data ? <span className="small muted"> · {monthMade(cal.data)} made</span> : null}</>} actions={<><button className="small" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}>‹ Prev</button><button className="small" onClick={() => setCursor(new Date(new Date().getFullYear(), new Date().getMonth(), 1))}>Today</button><button className="small" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}>Next ›</button></>}>
         <Async state={cal}>{(d) => <MonthGrid cursor={cursor} data={d} />}</Async>
       </Card>
       <Card title="Production plans">
@@ -45,7 +60,7 @@ export function CalendarPage() {
       </Card>
       <Async state={cal}>{(d) => d.seasonal.length ? (
         <Card title="Seasonal opportunities">
-          <table className="t"><tbody>{d.seasonal.map((o: any) => <tr key={o.id}><td>{o.title}</td><td>{o.seasonal_months.map((m: number) => MONTHS[m - 1]).join(', ')}</td><td><Pill value={o.status} /></td></tr>)}</tbody></table>
+          <CompactList total={d.seasonal.length} shown={d.seasonal.length} noun="seasonal ideas" height={320}><table className="t"><tbody>{d.seasonal.map((o: any) => <tr key={o.id}><td>{o.title}</td><td>{o.seasonal_months.map((m: number) => MONTHS[m - 1]).join(', ')}</td><td><Pill value={o.status} /></td></tr>)}</tbody></table></CompactList>
         </Card>
       ) : null}</Async>
       {editing && <PlanEditor plan={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); plans.reload(); cal.reload(); }} />}
@@ -71,6 +86,8 @@ function MonthGrid({ cursor, data }: { cursor: Date; data: any }) {
     const tone = r.status === 'missed' ? 'var(--warn-soft)' : r.status === 'failed' ? 'var(--bad-soft)' : r.status === 'running' || r.status === 'pending' ? 'var(--primary-soft)' : 'var(--ok-soft)';
     push(at, { text: `${r.plan}: ${label(r.status)}${r.products_created ? ` (${r.products_created})` : ''}`, tone, link: r.batch_id ? `/batches/${r.batch_id}` : undefined });
   }
+  const madeByDay = new Map<string, number>();
+  for (const iso of data.made ?? []) { const k = key(new Date(iso)); madeByDay.set(k, (madeByDay.get(k) ?? 0) + 1); }
   for (const u of data.upcoming) push(u.at, { text: `${u.plan} ${new Date(u.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`, tone: 'var(--surface-2)' });
   const today = key(new Date());
   return (
@@ -78,8 +95,9 @@ function MonthGrid({ cursor, data }: { cursor: Date; data: any }) {
       {DOW.map((d) => <div key={d} className="dow">{d}</div>)}
       {cells.map((d) => (
         <div key={key(d)} className={`${d.getMonth() !== cursor.getMonth() ? 'out' : ''} ${key(d) === today ? 'today' : ''}`}>
-          <span className="muted">{d.getDate()}</span>
+          <span className="spread"><span className="muted">{d.getDate()}</span>{madeByDay.get(key(d)) ? <span className="made" title="Things made this day">{madeByDay.get(key(d))} made</span> : null}</span>
           {(byDay.get(key(d)) ?? []).slice(0, 4).map((e, i) => e.link ? <Link key={i} to={e.link} className="ev" style={{ background: e.tone, color: 'var(--text)' }}>{e.text}</Link> : <span key={i} className="ev" style={{ background: e.tone }}>{e.text}</span>)}
+          {(byDay.get(key(d))?.length ?? 0) > 4 && <span className="more-ev" title={(byDay.get(key(d)) ?? []).slice(4).map((e) => e.text).join('\n')}>+{(byDay.get(key(d))?.length ?? 0) - 4} more</span>}
         </div>
       ))}
     </div>

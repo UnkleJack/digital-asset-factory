@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { api, errorText, useApi } from '../api.ts';
-import { ActionButton, AssetImg, Async, Empty, Modal } from '../ui.tsx';
+import { ActionButton, Async, Empty, Modal } from '../ui.tsx';
+import { CompactList, CompactRow, PreviewButton, PreviewPane, usePreview } from '../compact.tsx';
 import { label } from '../format.ts';
 
 /**
@@ -8,7 +9,9 @@ import { label } from '../format.ts';
  * give it a theme, optionally let AI suggest titles and a description from what you picked.
  */
 export function PackBuilder({ initial = [], onClose, onDone }: { initial?: string[]; onClose: () => void; onDone: (productId: string) => void }) {
-  const list = useApi<any>('/products?limit=200');
+  // Every product, not only the newest 200: the rows are text, pictures load only on Preview.
+  const list = useApi<any>('/products?limit=5000');
+  const preview = usePreview();
   const [picked, setPicked] = useState<string[]>(initial);
   const [filter, setFilter] = useState('');
   const [category, setCategory] = useState('');
@@ -55,14 +58,16 @@ export function PackBuilder({ initial = [], onClose, onDone }: { initial?: strin
           <div className="chips"><button className={`chip${!category ? ' on' : ''}`} onClick={() => setCategory('')}>All</button>{categories.map((c) => <button key={c} className={`chip${c === category ? ' on' : ''}`} onClick={() => setCategory(c)}>{c}</button>)}</div>
         </div>
         <Async state={list}>{() => eligible.length < 2 ? <Empty title="Not enough finished products yet">At least two products that passed QA are needed. Make some from Product library → New product.</Empty> : (
-          <div className="pick-grid">{shown.map((p: any) => (
-            <button key={p.id} className={`pick${picked.includes(p.id) ? ' on' : ''}`} onClick={() => toggle(p.id)} aria-pressed={picked.includes(p.id)}>
-              <span className="tick">{picked.includes(p.id) ? '✓' : ''}</span>
-              <span className="img"><AssetImg id={p.thumb} alt="" /></span>
-              <span className="small"><b>{p.title}</b></span>
-              <span className="small muted">{label(p.product_type)}</span>
-            </button>
-          ))}</div>
+          <CompactList total={shown.length} shown={shown.length} noun="finished products" height={360} tools={picked.length ? <span className="small">{picked.length} picked</span> : undefined}>
+            {shown.map((p: any) => (
+              <CompactRow key={p.id} className={picked.includes(p.id) ? 'on' : ''}
+                main={<label className="check"><input type="checkbox" checked={picked.includes(p.id)} onChange={() => toggle(p.id)} /> <b>{p.title}</b></label>}
+                sub={<>{label(p.product_type)}{p.category ? ` · ${p.category}` : ''}</>}
+                actions={<PreviewButton open={preview.open === p.id} disabled={!p.thumb} onClick={() => preview.toggle(p.id)} />}>
+                {preview.open === p.id && <PreviewPane assets={[p.thumb]} alt={p.title} />}
+              </CompactRow>
+            ))}
+          </CompactList>
         )}</Async>
 
         <h3>2. Name it</h3>

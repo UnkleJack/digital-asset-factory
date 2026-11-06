@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { api, errorText, useApi } from '../api.ts';
+import { CompactList } from '../compact.tsx';
 import { ActionButton, Async, Card, Empty, PageHead, Pill, useToast } from '../ui.tsx';
 import { ago, fmtDate } from '../format.ts';
 
@@ -25,13 +26,13 @@ export function Digest() {
         <Async state={settings}>{(s) => <DigestSettings value={s.settings.research} onSaved={() => { settings.reload(); st.reload(); }} />}</Async>
         <Card title="Past digests">
           <Async state={st}>{(d) => d.runs.length === 0 ? <Empty title="No digests yet">Run one now, or turn on the schedule.</Empty> : (
-            <div className="stack">{d.runs.map((r: any) => (
+            <CompactList total={d.runs.length} shown={d.runs.length} noun="digests" height={560}><div className="stack">{d.runs.map((r: any) => (
               <div key={r.id} className="digest-run">
                 <div className="spread"><span><b>{fmtDate(r.created_at)}</b> <span className="small muted">{r.trigger} · {r.search_queries} searches</span></span><span className="row"><Pill value={r.status === 'sent' ? 'ready' : r.status === 'failed' ? 'failed' : 'running'} text={r.status} /><button className="small" onClick={() => setOpen(open === r.id ? null : r.id)}>{open === r.id ? 'Hide' : 'Open'}</button></span></div>
                 {r.error && <div className="small" style={{ color: 'var(--bad)' }}>{r.error}</div>}
                 {open === r.id && <RunDetail run={r} />}
               </div>
-            ))}</div>
+            ))}</div></CompactList>
           )}</Async>
         </Card>
       </div>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
-import { api, useApi, errorText } from '../api.ts';
+import { api, useApi, usePagedApi, errorText } from '../api.ts';
+import { CompactList, CompactRow, PreviewButton, PreviewPane, usePreview } from '../compact.tsx';
 import { AssetImg, Async, Empty, Modal, PageHead, Pill, useToast } from '../ui.tsx';
 import { ago, label } from '../format.ts';
 import { PackBuilder } from './PackBuilder.tsx';
@@ -11,8 +12,12 @@ export function Library() {
   const type = sp.get('type') ?? '';
   const versionStatus = sp.get('versionStatus') ?? '';
   const status = sp.get('status') ?? 'active';
-  const qs = new URLSearchParams({ ...(type && { type }), ...(versionStatus && { versionStatus }), ...(status && { status }), ...(sp.get('q') && { q: sp.get('q')! }), limit: '120' });
-  const state = useApi<any>(`/products?${qs}`, { poll: 8000 });
+  const qs = new URLSearchParams({ ...(type && { type }), ...(versionStatus && { versionStatus }), ...(status && { status }), ...(sp.get('q') && { q: sp.get('q')! }) });
+  // Gallery unless the address asks for a list or carries a filter (links from the Dashboard do).
+  const filtered = !!(type || versionStatus || sp.get('q') || (sp.get('status') && sp.get('status') !== 'active'));
+  const view = sp.get('view') === 'gallery' ? 'gallery' : sp.get('view') === 'list' || filtered ? 'list' : 'gallery';
+  const state = usePagedApi<any>(view === 'list' ? `/products?${qs}` : null, { poll: 8000 });
+  const preview = usePreview();
   const types = useApi<any[]>('/product-types');
   const [creating, setCreating] = useState(sp.get('new') === '1');
   const [packing, setPacking] = useState(sp.get('pack') === '1');
@@ -21,6 +26,13 @@ export function Library() {
   return (
     <div className="page">
       <PageHead title="Product library" sub="Every product, its current version and where it is in production." actions={<><button onClick={() => setPacking(true)}>Build a pack</button><button className="primary" onClick={() => setCreating(true)}>New product</button></>} />
+      <div className="row" style={{ marginBottom: 14 }}>
+        <span className="view-switch" role="group" aria-label="View">
+          <button className={view === 'gallery' ? 'on' : ''} aria-pressed={view === 'gallery'} onClick={() => update('view', 'gallery')}>Gallery</button>
+          <button className={view === 'list' ? 'on' : ''} aria-pressed={view === 'list'} onClick={() => update('view', 'list')}>List</button>
+        </span>
+      </div>
+      {view === 'gallery' ? <Spread types={types.data ?? []} onList={() => update('view', 'list')} /> : (<>
       <div className="row" style={{ marginBottom: 14 }}>
         <form onSubmit={(e) => { e.preventDefault(); update('q', q); }} className="row"><input placeholder="Search titles…" value={q} onChange={(e) => setQ(e.target.value)} /><button>Search</button></form>
         <select value={type} onChange={(e) => update('type', e.target.value)} aria-label="Product type"><option value="">All types</option>{types.data?.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
@@ -31,25 +43,52 @@ export function Library() {
         <Empty title="No products here yet" action={<button className="primary" onClick={() => setCreating(true)}>Create a product</button>}>Create one directly, produce one from an opportunity in Research, or let a production plan make them.</Empty>
       ) : (
         <>
-          <p className="muted small">{d.total} product(s)</p>
-          <div className="product-cards">
+          <CompactList total={d.total} shown={d.items.length} onMore={state.more} noun="products">
             {d.items.map((p: any) => (
-              <Link key={p.id} to={`/products/${p.id}`} className="pcard">
-                <div className="img">{p.thumb ? <AssetImg id={p.thumb} alt={`${p.title} preview`} /> : <span className="muted small">{p.version_status === 'in_progress' ? 'Rendering…' : 'No preview'}</span>}</div>
-                <div className="body">
-                  <div className="title">{p.title}</div>
-                  <div className="small muted">{types.data?.find((t) => t.id === p.product_type)?.name ?? p.product_type} · v{p.version_no}</div>
-                  <div className="row"><Pill value={p.version_status} />{p.qa_status !== 'pending' && <Pill value={p.qa_status} text={`QA ${label(p.qa_status)}`} />}{p.published > 0 && <Pill value="published_manual" text="Published" />}</div>
-                  <div className="small muted">Updated {ago(p.updated_at)}</div>
-                </div>
-              </Link>
+              <CompactRow key={p.id}
+                main={<Link to={`/products/${p.id}`}><b>{p.title}</b></Link>}
+                sub={<>{types.data?.find((t) => t.id === p.product_type)?.name ?? p.product_type} · v{p.version_no}{p.category ? ` · ${p.category}` : ''} · updated {ago(p.updated_at)}</>}
+                actions={<><Pill value={p.version_status} />{p.qa_status !== 'pending' && <Pill value={p.qa_status} text={`QA ${label(p.qa_status)}`} />}{p.published > 0 && <Pill value="published_manual" text="Published" />}<PreviewButton open={preview.open === p.id} disabled={!p.thumb} onClick={() => preview.toggle(p.id)} /></>}>
+                {preview.open === p.id && <PreviewPane assets={[p.thumb]} alt={`${p.title} preview`} />}
+              </CompactRow>
             ))}
-          </div>
+          </CompactList>
         </>
       )}</Async>
+      </>)}
       {packing && <PackBuilder onClose={() => setPacking(false)} onDone={(id) => { setPacking(false); nav(`/products/${id}`); }} />}
       {creating && <NewProductModal onClose={() => { setCreating(false); update('new', ''); }} />}
     </div>
+  );
+}
+
+/** The gallery: the last 5 product types with approved work, the 4 newest approved items of each. */
+function Spread({ types, onList }: { types: any[]; onList: () => void }) {
+  const st = useApi<any[]>('/products/spread?types=5&per=4', { poll: 30000 });
+  return (
+    <Async state={st}>{(lanes) => lanes.length === 0 ? (
+      <Empty title="Nothing approved yet" action={<button onClick={onList}>Show the full list</button>}>The gallery shows your newest approved work: the last 5 types you made, 4 of each. Approve products in Batch approval and they appear here.</Empty>
+    ) : (
+      <>
+        <p className="muted small" style={{ marginTop: 0 }}>Your newest approved work: the last {lanes.length} type{lanes.length === 1 ? '' : 's'} you made, up to 4 of each. <button className="small" onClick={onList}>See everything as a list</button></p>
+        {lanes.map((l) => (
+          <section key={l.type} className="lane">
+            <h3>{types.find((t) => t.id === l.type)?.name ?? label(l.type)} <span className="small muted">{l.total} approved</span></h3>
+            <div className="product-cards">
+              {l.items.map((p: any) => (
+                <Link key={p.id} to={`/products/${p.id}`} className="pcard">
+                  <div className="img">{p.thumb ? <AssetImg id={p.thumb} alt={`${p.title} preview`} /> : <span className="muted small">No preview</span>}</div>
+                  <div className="body">
+                    <div className="title">{p.title}</div>
+                    <div className="small muted">v{p.version_no}{p.category ? ` · ${p.category}` : ''} · {ago(p.created_at)}</div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        ))}
+      </>
+    )}</Async>
   );
 }
 

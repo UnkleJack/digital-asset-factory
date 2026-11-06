@@ -6,6 +6,7 @@ import { ago, bytes, fmtDate, generatorLabel, label, money, usd } from '../forma
 import { ParamsEditor } from './Library.tsx';
 import { PackBuilder } from './PackBuilder.tsx';
 import { ProductTags } from './Packing.tsx';
+import { CompactList, PreviewButton } from '../compact.tsx';
 
 export function ProductDetail() {
   const { id } = useParams();
@@ -34,7 +35,9 @@ export function ProductDetail() {
           {p.product.opportunity && <p className="small muted" style={{ marginTop: -8 }}>From opportunity <Link to={`/research?open=${p.product.opportunity.id}`}>{p.product.opportunity.title}</Link></p>}
           <div className="row" style={{ marginBottom: 12 }}>
             <span className="small muted">Version:</span>
-            {p.versions.map((v: any) => <button key={v.id} className={`small ${v.id === vid ? 'primary' : ''}`} onClick={() => setVersionId(v.id)}>v{v.version_no} · {label(v.status)}</button>)}
+            {/* One dropdown instead of a button per version, so a product with many versions stays one line. */}
+            <select value={vid ?? ''} onChange={(e) => setVersionId(e.target.value)} aria-label="Version">{p.versions.map((v: any) => <option key={v.id} value={v.id}>v{v.version_no} · {label(v.status)}{v.id === p.product.current_version_id ? ' (current)' : ''}</option>)}</select>
+            <span className="small muted">{p.versions.length} version{p.versions.length === 1 ? '' : 's'}</span>
           </div>
           <Async state={ver}>{(v) => (
             <>
@@ -65,12 +68,18 @@ export function ProductDetail() {
 }
 
 function Overview({ v }: { v: any }) {
+  const [showPages, setShowPages] = useState(false);
+  const [showListing, setShowListing] = useState(false);
   const previews = v.assets.filter((a: any) => a.role === 'preview');
   const listingImgs = v.assets.filter((a: any) => a.role === 'listing_image');
   const files = v.assets.filter((a: any) => a.role === 'deliverable');
   return (
     <>
-      <Card title="Page previews">{previews.length ? <div className="thumbs">{previews.map((a: any) => <a key={a.id} href={assetUrl(a.id)} target="_blank" rel="noreferrer" className="thumb"><AssetImg id={a.id} alt={`Page ${a.pageIndex + 1}`} /></a>)}</div> : <Empty title="No previews yet">They appear once the product is rendered.</Empty>}</Card>
+      <Card title="Page previews" actions={previews.length ? <PreviewButton open={showPages} onClick={() => setShowPages(!showPages)} label={`Show ${previews.length} page preview${previews.length === 1 ? '' : 's'}`} /> : undefined}>
+        {!previews.length ? <Empty title="No previews yet">They appear once the product is rendered.</Empty>
+          : showPages ? <div className="thumbs">{previews.map((a: any) => <a key={a.id} href={assetUrl(a.id)} target="_blank" rel="noreferrer" className="thumb"><AssetImg id={a.id} alt={`Page ${a.pageIndex + 1}`} /></a>)}</div>
+          : <p className="small muted" style={{ margin: 0 }}>Previews load only when you press the button, to keep the page light.</p>}
+      </Card>
       <div className="grid g2" style={{ marginTop: 14 }}>
         <Card title="Files">
           {files.length ? <table className="t"><tbody>{files.map((a: any) => <tr key={a.id}><td><a href={assetUrl(a.id)} target="_blank" rel="noreferrer">{a.name}</a><div className="small muted">{label(a.kind)}{a.pages ? ` · ${a.pages} pages` : ''}</div></td><td className="right small">{bytes(a.bytes)}</td><td className="right"><a className="btn small" href={assetUrl(a.id, true)}>Download</a></td></tr>)}</tbody></table> : <p className="muted">No files yet.</p>}
@@ -82,7 +91,7 @@ function Overview({ v }: { v: any }) {
         </Card>
       </div>
       {v.product?.id && <div style={{ marginTop: 14 }}><ProductTags productId={v.product.id} /></div>}
-      {listingImgs.length > 0 && <Card title="Listing images" className="" ><div className="thumbs">{listingImgs.map((a: any) => <a key={a.id} href={assetUrl(a.id)} target="_blank" rel="noreferrer" className="thumb sq"><AssetImg id={a.id} alt="Listing image" /></a>)}</div></Card>}
+      {listingImgs.length > 0 && <Card title="Listing images" className="" actions={<PreviewButton open={showListing} onClick={() => setShowListing(!showListing)} label={`Show ${listingImgs.length} listing image${listingImgs.length === 1 ? '' : 's'}`} />}>{showListing ? <div className="thumbs">{listingImgs.map((a: any) => <a key={a.id} href={assetUrl(a.id)} target="_blank" rel="noreferrer" className="thumb sq"><AssetImg id={a.id} alt="Listing image" /></a>)}</div> : <p className="small muted" style={{ margin: 0 }}>Hidden until you ask for them.</p>}</Card>}
     </>
   );
 }
@@ -112,9 +121,9 @@ function ProvenanceTab({ v }: { v: any }) {
         {prov ? <div className="kv"><span>Generator</span><span>{prov.generator === 'deterministic' ? `Built-in library (${prov.library ?? 'deterministic'})` : generatorLabel(prov.generator, prov.model)}</span>{prov.note && <><span>Note</span><span>{prov.note}</span></>}{prov.copiedFromVersion && <><span>Copied from</span><span className="mono">{prov.copiedFromVersion}</span></>}{prov.promptHash && <><span>Prompt hash</span><span className="mono">{prov.promptHash.slice(0, 16)}…</span></>}</div> : <p className="muted">No content yet.</p>}
       </Card>
       <Card title="AI generation runs" actions={<span className="small muted">Estimated total {usd(total)} — from the price table in Settings, not an invoice</span>}>
-        {v.generationRuns.length ? <table className="t"><thead><tr><th>When</th><th>Purpose</th><th>Model</th><th>Tokens in/out</th><th>Est. cost</th><th>Status</th></tr></thead><tbody>{v.generationRuns.map((r: any) => <tr key={r.id}><td className="small">{fmtDate(r.started_at)}</td><td>{r.purpose}</td><td>{r.provider} · {r.model}</td><td>{r.input_tokens ?? '—'} / {r.output_tokens ?? '—'}</td><td>{r.cost_basis === 'unknown' ? 'unknown' : usd(r.cost_usd)}</td><td><Pill value={r.status} />{r.error && <div className="small" style={{ color: 'var(--bad)' }}>{r.error}</div>}</td></tr>)}</tbody></table> : <p className="muted">No AI calls were made for this version.</p>}
+        {v.generationRuns.length ? <CompactList total={v.generationRuns.length} shown={v.generationRuns.length} noun="AI calls" height={320}><table className="t"><thead><tr><th>When</th><th>Purpose</th><th>Model</th><th>Tokens in/out</th><th>Est. cost</th><th>Status</th></tr></thead><tbody>{v.generationRuns.map((r: any) => <tr key={r.id}><td className="small">{fmtDate(r.started_at)}</td><td>{r.purpose}</td><td>{r.provider} · {r.model}</td><td>{r.input_tokens ?? '—'} / {r.output_tokens ?? '—'}</td><td>{r.cost_basis === 'unknown' ? 'unknown' : usd(r.cost_usd)}</td><td><Pill value={r.status} />{r.error && <div className="small" style={{ color: 'var(--bad)' }}>{r.error}</div>}</td></tr>)}</tbody></table></CompactList> : <p className="muted">No AI calls were made for this version.</p>}
       </Card>
-      <Card title="File provenance"><table className="t"><tbody>{v.assets.map((a: any) => <tr key={a.id}><td>{a.name}</td><td className="small mono">{JSON.stringify(a.provenance)}</td></tr>)}</tbody></table></Card>
+      <Card title="File provenance"><details><summary className="small">Where each of the {v.assets.length} files came from (raw detail)</summary><CompactList total={v.assets.length} shown={v.assets.length} noun="files" height={320}><table className="t"><tbody>{v.assets.map((a: any) => <tr key={a.id}><td>{a.name}</td><td className="small mono">{JSON.stringify(a.provenance)}</td></tr>)}</tbody></table></CompactList></details></Card>
     </>
   );
 }
@@ -122,7 +131,7 @@ function ProvenanceTab({ v }: { v: any }) {
 function HistoryTab({ p }: { p: any }) {
   return (
     <div className="grid g2">
-      <Card title="Versions"><table className="t"><tbody>{p.versions.map((v: any) => <tr key={v.id}><td>v{v.version_no}</td><td>{label(v.origin)}</td><td><Pill value={v.status} /></td><td className="small">{v.revision_notes || v.change_note}</td><td className="small muted">{ago(v.created_at)}</td></tr>)}</tbody></table></Card>
+      <Card title="Versions"><CompactList total={p.versions.length} shown={p.versions.length} noun="versions" height={320}><table className="t"><tbody>{p.versions.map((v: any) => <tr key={v.id}><td>v{v.version_no}</td><td>{label(v.origin)}</td><td><Pill value={v.status} /></td><td className="small">{v.revision_notes || v.change_note}</td><td className="small muted">{ago(v.created_at)}</td></tr>)}</tbody></table></CompactList></Card>
       <Card title="Related products">
         {p.related.relationships.map((r: any, i: number) => <div key={i} className="small">{label(r.kind)}: <Link to={`/products/${r.from_product_id === p.product.id ? r.to_product_id : r.from_product_id}`}>{r.from_product_id === p.product.id ? r.to_title : r.from_title}</Link></div>)}
         {p.related.mergeCandidates.length > 0 && <><h3 style={{ marginTop: 10 }}>Very similar (consider merging)</h3>{p.related.mergeCandidates.map((m: any) => <div key={m.id} className="small"><Link to={`/products/${m.id}`}>{m.title}</Link> — {Math.round(m.similarity * 100)}% similar text</div>)}</>}

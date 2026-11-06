@@ -14,6 +14,11 @@ export class ApiError extends Error {
 }
 
 export async function api<T = any>(path: string, opts: { method?: string; body?: unknown } = {}): Promise<T> {
+  return (await apiFull<T>(path, opts)).data;
+}
+
+/** Like api(), plus the list's real size when the server sends one (X-Total-Count), so a page can say "Showing 50 of 412". */
+export async function apiFull<T = any>(path: string, opts: { method?: string; body?: unknown } = {}): Promise<{ data: T; total: number | null }> {
   const method = opts.method ?? (opts.body !== undefined ? 'POST' : 'GET');
   const headers: Record<string, string> = { 'x-daf-client': '1' };
   if (opts.body !== undefined) headers['content-type'] = 'application/json';
@@ -33,7 +38,8 @@ export async function api<T = any>(path: string, opts: { method?: string; body?:
   // Using the app from another computer and the sign-in expired: go to the sign-in page.
   if (res.status === 401 && data?.error?.code === 'login_required') window.location.href = '/login';
   if (!res.ok) throw new ApiError(data?.error?.message ?? `${res.status} ${res.statusText}`, res.status, data?.error?.code ?? 'error', data?.error?.details);
-  return data as T;
+  const total = res.headers.get('x-total-count');
+  return { data: data as T, total: total === null ? null : Number(total) };
 }
 
 export function errorText(err: unknown): string {
@@ -46,8 +52,9 @@ export function errorText(err: unknown): string {
 
 export const assetUrl = (id: string, download = false) => `/api/assets/${id}/file${download ? '?download=1' : ''}`;
 
-export function useApi<T = any>(path: string | null, opts: { poll?: number } = {}) {
+export function useApi<T = any>(path: string | null, opts: { poll?: number; keepData?: boolean } = {}) {
   const [data, setData] = useState<T | null>(null);
+  const [total, setTotal] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(!!path);
   const seq = useRef(0);
@@ -56,9 +63,10 @@ export function useApi<T = any>(path: string | null, opts: { poll?: number } = {
     const my = ++seq.current;
     if (!quiet) setLoading(true);
     try {
-      const d = await api<T>(path);
+      const r = await apiFull<T>(path);
       if (my === seq.current) {
-        setData(d);
+        setData(r.data);
+        setTotal(r.total);
         setError(null);
       }
     } catch (e) {
@@ -68,8 +76,9 @@ export function useApi<T = any>(path: string | null, opts: { poll?: number } = {
     }
   }, [path]);
   useEffect(() => {
-    setData(null);
-    void load();
+    // keepData: a "Load more" asks for a longer page; keep showing the rows already there while it loads.
+    if (!opts.keepData) setData(null);
+    void load(opts.keepData);
   }, [load]);
   useEffect(() => {
     if (!opts.poll || !path) return;
@@ -78,7 +87,24 @@ export function useApi<T = any>(path: string | null, opts: { poll?: number } = {
     }, opts.poll);
     return () => clearInterval(t);
   }, [opts.poll, path, load]);
-  return { data, error, loading, reload: () => load(true), setData };
+  return { data, error, loading, total, reload: () => load(true), setData };
+}
+
+/**
+ * A list that starts with `pageSize` rows and grows by that much on each "Load more".
+ * Polling refreshes only the rows already loaded. `path` must not carry its own `limit`.
+ */
+export function usePagedApi<T = any>(path: string | null, opts: { pageSize?: number; poll?: number } = {}) {
+  const size = opts.pageSize ?? 50;
+  const [limit, setLimit] = useState(size);
+  const base = useRef(path);
+  if (base.current !== path) {
+    base.current = path;
+    if (limit !== size) setLimit(size);
+  }
+  const url = path ? `${path}${path.includes('?') ? '&' : '?'}limit=${limit}` : null;
+  const st = useApi<T>(url, { poll: opts.poll, keepData: limit > size });
+  return { ...st, limit, more: () => setLimit((n) => n + size) };
 }
 
 export function readFileText(file: File): Promise<string> {
