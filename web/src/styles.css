@@ -279,11 +279,18 @@ span.chip:not(.on) { border: 1px solid var(--border); }
 /* Imports */
 .dropzone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 28px 16px; text-align: center; color: var(--muted); cursor: pointer; background: var(--surface-2); }
 .dropzone.on, .dropzone:hover { border-color: var(--primary); color: var(--primary); }
-.ref-card { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.ref-card .small { overflow-wrap: anywhere; }
-.ref-pick { position: relative; padding: 0; cursor: pointer; width: 100%; }
-.ref-card.on .ref-pick { outline: 3px solid var(--primary); outline-offset: 1px; }
-.ref-n { position: absolute; top: 6px; left: 6px; background: var(--primary); color: var(--surface); border-radius: 999px; min-width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
+.ref-list { max-height: 480px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); }
+.ref-row { border-bottom: 1px solid var(--border); padding: 8px 10px; }
+.ref-row:last-child { border-bottom: none; }
+.ref-row.on { background: var(--surface); }
+.ref-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ref-check { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.ref-name { flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
+.ref-actions { flex-wrap: wrap; }
+.ref-n { background: var(--primary); color: var(--surface); border-radius: 999px; min-width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; }
+.ref-n:empty { visibility: hidden; }
+.ref-preview { margin-top: 8px; display: flex; justify-content: center; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px; }
+.ref-preview img { max-width: 100%; max-height: 320px; object-fit: contain; }
 
 /* Opportunity sample previews (Research & opportunities). Always labelled as a sample, never the final product. */
 .opp-thumb { position: relative; width: 44px; aspect-ratio: 8.5/11; border-radius: 4px; overflow: hidden; background: var(--surface-2); border: 1px solid var(--border); flex: none; }

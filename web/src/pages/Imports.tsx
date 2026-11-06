@@ -145,6 +145,8 @@ function TextUpload({ onDone }: { onDone: () => void }) {
 function ImageLibrary({ state }: { state: any }) {
   const [sel, setSel] = useState<string[]>([]);
   const [title, setTitle] = useState('');
+  // Only one preview is open at a time, so only one full image is ever loaded.
+  const [preview, setPreview] = useState<string | null>(null);
   const toast = useToast();
   const nav = useNavigate();
   const toggle = (id: string) => setSel(sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id]);
@@ -164,23 +166,35 @@ function ImageLibrary({ state }: { state: any }) {
     )}>
       <Async state={state}>{(d: any[]) => d.length === 0 ? <Empty title="No images yet">Add some above.</Empty> : (
         <>
-          <p className="small muted">Click images to pick them, in the order you want the pages. {sel.length ? `${sel.length} picked.` : ''}</p>
-          <div className="thumbs">
+          <p className="small muted">Tick files to pick them, in the order you want the pages. Press Preview to see one. {sel.length ? `${sel.length} picked.` : ''}</p>
+          <div className="ref-list" role="list">
             {d.map((r) => {
               const n = sel.indexOf(r.id);
+              const name = r.rel_path?.split('/').pop() ?? r.original_name;
+              const open = preview === r.id;
               return (
-                <div key={r.id} className={`ref-card${n >= 0 ? ' on' : ''}`}>
-                  <button className="thumb sq ref-pick" onClick={() => toggle(r.id)} title={r.original_name}>
-                    <img src={`/api/references/${r.id}/file`} alt={r.label} loading="lazy" />
-                    {n >= 0 && <span className="ref-n">{n + 1}</span>}
-                  </button>
-                  <div className="small"><b>{r.rel_path?.split('/').pop()}</b></div>
-                  <div className="small muted">{r.source_tool || 'tool not recorded'} · {r.width_px}×{r.height_px} · {fmtDate(r.made_at)}</div>
-                  {r.usedBy.length > 0 && <div className="small">In {r.usedBy.map((u: any, i: number) => <span key={u.id}>{i ? ', ' : ''}<Link to={`/products/${u.id}`}>{u.title}</Link></span>)}</div>}
-                  <div className="row">
-                    <EditTool item={r} onSaved={() => state.reload()} />
-                    <ActionButton className="small danger" disabled={r.usedBy.length > 0} title={r.usedBy.length ? 'Used by a product' : 'Delete this image from the library'} confirm={`Delete ${r.rel_path?.split('/').pop()}? This removes the file.`} onClick={async () => { await api(`/references/${r.id}`, { method: 'DELETE' }); setSel(sel.filter((x) => x !== r.id)); state.reload(); }}>Delete</ActionButton>
+                <div key={r.id} role="listitem" className={`ref-row${n >= 0 ? ' on' : ''}`}>
+                  <div className="ref-line">
+                    <label className="ref-check" title={r.original_name}>
+                      <input type="checkbox" checked={n >= 0} onChange={() => toggle(r.id)} aria-label={`Pick ${name}`} />
+                      <span className="ref-n">{n >= 0 ? n + 1 : ''}</span>
+                    </label>
+                    <div className="ref-name">
+                      <b>{name}</b>
+                      <div className="small muted">{r.source_tool || 'tool not recorded'} · {r.width_px}×{r.height_px} · {fmtDate(r.made_at)}</div>
+                      {r.usedBy.length > 0 && <div className="small">In {r.usedBy.map((u: any, i: number) => <span key={u.id}>{i ? ', ' : ''}<Link to={`/products/${u.id}`}>{u.title}</Link></span>)}</div>}
+                    </div>
+                    <div className="row ref-actions">
+                      <button className="small" aria-expanded={open} onClick={() => setPreview(open ? null : r.id)}>{open ? 'Hide preview' : 'Preview'}</button>
+                      <EditTool item={r} onSaved={() => state.reload()} />
+                      <ActionButton className="small danger" disabled={r.usedBy.length > 0} title={r.usedBy.length ? 'Used by a product' : 'Delete this image from the library'} confirm={`Delete ${name}? This removes the file.`} onClick={async () => { await api(`/references/${r.id}`, { method: 'DELETE' }); setSel(sel.filter((x) => x !== r.id)); if (open) setPreview(null); state.reload(); }}>Delete</ActionButton>
+                    </div>
                   </div>
+                  {open && (
+                    <div className="ref-preview">
+                      <img src={`/api/references/${r.id}/file`} alt={r.label || name} />
+                    </div>
+                  )}
                 </div>
               );
             })}
