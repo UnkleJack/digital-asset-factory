@@ -7,7 +7,9 @@ import {
   DIFFICULTIES, TASK_STATUSES, worldsFor, worldDetailFor, listAllWorlds, worldForBuilder,
   createWorld, updateWorld, addMilestone, addTask, updateTask, deleteTask, createWorldFromProposal,
 } from '../../engine/arcade/worlds.ts';
-import { generateWorld, suggestWorlds, suggestTasks, DIFFICULTY_MIXES, GENERATE_LIMITS } from '../../engine/arcade/suggest.ts';
+import { generateWorld, checkGenerate, suggestWorlds, suggestTasks, tidyNotes, requireAi, DIFFICULTY_MIXES, GENERATE_LIMITS, SUGGEST_MODES, NOTES_MAX } from '../../engine/arcade/suggest.ts';
+import { startDraft, getDraft, listDrafts, discardDraft, DRAFT_KINDS } from '../../engine/arcade/drafts.ts';
+import { tickerCatalog, tickerValues, chosenTickerStats } from '../../engine/arcade/ticker.ts';
 import { setPortrait, clearPortrait, portraitFor, MAX_PORTRAIT_BYTES } from '../../engine/arcade/portraits.ts';
 import { notFound } from '../../core/errors.ts';
 import { parse, type P, type Q } from './util.ts';
@@ -46,7 +48,8 @@ const Proposal = z.object({
   milestones: z.array(z.object({ name: z.string().trim().min(1).max(80), tasks: z.array(ProposedTask).max(40) })).min(1).max(30),
 });
 const GenerateBody = z.object({
-  goal: z.string().trim().min(1).max(1000),
+  // Room for a tidied set of notes used as the goal.
+  goal: z.string().trim().min(1).max(4000),
   milestones: z.number().int().min(GENERATE_LIMITS.milestones.min).max(GENERATE_LIMITS.milestones.max),
   tasksPerMilestone: z.number().int().min(GENERATE_LIMITS.tasksPerMilestone.min).max(GENERATE_LIMITS.tasksPerMilestone.max),
   difficulty: z.enum(DIFFICULTY_MIXES),
@@ -71,6 +74,13 @@ export function registerArcadeRoutes(s: FastifyInstance, { app }: ServerDeps): v
     const state = arcadeState(app);
     return { ...state, startAllowed: canStart(state) };
   });
+
+  // The hub's stats ticker: the owner's chosen stats, and the full list to choose from.
+  s.get('/api/arcade/ticker', async (req) => {
+    const character = parse(z.object({ character: z.string().min(2).max(40).optional() }), req.query as Q, 'ticker').character ?? null;
+    return { items: tickerValues(app, character) };
+  });
+  s.get('/api/arcade/ticker/catalog', async () => ({ stats: tickerCatalog(), chosen: chosenTickerStats(app) }));
 
   // Custom portraits: the owner's own image for a character, instead of the pixel art.
   const PortraitBody = z.object({ dataBase64: z.string().min(8).max(Math.ceil((MAX_PORTRAIT_BYTES * 4) / 3) + 16) });
@@ -115,10 +125,10 @@ export function registerArcadeRoutes(s: FastifyInstance, { app }: ServerDeps): v
     deleteTask(app, (req.params as P).id);
     return { ok: true };
   });
-  // AI suggestions and AI-written worlds. Nothing is saved until the owner accepts it.
+  // AI suggestions and AI-written worlds. Nothing is saved as a world until the owner accepts it.
   s.post('/api/arcade/builder/suggest/worlds', async (req) => {
-    const b = parse(z.object({ hint: z.string().max(500).optional() }), req.body ?? {}, 'suggestion request');
-    const r = await suggestWorlds(app, b.hint);
+    const b = parse(z.object({ hint: z.string().max(500).optional(), mode: z.enum(SUGGEST_MODES).optional() }), req.body ?? {}, 'suggestion request');
+    const r = await suggestWorlds(app, b.hint, b.mode);
     return { suggestions: r.result, model: r.provenance.model ?? null };
   });
   s.post('/api/arcade/builder/suggest/tasks', async (req) => {
@@ -126,13 +136,41 @@ export function registerArcadeRoutes(s: FastifyInstance, { app }: ServerDeps): v
     const r = await suggestTasks(app, b);
     return { suggestions: r.result, model: r.provenance.model ?? null };
   });
+  // Slow AI work (a whole world, tidied notes) runs as a draft: the request returns at once, the answer is
+  // stored on the draft, and the page polls it, so leaving the page loses nothing. Problems that can be
+  // found before asking the AI (bad settings, no AI provider) still come back at once.
   s.post('/api/arcade/builder/generate', async (req) => {
     const b = parse(GenerateBody, req.body, 'world settings');
-    const r = await generateWorld(app, b);
-    return { proposal: r.result, model: r.provenance.model ?? null };
+    await checkGenerate(app, b);
+    const draft = startDraft(app, 'world', b, async () => {
+      const r = await generateWorld(app, b);
+      return { result: r.result, model: r.provenance.model ?? null };
+    });
+    return { draft };
+  });
+  s.post('/api/arcade/builder/tidy', async (req) => {
+    const b = parse(z.object({ notes: z.string().trim().min(1).max(NOTES_MAX) }), req.body, 'notes');
+    await requireAi(app);
+    const draft = startDraft(app, 'notes', b, async () => {
+      const r = await tidyNotes(app, b.notes);
+      return { result: r.result, model: r.provenance.model ?? null };
+    });
+    return { draft };
+  });
+  s.get('/api/arcade/builder/drafts', async (req) => {
+    const kind = parse(z.object({ kind: z.enum(DRAFT_KINDS).optional() }), req.query as Q, 'drafts').kind;
+    return { drafts: listDrafts(app, kind) };
+  });
+  s.get('/api/arcade/builder/drafts/:id', async (req) => getDraft(app, (req.params as P).id));
+  s.delete('/api/arcade/builder/drafts/:id', async (req) => {
+    discardDraft(app, (req.params as P).id);
+    return { ok: true };
   });
   s.post('/api/arcade/builder/worlds/from-proposal', async (req) => {
-    const b = parse(Proposal, req.body, 'world');
-    return createWorldFromProposal(app, b);
+    const b = parse(Proposal.extend({ draftId: z.string().min(3).optional() }), req.body, 'world');
+    const saved = createWorldFromProposal(app, b);
+    // The draft has become a real world, so it leaves the drafts list.
+    if (b.draftId) app.db.run("DELETE FROM world_drafts WHERE id = ? AND kind = 'world'", b.draftId);
+    return saved;
   });
 }

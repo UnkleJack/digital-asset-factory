@@ -120,11 +120,11 @@ Adopted 2026-11-03.
 | QA, packaging, listings, approval, publishing | `src/engine/qa/`, `packaging/`, `listing/`, `approval/`, `publishing/` |
 | Packs ("factory floor") | `src/engine/packing/` |
 | Opportunity sample previews | `src/engine/research/preview.ts` (stored under `research/previews/` in the asset folder) |
-| Arcade engine and API | `src/engine/arcade/service.ts`, `src/server/routes/arcade.ts` (`GET /api/arcade`) |
-| Arcade screens | `web/src/arcade/` (`Arcade.tsx`, `input.ts`, `arcade.css`) |
+| Arcade engine and API | `src/engine/arcade/` (`service.ts` characters and credits, `worlds.ts`, `suggest.ts` AI suggestions and TIDY MY NOTES, `drafts.ts` World Builder drafts, `ticker.ts` hub stats), `src/server/routes/arcade.ts` (`/api/arcade/...`) |
+| Arcade screens | `web/src/arcade/` (`Arcade.tsx` cabinet and Hub, `Worlds.tsx`, `Ai.tsx`, `Ticker.tsx`, `input.ts`, `arcade.css`) |
 | Back-office screens | `web/src/pages/` |
 | Settings schema | `src/config/settings.ts` |
-| Database migrations | `src/db/migrations/` (001 to 007 and 009 on `main`; 008 is taken by open pull request #13; 010 is added by pull request #19) |
+| Database migrations | `src/db/migrations/` (001 to 010; 008 is World Builder drafts, from pull request #13, 009 is rework marks, and 010 is notes for the AI, from pull request #19) |
 | Tests | `tests/` (`npm test`) |
 | Mac Dock app (`npm run make-mac-app`) | `src/ops/macApp.ts` (bundle and launcher), `src/ops/macIcon.ts` (GAGE icon), `scripts/make-mac-app.ts`; built into `dist-mac/` (not in git) |
 | Setup and daily use | `README.md`, `docs/GETTING_STARTED.md`, `docs/WINDOWS.md` |
@@ -135,7 +135,7 @@ Adopted 2026-11-03.
 
 ## Article 8: Current state
 
-As of 2026-11-05, `main` after pull request #15, plus the Mac Dock app (pull request #16).
+As of 2026-11-06: `main` after pull requests #12 (backup AI models), #15 (sample previews), #16 (the Mac Dock app), #18 (compact lists and Rework) and #19 (warning gate and notes for the AI), plus the Hub, the stats ticker, World Builder drafts, smarter AI help and the test-data cleanup on branch `claude/arcade-start-flow` (pull request #13, not merged yet).
 
 **Working**
 - All 17 product types produce offline with the built-in content library: QA, packaging, listings, batch approval and export packages.
@@ -143,19 +143,44 @@ As of 2026-11-05, `main` after pull request #15, plus the Mac Dock app (pull req
 - Pack carts and the bundle builder. Production plans, which run while the app is open.
 - Portable copy: `npm run portable`.
 - Mac Dock app (2026-11-04): `npm run make-mac-app` makes `dist-mac/Asset Foundry.app`, a small app bundle and not Electron. One click starts the app if it isn't running and opens the arcade (`/arcade`, the owner's choice) in its own Chrome window. It records the full path of Node and of this folder when it is made, because the Dock doesn't load the Terminal's PATH, so it must be made again if either moves. If Node or the folder is missing, or the app doesn't start, it shows a Mac alert saying why and where the log is (`~/Library/Logs/Asset Foundry.log`). The icon is GAGE, the ninja, drawn from the arcade's own pixel art. It has been started the way the Dock starts it, but not yet double-clicked from Finder.
-- HAPPY DAFFY milestone 1: Insert Coin, Start Gate with the zero-credit lock, Title, Character Select, the cabinet, keyboard, WASD and controller input, and a motion switch.
+- HAPPY DAFFY milestone 1: the cabinet, the zero-credit lock, keyboard, WASD and controller input, and a motion switch.
+- **The Hub** (owner's change, 2026-11-05; branch `claude/arcade-start-flow`).
+  - Insert Coin, Start Gate, Title, Character Select and Worlds are one opening screen. It holds the character picker, the chosen character's worlds and a stats area (a ticker plus a STATS button). Opening `/arcade` to a world is now 1 click, down from 6.
+  - A ◀ HUB button in the cabinet header returns to it from anywhere. The last character played is remembered on the computer.
+  - Locked rules kept. Insert Coin is cabinet flair and never changes credits. At 0 credits ENTER WORLD is locked and the Hub says why; entering a world counts as the "start" (Art. 5.9), a reading the owner approved with the plan. The character picker, World Builder and STATS stay usable at 0.
+  - The spec is amended to match (`docs/ASSET_FOUNDRY_UX_SPEC.md`, section A note, E1, E5, E7, milestone 1).
+- **Stats ticker on the Hub** (2026-11-05).
+  - Shows the stats the owner picks, in order, from a list of every stat the factory can report (47 today: Arcade, Production, AI, Listings per shop, and Sales per metric and source). EDIT TICKER changes the list, saved in Settings (`arcade.tickerStats`).
+  - Anything about the outside world with nothing recorded shows NO DATA, never a made-up 0. Sales sources are never added together; estimates are labelled.
+  - STATS opens the back-office Analytics page until an arcade stats page exists.
+- **World Builder drafts** (2026-11-05).
+  - What the AI writes (a whole world, or tidied notes) is stored as a draft, so leaving the page while the AI works loses nothing. Drafts are listed as writing, ready or failed, with REVIEW and DISCARD.
+  - SAVE WORLD is still the only thing that creates a world, and a saved draft leaves the list. A draft still being written when the app stops is marked failed on the next start.
+- **Smarter AI help in the World Builder** (2026-11-05).
+  - BUILD ON WHAT I HAVE and SHOW ME UNEXPLORED GROUND sit beside SUGGEST WORLDS. They give the AI a summary built only from real rows: existing worlds, product types used and never used, idle characters, and recorded orders by source.
+  - TIDY MY NOTES turns a brain dump into a fixed structure (goal, scope, milestones and tasks, must and must-not, done when), with anything unclear listed as questions for the owner. It is told not to add facts.
+  - The owner sees the original beside the tidy version. The tidy text can be edited and handed to LET THE AI BUILD A WORLD.
 - HAPPY DAFFY milestone 2a (pull request #10): Worlds the owner builds by hand. The World Builder creates worlds, milestones and tasks. Each task belongs to one character, has a task type (any of the 17 product types except imports, or Custom), a difficulty and effort points the owner sets. The Worlds list shows only worlds where the chosen character has an open task (open, in progress or blocked), sorted by the fewest effort points left before the next milestone. A milestone completes by itself when all its tasks are complete and reopens if one is reopened. World Detail lists that character's open tasks. The Task Workspace behind OPEN TASK is milestone 3.
 - HAPPY DAFFY milestones 2b and 2c: AI suggestions and AI-written worlds in the World Builder. NEED AN IDEA? gives clickable world ideas and task ideas that fill the forms. LET THE AI BUILD A WORLD takes a goal, the number of milestones, tasks per milestone, a difficulty mix, optional product types and an optional character, then shows a review screen. Nothing is saved until the owner presses SAVE WORLD, and the owner can remove tasks and milestones first. The owner's rule (2026-11-03): this part is AI-first. With no working AI provider it says so, and it never uses the built-in content library. Totals, ordering, progress and validation stay rule-based. Only tested against a stand-in AI so far, because no real provider key has been tried.
-- Backup models at each AI text provider (2026-11-04). Every free-tier text provider has a list of backup models that it tries in order, on the same key, before the app moves on to the next provider. It moves to the next model when a model is retired or unknown, times out, has a server error or refuses. It does not when the key is rejected, the host can't be reached or the key is rate-limited, so backups don't spend more of a capped key. The owner's text setup: NVIDIA first, with Nemotron 3 Ultra (`nvidia/nemotron-3-ultra-550b-a55b`) and MiniMax (`minimaxai/minimax-m3.1-flash`) behind it. Groq is a late backup and never the first one. The old NVIDIA default, `meta/llama-3.1-70b-instruct`, was retired (HTTP 410). Tested against stand-in servers only; no real NVIDIA call has been made with these models yet.
+- Backup models at each AI text provider (2026-11-04). Every free-tier text provider has a list of backup models that it tries in order, on the same key, before the app moves on to the next provider. It moves to the next model when a model is retired or unknown, times out, has a server error or refuses. It does not when the key is rejected, the host can't be reached or the key is rate-limited, so backups don't spend more of a capped key. The owner's text setup: NVIDIA first, with Nemotron 3 Ultra (`nvidia/nemotron-3-ultra-550b-a55b`) and MiniMax (`minimaxai/minimax-m3.1-flash`) behind it. Groq is a late backup and never the first one. The old NVIDIA default, `meta/llama-3.1-70b-instruct`, was retired (HTTP 410). **First live success, 2026-11-05:** with the owner's real NVIDIA key, Nemotron 3 Ultra wrote a whole world in the World Builder in 76 seconds. MiniMax as the backup has not been seen answering live yet.
 - Sample previews on Research & opportunities (2026-11-04). Each idea can get a picture of what it describes: the first two pages (the cover and the first inside page) of its product type, drawn offline with the idea's title, audience and theme and the built-in sample content. It's free and needs no AI key. Owner's choices: it is made only when the owner presses Make preview (in the opened idea) or Make sample previews (for the whole list), the list shows a small picture on each row, and an AI-drawn picture is a later addition. Every picture is labelled SAMPLE, and the idea's own extras (its differentiation) are not drawn. Previews are kept under `research/previews/` in the asset folder and marked out of date when the idea's title, type, audience or theme changes. Illustrated coloring ideas get no free sample, because their pages need an AI image provider.
 - Compact output lists (2026-11-06): every page that lists output uses one shared compact list (`web/src/compact.tsx`) with slim rows, a box of fixed height, the real total and Load more. Pictures load only when Preview is pressed. Lists no longer stop silently at 100 to 300 items. Product library has Gallery (the last 5 types with approved work, 4 of each) and List. Production calendar shows things made today, this week and this month. New **Rework** screen: failed by the machine on top, rejected by you below, each sortable. An item leaves only when Mark fixed is pressed.
 - Warning gate (2026-11-06): a version with open QA warnings (yellow flags) can't be approved until the owner ticks "I accept these warnings" in batch review. The note is optional and is kept in the audit log, not in the decision notes that feed prompts. Each warning has an optional "Help me with this" AI button, which only suggests a fix and needs an AI key. Packs, carts and bundles take **approved** products only. Products waiting in carts or the backlog that aren't approved get taken out, and come back once approved. The old `packing.feedOn` setting is ignored and hidden. Items approved before the gate that carry unaccepted warnings keep their approval, but they are held back from packing, bundling and export/publishing until accepted. Batch approval lists them at the top.
 - Notes for the AI (2026-11-06): every review note is kept in one list on a new **Notes for the AI** screen. That covers reject, send back, regenerate, approve and accepted-warning notes, plus notes added with "Add note" on Rework. After every 10 new notes, or when "Read my notes now" is pressed, the AI reads them all and writes a list of repeat problems. That list goes into every AI prompt ahead of the 12 most recent notes. You can edit, pin, delete or add lessons; the AI only replaces its own unpinned ones. Reading needs an AI key. Migration 010.
 - Parked, not to be forgotten: a tool for drawing a box on a page preview in reject/revise notes. It waits for an AI model that can look at pictures, because today's app AI reads text only.
-- Tests: 158 tests, 156 pass, 2 skipped, 0 fail (run in a cloud session on 2026-11-06, after the warning gate and notes for the AI).
+- **Cleanup of old test data** (owner request, 2026-11-05).
+  - `npm run clean-verification` lists folders inside `verification-output/` (the throwaway copies used for browser checks) that have not changed for 7 days. `-- --apply` removes them. This is the same pattern as `tidy-folders`, chosen by the owner.
+  - It never removes `verification-output/` itself, loose files or links, and never touches anything outside it, `data/` above all. It skips any folder a running copy of the app is using, and checks again just before deleting.
+  - The app runs it once a week while open. Turn that off in Settings → Scheduler → `cleanVerificationWeekly`. The last run is noted in `verification-output/.last-cleanup`.
+- Tests: 168 tests, 168 pass, 0 skipped, 0 fail (branch `claude/arcade-start-flow` with `main` merged in, run on the Mac, 2026-11-06).
 
 **Built but not proven live**
-- AI text and image providers have only been tested against stand-in servers, never with real keys.
+- Of the AI providers, only NVIDIA text has worked with a real key (2026-11-05). On 2026-11-04 and 2026-11-05 the log showed the others failing:
+  - OpenAI images: out of credits.
+  - Hugging Face: could not be reached, or wanted pre-paid credits.
+  - OpenRouter: its key was rejected (missing).
+  - Groq: its Llama model was not found.
+- Untested live: the rest of the providers, and the new TIDY MY NOTES and suggestion modes, which have only run against a stand-in AI.
 - Gumroad direct posting, the research digest email, Windows and hub mode have also never had a live run.
 
 **Data**
@@ -172,17 +197,25 @@ As of 2026-11-05, `main` after pull request #15, plus the Mac Dock app (pull req
 
 **Next, in order**
 1. **On the Mac:** `git pull`, `npm ci`, `npm run backup`, then `npm run restore-products` (dry run), then `-- --apply`. Then try `/arcade`. To get the Dock app, run `npm run make-mac-app`, drag `dist-mac/Asset Foundry.app` into Applications and keep it in the Dock.
-2. **Try the AI with the real NVIDIA key.** In Settings → AI providers, press Test text provider and check that Nemotron 3 Ultra (or MiniMax behind it) answers. Then re-run the `prepare_listings` jobs that failed on 2026-11-04, and use NEED AN IDEA? and LET THE AI BUILD A WORLD in the World Builder. Until then they only run against a test stand-in.
-3. **HAPPY DAFFY milestone 3, the Task Workspace** (the screen behind OPEN TASK). Its questions are the spec's section H.
-4. **Factory upgrades from the 2026-10-28 plan:** mandala engine expansion, then geometric pattern art.
-5. **AI-drawn opportunity pictures** (the owner's "later" choice, 2026-11-04): a Draw with AI button beside the free sample preview, once an image provider key works. It costs credits per idea and must be labelled as an AI impression, not the product.
+2. **Try the new AI help with the real NVIDIA key.** LET THE AI BUILD A WORLD already worked live on 2026-11-05. Still to try live:
+   - TIDY MY NOTES, BUILD ON WHAT I HAVE and SHOW ME UNEXPLORED GROUND.
+   - Starting a world, leaving the page and finding the draft waiting.
+   - Re-running the `prepare_listings` jobs that failed on 2026-11-04.
+3. **A guide in each area** (owner request, 2026-11-05). A HOW THIS WORKS button on each arcade area opens a short guide for just that screen, describing only what exists (Art. 5.2). The owner reviews the wording. Order: Hub, World Detail, World Builder (including the AI parts).
+4. **HAPPY DAFFY milestone 3, the Task Workspace** (the screen behind OPEN TASK). Its questions are the spec's section H.
+5. **Factory upgrades from the 2026-10-28 plan:** mandala engine expansion, then geometric pattern art.
+6. **AI-drawn opportunity pictures** (the owner's "later" choice, 2026-11-04): a Draw with AI button beside the free sample preview, once an image provider key works. It costs credits per idea and must be labelled as an AI impression, not the product.
 
 **Undecided**
 - **A.** Answered 2026-11-03 and built: both. The owner builds from scratch, and the AI suggests and writes worlds. Possible later additions: more settings to tune, and effort points the AI estimates from past work.
 - **B.** The spec's own open questions H1 to H18 (`docs/ASSET_FOUNDRY_UX_SPEC.md`, section H). These include the low-credit threshold, the pack bonus, the vagueness test, the QA checklist, the laziness thresholds and the XP values.
 - **C.** What the AI Chatbot can see and do. Questions about income, money owed and tax can't get definite answers until the factory holds that data.
 - **D.** An off-Mac backup for `data/`.
-- **E.** Characters, settled 2026-11-03. Each is an original pixel design, and the two side characters face the middle. **GAGE**, the ninja, is IDE on the left. **B.M.O.**, the desk robot with a headset (an original design; only the name is borrowed, at the owner's request), is the AI Chatbot in the middle. **SPARKS**, the wizard, is DAF on the right. The names, roles and bios live in `src/engine/arcade/service.ts`. Custom portraits: the owner can upload their own image for any character on the select screen, and it replaces the pixel art until removed (stored under `arcade/portraits/` in the asset folder).
+- **E.** Characters, settled 2026-11-03. Each is an original pixel design, and the two side characters face the middle. **GAGE**, the ninja, is IDE on the left. **B.M.O.**, the desk robot with a headset (an original design; only the name is borrowed, at the owner's request), is the AI Chatbot in the middle. **SPARKS**, the wizard, is DAF on the right. The names, roles and bios live in `src/engine/arcade/service.ts`. Custom portraits: the owner can upload their own image for any character on the Hub (under BIO, PORTRAIT & STATS), and it replaces the pixel art until removed (stored under `arcade/portraits/` in the asset folder). A character's job in the app today is to filter: picking one shows only worlds with tasks assigned to it. No AI runs behind any character yet.
+- **F. A coding agent behind GAGE** (owner's idea, 2026-11-05, placeholder only). GAGE could become a real coding agent for the owner. Nothing is designed. What it would run on and what it could touch are both undecided, and today's AI providers only exchange text, with no access to files or tools.
+- **G. What EYE, CRAFT, TASTE and PATIENCE mean.** The spec names the four character stats but never defines them, and their formulas are open (spec section H). They stay blank until decided.
+- **H. The arcade stats page** (owner request, 2026-11-05). This would cover analytics, earnings and performance across live Etsy and Gumroad products and future platforms. Until it exists, STATS opens the back-office Analytics page, and the Hub ticker shows the stats the owner picks.
+- **I. A whole-machine tracking system** (owner's idea, 2026-11-05, back burner). Instead of the four spec stats, a system within the system that keeps track of everything about the whole machine. Idea only: nothing is designed, and the owner wants to finish exploring what exists first.
 
 ---
 
@@ -196,3 +229,4 @@ As of 2026-11-05, `main` after pull request #15, plus the Mac Dock app (pull req
 | 2026-11-04 | Articles 8 and 9 updated for backup models per AI text provider and the owner's NVIDIA-first text setup. |
 | 2026-11-04 | Articles 7, 8 and 9 updated for sample previews on Research & opportunities. |
 | 2026-11-04 | Articles 7, 8 and 9 updated for the Mac Dock app (`npm run make-mac-app`). |
+| 2026-11-05 | Articles 7, 8 and 9 updated for the Hub, the stats ticker, World Builder drafts, smarter AI help and the first live NVIDIA success. Undecided items F to I added. The UX spec is amended for the Hub, with the owner's approval. |

@@ -68,6 +68,17 @@ The application uses an old-school arcade cabinet interaction model. Its interfa
 
 The shared cabinet frame, credit meter, and navigation controls are persistent interface components rather than separate screens.
 
+> **Owner amendment, 2026-11-05: the Hub.** The owner found too many steps between opening the cabinet and the work. Screens 1 to 5 (Insert Coin, Start Gate, Title Screen, Character Select and Worlds) are now one screen, the **Hub**. Top to bottom, it shows the hi-score banner, the character picker, the chosen character's worlds, and a stats area. The stats area has a ticker of stats the owner picks and a STATS button.
+>
+> The B4 and B5 visibility and ordering rules are unchanged. A **◀ HUB** button in the cabinet header returns to the Hub from any screen. The last character played is remembered on the computer.
+>
+> **Locked rules kept:**
+> - Insert Coin never changes credits. The coin door stays as cabinet flair only.
+> - Entering a world is now the "start". At N = 0, ENTER WORLD is locked and the Hub says why. The character picker, World Builder and STATS stay usable because they don't spend anything.
+> - The arcade is always dark.
+>
+> Sections B1 to B5 below describe the original separate screens and are kept for their rules. Where they say a screen "advances to" or "transitions to" the next one, the Hub replaces that step.
+
 # **B. PER-SCREEN SPEC**
 
 ## **B0. Shared application frame**
@@ -1354,16 +1365,10 @@ Do not invent XP values or assign stat benefits until the progression model is a
 
 ## **E1. Primary entry flow**
 
-INSERT COIN  
-↓  
-START GATE  
-↓ (N \> 0)  
-TITLE SCREEN  
-↓  
-CHARACTER SELECT  
-↓  
-WORLDS  
-↓  
+Amended 2026-11-05 (the Hub). Until then this was INSERT COIN → START GATE (N \> 0) → TITLE SCREEN → CHARACTER SELECT → WORLDS → WORLD DETAIL.
+
+HUB (character picker, the character's worlds, stats)  
+↓ ENTER WORLD (N \> 0)  
 WORLD DETAIL  
 ↓  
 TASK WORKSPACE  
@@ -1417,11 +1422,11 @@ The exact navigation component is TBD.
 
 ## **E5. Character switching**
 
-Any active character context  
+Any screen  
 ↓  
-Character Select  
+◀ HUB (cabinet header; amended 2026-11-05)  
 ↓  
-Select IDE / AI Chatbot / DAF  
+Select IDE / AI Chatbot / DAF on the Hub  
 ↓  
 Worlds reload  
 ↓  
@@ -1450,7 +1455,7 @@ Normalize applicable provider constraints
 Identify bottleneck provider  
 ↓  
 Calculate N  
-├── N = 0 → Start locked  
+├── N = 0 → Start locked (since the Hub, 2026-11-05: ENTER WORLD locked)  
 ├── N below low threshold → Low-credit warning  
 └── N above warning threshold → Normal credit state
 
@@ -1944,13 +1949,13 @@ Build:
 
 Acceptance criteria:
 
-- Insert Coin transitions to Start Gate.
+- Insert Coin transitions to Start Gate. *(Amended 2026-11-05: Insert Coin is cabinet flair on the Hub and never changes credits.)*
 
-- Start opens Title only when N \> 0.
+- Start opens Title only when N \> 0. *(Amended 2026-11-05: ENTER WORLD on the Hub works only when N \> 0.)*
 
-- Zero credits visibly locks Start.
+- Zero credits visibly locks Start. *(Amended 2026-11-05: zero credits visibly lock ENTER WORLD, and the Hub says why.)*
 
-- Title transitions to Character Select.
+- Title transitions to Character Select. *(Amended 2026-11-05: the character picker is on the Hub.)*
 
 - All three characters can be selected.
 

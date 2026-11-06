@@ -30,6 +30,7 @@ import { seedBuiltins } from '../engine/templates/seed.ts';
 import { Pacer } from '../engine/generation/pacing.ts';
 import { resolveChromePath } from '../config/chrome.ts';
 import { systemClock, type Clock } from '../core/time.ts';
+import { recoverDrafts } from '../engine/arcade/drafts.ts';
 import type { AppContext } from './context.ts';
 
 export interface BootstrapOptions {
@@ -61,6 +62,8 @@ export function bootstrap(opts: BootstrapOptions = {}): App {
   const mig = migrate(db, paths.backupsDir);
   if (mig.renumbered.length) log.info('Migration records moved to renumbered files', { renumbered: mig.renumbered, backup: mig.backupFile });
   if (mig.applied.length) log.info('Database migrated', { applied: mig.applied, backup: mig.backupFile });
+  const interrupted = recoverDrafts(db);
+  if (interrupted) log.info('World Builder drafts interrupted by the last shutdown were marked failed', { drafts: interrupted });
   const settings = new SettingsService(db);
   const secrets = opts.secrets ?? createSecretStore(paths.dataDir);
   const seeded = seedBuiltins(db);

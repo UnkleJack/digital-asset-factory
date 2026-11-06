@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { api, errorText, useApi } from '../api.ts';
 import { useFocusMainWhenReady } from './input.ts';
-import { WorldIdeas, TaskIdeas, WorldGenerator } from './Ai.tsx';
+import { WorldIdeas, TaskIdeas, WorldGenerator, TidyNotesPanel, type GoalSeed } from './Ai.tsx';
 
 // HAPPY DAFFY milestone 2: Worlds, World Detail and the World Builder.
 
@@ -58,25 +58,23 @@ export function ArcadeTabs({ onSoon }: { onSoon: (name: string) => void }) {
   );
 }
 
-// ---------- Worlds ----------
+// ---------- Worlds (shown on the hub, under the character picker) ----------
 
-export function WorldsScreen({ character, onOpen, onBuilder, onSwitch }: { character: ArcadeCharacter | null; onOpen: (id: string) => void; onBuilder: () => void; onSwitch: () => void }) {
-  const { data, error, loading, reload } = useApi<{ worlds: WorldCard[] }>(character ? `/arcade/worlds?character=${encodeURIComponent(character.id)}` : null);
-  const [notice, setNotice] = useState<string | null>(null);
+/**
+ * The chosen character's worlds, closest milestone first. Locked rule: only worlds where the character has
+ * an open task. `locked` is the zero-credit lock: ENTER WORLD is shown but refuses, and the hub says why.
+ */
+export function WorldList({ character, locked, onOpen }: { character: ArcadeCharacter; locked: boolean; onOpen: (id: string) => void }) {
+  const { data, error, loading, reload } = useApi<{ worlds: WorldCard[] }>(`/arcade/worlds?character=${encodeURIComponent(character.id)}`, { poll: 30000 });
   const worlds = data?.worlds ?? [];
-  useFocusMainWhenReady(!!data);
   return (
-    <div className="scr worlds-screen">
-      <ArcadeTabs onSoon={(d) => setNotice(`${d} UNLOCKS IN A LATER BUILD`)} />
-      <h2 className="screen-title">WORLDS</h2>
-      {character ? <p className="fine center-text">{character.displayName} · {character.scope}</p> : null}
-      {notice ? <p className="lock-line center-text">{notice}</p> : null}
+    <>
       {loading && !data ? <p className="big-pixel center-text blink-slow">LOADING WORLDS...</p> : null}
       {error ? <div className="empty-panel" role="alert"><p className="big-pixel bad">WORLDS DIDN'T LOAD</p><p className="crt-text">{error}</p><button type="button" className="arc-btn small" data-nav onClick={() => void reload()}>RETRY</button></div> : null}
       {!loading && !error && worlds.length === 0 ? (
         <div className="empty-panel" role="status">
           <p className="big-pixel">NO OPEN WORLDS</p>
-          <p className="crt-text">{character?.displayName ?? 'This character'} has no open tasks in any world yet. Build a world and give this character a task, and it shows up here.</p>
+          <p className="crt-text">{character.displayName} has no open tasks in any world yet. Build a world and give {character.displayName} a task, and it shows up here.</p>
         </div>
       ) : null}
       <div className="world-list">
@@ -92,15 +90,11 @@ export function WorldsScreen({ character, onOpen, onBuilder, onSwitch }: { chara
               <span>NEXT: <b>{w.nextMilestone?.name ?? 'NONE'}</b></span>
               <span title="Effort points left in the next milestone">WORK LEFT: <b>{fmt(w.remainingEffort)}</b></span>
             </div>
-            <button type="button" className="arc-btn small" data-nav {...(i === 0 ? { 'data-autofocus': true } : {})} onClick={() => onOpen(w.id)}>ENTER WORLD</button>
+            <button type="button" className={`arc-btn small${locked ? ' locked' : ''}`} data-nav data-enter-world aria-disabled={locked} onClick={() => onOpen(w.id)}>ENTER WORLD</button>
           </article>
         ))}
       </div>
-      <div className="row-actions">
-        <button type="button" className="arc-btn" data-nav {...(worlds.length === 0 ? { 'data-autofocus': true } : {})} onClick={onBuilder}>WORLD BUILDER</button>
-        <button type="button" className="arc-btn" data-nav onClick={onSwitch}>SWITCH CHARACTER</button>
-      </div>
-    </div>
+    </>
   );
 }
 
@@ -124,7 +118,7 @@ export function WorldDetail({ worldId, character, onBack }: { worldId: string; c
         <p className="big-pixel bad">CAN'T ENTER THIS WORLD</p>
         <p className="crt-text">{error ?? 'Not found.'}</p>
         <div className="row-actions">
-          <button type="button" className="arc-btn" data-nav data-autofocus onClick={onBack}>BACK TO WORLDS</button>
+          <button type="button" className="arc-btn" data-nav data-autofocus onClick={onBack}>BACK TO HUB</button>
           <button type="button" className="arc-btn" data-nav onClick={() => void reload()}>RETRY</button>
         </div>
       </div>
@@ -133,7 +127,7 @@ export function WorldDetail({ worldId, character, onBack }: { worldId: string; c
   const w = data.world;
   return (
     <div className="scr world-detail">
-      <p className="breadcrumb">WORLDS / {w.name.toUpperCase()}</p>
+      <p className="breadcrumb">HUB / {w.name.toUpperCase()}</p>
       <h2 className="screen-title">{w.name}</h2>
       {w.description ? <p className="crt-text center-text">{w.description}</p> : null}
       <ProgressBar value={w.progress} label="Progress to next milestone" />
@@ -160,7 +154,7 @@ export function WorldDetail({ worldId, character, onBack }: { worldId: string; c
       </ol>
       {notice ? <p className="lock-line center-text">{notice}</p> : null}
       <div className="row-actions">
-        <button type="button" className="arc-btn" data-nav onClick={onBack}>BACK TO WORLDS</button>
+        <button type="button" className="arc-btn" data-nav onClick={onBack}>BACK TO HUB</button>
       </div>
     </div>
   );
@@ -177,6 +171,7 @@ export function BuilderScreen({ onOpen, onBack }: { onOpen: (id: string) => void
   const [milestones, setMilestones] = useState('');
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [goalSeed, setGoalSeed] = useState<GoalSeed | null>(null);
 
   const create = async (e: FormEvent) => {
     e.preventDefault();
@@ -198,8 +193,9 @@ export function BuilderScreen({ onOpen, onBack }: { onOpen: (id: string) => void
   return (
     <div className="scr builder">
       <h2 className="screen-title">WORLD BUILDER</h2>
-      <p className="fine center-text">Start from scratch. A world shows up for a character once that character has an open task in it.</p>
-      <WorldGenerator onSaved={onOpen} />
+      <p className="fine center-text">Start from scratch, or let the AI help. A world shows up for a character once that character has an open task in it. Anything the AI writes waits in your drafts, so you can leave this page while it works.</p>
+      <TidyNotesPanel onUse={(seed) => setGoalSeed(seed)} />
+      <WorldGenerator onSaved={onOpen} seed={goalSeed} />
       <WorldIdeas onPick={(i) => { setName(i.name); setDescription(i.description); setMilestones(i.milestones.join('\n')); }} />
       <form className="arc-form" onSubmit={create}>
         <h3 className="form-title">NEW WORLD</h3>
@@ -223,7 +219,7 @@ export function BuilderScreen({ onOpen, onBack }: { onOpen: (id: string) => void
           </li>
         ))}
       </ul>
-      <div className="row-actions"><button type="button" className="arc-btn" data-nav onClick={onBack}>BACK TO WORLDS</button></div>
+      <div className="row-actions"><button type="button" className="arc-btn" data-nav onClick={onBack}>BACK TO HUB</button></div>
     </div>
   );
 }
@@ -235,7 +231,7 @@ interface BuilderDetail {
   milestones: { id: string; name: string; sequence: number; status: string; progress: number; remainingEffort: number; taskList: Task[] }[];
 }
 
-export function BuilderWorldScreen({ worldId, defaultCharacter, onBack }: { worldId: string; defaultCharacter: string | null; onBack: () => void }) {
+export function BuilderWorldScreen({ worldId, defaultCharacter, onBack, onHub }: { worldId: string; defaultCharacter: string | null; onBack: () => void; onHub: () => void }) {
   const types = useProductTypes();
   const { data, error, reload } = useApi<BuilderDetail>(`/arcade/builder/worlds/${encodeURIComponent(worldId)}`);
   const [problem, setProblem] = useState<string | null>(null);
@@ -353,6 +349,7 @@ export function BuilderWorldScreen({ worldId, defaultCharacter, onBack }: { worl
 
       <div className="row-actions">
         <button type="button" className="arc-btn" data-nav onClick={onBack}>BACK TO BUILDER</button>
+        <button type="button" className="arc-btn" data-nav onClick={onHub}>HUB</button>
         <button type="button" className="arc-btn" data-nav onClick={() => void run(() => api(`/arcade/builder/worlds/${worldId}`, { method: 'PATCH', body: { status: data.world.status === 'active' ? 'archived' : 'active' } }))}>
           {data.world.status === 'active' ? 'ARCHIVE WORLD' : 'RESTORE WORLD'}
         </button>

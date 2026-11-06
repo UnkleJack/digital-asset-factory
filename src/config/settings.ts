@@ -271,6 +271,10 @@ export const SettingsSchema = z.object({
     jobMaxAttempts: z.number().int().min(1).max(10).default(3),
     retryBaseSeconds: z.number().int().min(1).max(3600).default(15),
     leaseSeconds: z.number().int().min(30).max(3600).default(300),
+    // Once a week, while the app is open, remove test folders in verification-output/ that have not changed
+    // for 7 days (browser-check copies of the app). Never touches data/. Turn off here. By hand:
+    // npm run clean-verification lists what it would remove; add -- --apply to remove it.
+    cleanVerificationWeekly: z.boolean().default(true),
     concurrency: z.object({
       ai: z.number().int().min(1).max(8).default(2),
       render: z.number().int().min(1).max(6).default(2),
@@ -376,6 +380,13 @@ export const SettingsSchema = z.object({
     // (spec milestone 6). The arcade always labels it TEST so it is never mistaken for live data.
     // 0 locks PRESS START, which is how the zero-credit lock is tried out.
     testCredits: z.number().int().min(0).max(99).default(3),
+    // The stats ticker on the arcade hub: which stats show at a glance, in order (ids from
+    // src/engine/arcade/ticker.ts). The owner picks them with EDIT on the ticker. Ids that no longer
+    // exist are ignored when read. Sales stats are one per source, because sources are never added together.
+    tickerStats: z.array(z.string().min(1).max(80)).max(16).default(() => [
+      'arcade.openTasks', 'listings.published.etsy', 'listings.published.gumroad',
+      'sales.orders.marketplace_api', 'sales.orders.csv_import', 'sales.revenue_cents.marketplace_api', 'sales.revenue_cents.csv_import', 'ai.cost30',
+    ]),
   }).prefault({}),
   email: z.object({
     // Gmail's SMTP relay: the Gmail address you send from goes here; its app password is the smtp_password secret.
