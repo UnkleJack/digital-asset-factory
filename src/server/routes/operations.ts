@@ -5,6 +5,9 @@ import { getJob, retryJob, cancelJob, mapJob } from '../../jobs/queue.ts';
 import { listBatches, batchDetail, decide, itemDetail } from '../../engine/approval/service.ts';
 import { createBatch, addToBatch } from '../../engine/approval/batches.ts';
 import { reworkList, reworkCount, markFixed } from '../../engine/approval/rework.ts';
+import { warningHelp } from '../../engine/approval/warningHelp.ts';
+import { unacceptedApprovals } from '../../engine/approval/warnings.ts';
+import { allNotes, addReviewNote, listLessons, addLesson, updateLesson, deleteLesson, notesStatus, digestNotes, maybeDigest, NOTE_KINDS } from '../../engine/generation/notes.ts';
 import { listPlans, createPlan, updatePlan, deletePlan, runPlanNow, nextSlot, dueSlots } from '../../scheduler/scheduler.ts';
 import { textMode } from '../../engine/generation/service.ts';
 import { adapters } from '../../engine/publishing/adapters.ts';
@@ -89,6 +92,27 @@ export function registerOperationsRoutes(s: FastifyInstance, deps: ServerDeps): 
   });
   s.get('/api/qa/summary', async () => app.db.all(`SELECT r.check_code, r.severity, sum(CASE WHEN r.passed = 0 THEN 1 ELSE 0 END) AS failed, count(*) AS total FROM qa_results r GROUP BY r.check_code, r.severity ORDER BY failed DESC`));
 
+  s.post('/api/rework/:versionId/note', async (req) => {
+    const b = parse(z.object({ notes: z.string().max(4000) }), req.body, 'note');
+    const r = addReviewNote(app, (req.params as P).versionId, b.notes);
+    void maybeDigest(app);
+    return r;
+  });
+
+  // Notes for the AI: every note in one list, and the repeat-problems list the AI writes from them.
+  s.get('/api/ai-notes', async (req, reply) => {
+    const q = req.query as Q;
+    const r = allNotes(app, { kind: NOTE_KINDS.includes(q.kind as never) ? q.kind : undefined });
+    totalHeader(reply, r.total);
+    return r.rows.slice(0, int(q.limit, 50, 1, LIST_MAX));
+  });
+  s.get('/api/ai-notes/status', async () => notesStatus(app));
+  s.post('/api/ai-notes/digest', async () => digestNotes(app, 'manual'));
+  s.get('/api/ai-lessons', async () => listLessons(app));
+  s.post('/api/ai-lessons', async (req) => addLesson(app, parse(z.object({ text: z.string().max(300) }), req.body, 'lesson').text));
+  s.patch('/api/ai-lessons/:id', async (req) => updateLesson(app, (req.params as P).id, parse(z.object({ text: z.string().max(300).optional(), pinned: z.boolean().optional() }), req.body, 'lesson')));
+  s.delete('/api/ai-lessons/:id', async (req) => { deleteLesson(app, (req.params as P).id); return { ok: true }; });
+
   s.get('/api/rework', async (req) => reworkList(app, { showFixed: (req.query as Q).showFixed === '1' }));
   s.post('/api/rework/:versionId/fixed', async (req) => markFixed(app, (req.params as P).versionId, true));
   s.delete('/api/rework/:versionId/fixed', async (req) => markFixed(app, (req.params as P).versionId, false));
@@ -107,9 +131,18 @@ export function registerOperationsRoutes(s: FastifyInstance, deps: ServerDeps): 
   });
   s.get('/api/batches/:id', async (req) => batchDetail(app, (req.params as P).id));
   s.get('/api/batch-items/:id', async (req) => itemDetail(app, (req.params as P).id));
+  // Approved items whose warnings were never accepted (approved before the warning gate). Blocked from packing and publishing.
+  s.get('/api/warnings-to-accept', async () => unacceptedApprovals(app));
+  // Suggestion only: explains one open QA warning and how to fix it. Nothing is saved or approved.
+  s.post('/api/versions/:id/warning-help', async (req) => {
+    const b = parse(z.object({ check: z.string().min(1).max(200) }), req.body, 'warning');
+    return warningHelp(app, (req.params as P).id, b.check);
+  });
   s.post('/api/batch-items/:id/decision', async (req) => {
-    const b = parse(z.object({ decision: z.enum(['approved', 'rejected', 'revision_requested', 'regenerate_requested']), marketplaces: z.array(z.string()).optional(), notes: z.string().max(4000).optional() }), req.body, 'decision');
+    const b = parse(z.object({ decision: z.enum(['approved', 'rejected', 'revision_requested', 'regenerate_requested']), marketplaces: z.array(z.string()).optional(), notes: z.string().max(4000).optional(), acceptWarnings: z.boolean().optional(), warningNote: z.string().max(2000).optional() }), req.body, 'decision');
     const result = decide(app, (req.params as P).id, b);
+    // A note was written: once 10 have piled up, the AI reads them all in the background.
+    if (b.notes?.trim() || b.warningNote?.trim()) void maybeDigest(app);
     const g = app.settings.get('marketplaces').gumroad;
     if (b.decision !== 'approved' || !g.autoPublishEnabled || !g.autoPublishOnApproval) return result;
     // Post approved Gumroad listings in the background; the outcome shows on the listing (Publishing page) and in the log.

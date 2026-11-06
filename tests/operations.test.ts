@@ -198,6 +198,9 @@ test('bundles include member files; variations must change a real axis', async (
   startPipeline(app, p1.version.id);
   startPipeline(app, p2.version.id);
   await idle(app);
+  assert.throws(() => createBundle(app, { productIds: [p1.product.id, p2.product.id] }), /must be approved/, 'packaging gate: unapproved members are refused');
+  // Stand-in for approving both in batch review (the approval flow itself is covered in lifecycle tests).
+  for (const v of [p1.version.id, p2.version.id]) app.db.update('product_versions', v, { status: 'approved' });
   const b = createBundle(app, { productIds: [p1.product.id, p2.product.id], title: 'Home and Business Bundle', marketplaces: ['etsy'] });
   await idle(app);
   const bv = getVersion(app.db, b.versionId);

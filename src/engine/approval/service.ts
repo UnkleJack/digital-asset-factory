@@ -6,6 +6,7 @@ import { startPipeline } from '../../jobs/pipeline.ts';
 import { addToBatch, refreshBatch, batchesContaining } from './batches.ts';
 import { fingerprintFor, activeApproval } from '../publishing/service.ts';
 import { qaReport } from '../qa/service.ts';
+import { latestQaResults, openWarnings, warningsCleared } from './warnings.ts';
 import { newId } from '../../core/ids.ts';
 import { conflict, notFound, validation } from '../../core/errors.ts';
 import { audit, type AuditActor } from '../../logging/logger.ts';
@@ -24,6 +25,8 @@ export function listBatches(app: AppContext, opts: { status?: string; open?: boo
   return { rows, total };
 }
 
+export { latestQaResults, openWarnings, warningsCleared } from './warnings.ts';
+
 export function itemDetail(app: AppContext, itemId: string) {
   const item = app.db.get<{ id: string; batch_id: string; product_id: string; version_id: string; added_at: string }>('SELECT * FROM approval_items WHERE id = ?', itemId);
   if (!item) throw notFound('Batch item', itemId);
@@ -31,9 +34,7 @@ export function itemDetail(app: AppContext, itemId: string) {
   const version = getVersion(app.db, item.version_id);
   const assets = app.assets.forVersion(version.id);
   const qa = qaReport(app, version.id);
-  const latestByKind = new Map<string, (typeof qa)[number]>();
-  for (const r of qa) if (!latestByKind.has(r.kind)) latestByKind.set(r.kind, r);
-  const qaResults = [...latestByKind.values()].flatMap((r) => r.results as { check_code: string; severity: string; passed: number; message: string }[]);
+  const qaResults = latestQaResults(app, version.id);
   const score = product.opportunity_id ? app.db.get<Record<string, unknown>>('SELECT score, confidence, outcome, factors, created_at FROM opportunity_scores WHERE opportunity_id = ? ORDER BY created_at DESC LIMIT 1', product.opportunity_id) : undefined;
   const cost = app.db.get<{ total: number | null; unknown: number; runs: number }>("SELECT sum(cost_usd) AS total, sum(CASE WHEN cost_basis = 'unknown' AND status = 'succeeded' THEN 1 ELSE 0 END) AS unknown, count(*) AS runs FROM generation_runs WHERE version_id = ?", version.id)!;
   const listings = listingsForVersion(app.db, version.id).map((l) => ({ ...l, approval: activeApproval(app, l), fingerprint: fingerprintFor(version.deliverable_hash, l) }));
@@ -54,6 +55,9 @@ export function itemDetail(app: AppContext, itemId: string) {
     provenance: version.content_provenance,
     listings,
     decisions,
+    warningsCleared: warningsCleared(app, version.id),
+    acceptedWarnings: app.db.all<{ at: string; details: string }>("SELECT at, details FROM audit_events WHERE action = 'approval.warnings_accepted' AND entity_id = ? ORDER BY at DESC", version.id)
+      .map((r) => ({ at: r.at, ...json<{ warnings?: { check: string; message: string }[]; notes?: string }>(r.details, {}) })),
     history: app.db.all('SELECT id, version_no, origin, status, qa_status, change_note, revision_notes, created_at FROM product_versions WHERE product_id = ? ORDER BY version_no DESC', product.id),
   };
 }
@@ -65,7 +69,7 @@ export function batchDetail(app: AppContext, batchId: string) {
   return { batch, items: items.map((i) => itemDetail(app, i.id)) };
 }
 
-export function decide(app: AppContext, itemId: string, input: { decision: Decision; marketplaces?: string[]; notes?: string }, actor: AuditActor = 'user'): { decisionIds: string[]; newVersionId?: string } {
+export function decide(app: AppContext, itemId: string, input: { decision: Decision; marketplaces?: string[]; notes?: string; acceptWarnings?: boolean; warningNote?: string }, actor: AuditActor = 'user'): { decisionIds: string[]; newVersionId?: string } {
   const item = app.db.get<{ id: string; batch_id: string; product_id: string; version_id: string }>('SELECT * FROM approval_items WHERE id = ?', itemId);
   if (!item) throw notFound('Batch item', itemId);
   const product = getProduct(app.db, item.product_id);
@@ -80,6 +84,11 @@ export function decide(app: AppContext, itemId: string, input: { decision: Decis
     if (version.qa_status === 'failed' || version.qa_status === 'pending') throw validation(`This version cannot be approved: QA status is "${version.qa_status}". Fix or regenerate it first.`);
     if (!['ready', 'approved'].includes(version.status)) throw validation(`This version cannot be approved while its status is "${version.status}".`);
     if (!version.deliverable_hash) throw validation('This version has not been packaged.');
+    // Yellow flags block approval until you look at them and tick "I accept these warnings".
+    const warnings = openWarnings(app, version.id);
+    const hasWarnings = warnings.length > 0 || version.qa_status === 'passed_with_warnings';
+    if (hasWarnings && input.acceptWarnings !== true) throw validation(`This version has ${warnings.length || 'some'} QA warning${warnings.length === 1 ? '' : 's'}. Fix ${warnings.length === 1 ? 'it' : 'them'}, or review ${warnings.length === 1 ? 'it' : 'them'} and tick "I accept these warnings" to approve.`);
+    const accepted = hasWarnings ? warnings.map((w) => ({ check: w.check_code, message: w.message })) : undefined;
     const listings = listingsForVersion(app.db, version.id).filter((l) => !input.marketplaces?.length || input.marketplaces.includes(l.marketplace));
     if (!listings.length) throw validation('Choose at least one marketplace listing to approve.');
     const bad = listings.filter((l) => l.status === 'invalid' || l.validation.issues.length);
@@ -93,7 +102,9 @@ export function decide(app: AppContext, itemId: string, input: { decision: Decis
         ids.push(id);
       }
       updateVersion(app.db, version.id, { status: 'approved' });
-      audit(app.db, actor, 'approval.approved', 'version', version.id, { listings: listings.map((l) => l.id), marketplaces: listings.map((l) => l.marketplace), notes });
+      audit(app.db, actor, 'approval.approved', 'version', version.id, { listings: listings.map((l) => l.id), marketplaces: listings.map((l) => l.marketplace), notes, ...(accepted && { acceptedWarnings: accepted }) });
+      // The warning note stays here (not in the decision notes) so it isn't fed into generation prompts as style advice.
+      if (accepted) audit(app.db, actor, 'approval.warnings_accepted', 'version', version.id, { warnings: accepted, notes: (input.warningNote ?? '').trim().slice(0, 2000) });
     });
     refreshBatch(app, item.batch_id);
     onProductFinished(app, version.id, 'approved');

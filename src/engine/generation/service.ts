@@ -68,10 +68,11 @@ export async function textMode(app: AppContext): Promise<TextMode> {
   return { mode: 'deterministic', reason: 'AI provider not configured; used the built-in content library' };
 }
 
-export async function structuredCall<T>(app: AppContext, req: { purpose: string; schema: z.ZodType<T>; system: string; prompt: string; maxTokens?: number; trace: CallTrace }): Promise<{ data: T; provenance: Provenance }> {
+export async function structuredCall<T>(app: AppContext, req: { purpose: string; schema: z.ZodType<T>; system: string; prompt: string; maxTokens?: number; trace: CallTrace; noBrief?: boolean }): Promise<{ data: T; provenance: Provenance }> {
   const g = app.settings.get('generation');
   const provider = app.providers.text;
-  const brief = learningBrief(app) + styleExamplesBrief(app, req.purpose);
+  // noBrief: the call is itself about the owner's notes (the notes read-through), so it gets them in its prompt instead.
+  const brief = req.noBrief ? '' : learningBrief(app) + styleExamplesBrief(app, req.purpose);
   req.system = req.system + brief;
   const promptHash = sha256(`${req.system}\n---\n${req.prompt}`);
   const maxTokens = req.maxTokens ?? g.anthropic.maxTokens;

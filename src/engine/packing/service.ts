@@ -9,6 +9,7 @@ import { newId } from '../../core/ids.ts';
 import { validation, notFound, errorMessage } from '../../core/errors.ts';
 import { audit, type AuditActor } from '../../logging/logger.ts';
 import { createBundle } from '../bundling/service.ts';
+import { warningsCleared } from '../approval/warnings.ts';
 import { z } from 'zod';
 import { structuredCall, textMode } from '../generation/service.ts';
 import { AI_SYSTEM_BASE } from '../producttypes/types.ts';
@@ -85,14 +86,25 @@ export function allTags(app: AppContext): { tag: string; kind: string; products:
 // ---- Eligibility and scoring ------------------------------------------------------------------
 
 const ELIGIBLE_SQL = `SELECT p.id, p.product_type FROM products p JOIN product_versions v ON v.id = p.current_version_id
-  WHERE p.status = 'active' AND p.product_type != 'bundle' AND v.qa_status IN ('passed','passed_with_warnings') AND v.status IN ('ready','approved')`;
+  WHERE p.status = 'active' AND p.product_type != 'bundle' AND v.qa_status IN ('passed','passed_with_warnings') AND v.status = 'approved'`;
+
+/** The packaging gate: only versions you approved in batch review go into packs. A version with QA
+ * warnings can only be approved once you tick "I accept these warnings", so warnings are cleared here too. */
+const NOT_CLEARED = 'not approved yet (approve it in batch review first)';
+function cleared(app: AppContext, versionId: string | null, qa: string | null, status: string | null): string | null {
+  if (!['passed', 'passed_with_warnings'].includes(qa ?? '')) return 'did not pass QA';
+  if (status !== 'approved') return NOT_CLEARED;
+  if (!versionId || !warningsCleared(app, versionId)) return 'has QA warnings you haven\'t accepted yet (tick "I accept these warnings" in batch review)';
+  return null;
+}
 
 function eligibility(app: AppContext, productId: string): string | null {
-  const r = app.db.get<{ product_type: string; status: string; v_status: string | null; qa: string | null }>('SELECT p.product_type, p.status, v.status AS v_status, v.qa_status AS qa FROM products p LEFT JOIN product_versions v ON v.id = p.current_version_id WHERE p.id = ?', productId);
+  const r = app.db.get<{ product_type: string; status: string; v_id: string | null; v_status: string | null; qa: string | null }>('SELECT p.product_type, p.status, v.id AS v_id, v.status AS v_status, v.qa_status AS qa FROM products p LEFT JOIN product_versions v ON v.id = p.current_version_id WHERE p.id = ?', productId);
   if (!r) return 'product not found';
   if (r.product_type === 'bundle') return 'packs are not packed into other packs';
   if (r.status !== 'active') return `product is ${r.status}`;
-  if (!['passed', 'passed_with_warnings'].includes(r.qa ?? '') || !['ready', 'approved'].includes(r.v_status ?? '')) return 'not finished or did not pass QA';
+  const gate = cleared(app, r.v_id, r.qa, r.v_status);
+  if (gate) return gate;
   const packs = app.db.value<number>('SELECT count(*) FROM bundle_items b JOIN products bp ON bp.id = b.bundle_product_id WHERE b.member_product_id = ? AND bp.status = \'active\'', productId) ?? 0;
   if (packs >= cfg(app).maxPacksPerProduct) return `already in ${packs} packs (the limit)`;
   return null;
@@ -306,6 +318,7 @@ export function runBreak(app: AppContext, opts: { force?: boolean; actor?: Audit
   const out: BreakResult = { ran: false, sealed: [], dissolved: [], placed: 0, variety: null, stillWaiting: 0 };
   if (!opts.force && conveyorCount(app) > 0) return { ...out, reason: 'products are still being made', stillWaiting: backlogCount(app) };
   out.ran = true;
+  pruneUncleared(app);
   const c = cfg(app);
   const staleBefore = new Date(app.clock.now().getTime() - c.staleHours * 3_600_000).toISOString();
   for (const cart of openCarts(app)) {
@@ -400,8 +413,28 @@ export function removeItem(app: AppContext, cartId: string, productId: string): 
   });
 }
 
+/** Take products that are not approved (or whose newest version is not) out of open carts and the backlog.
+ * They come back on their own when you approve them. Products already sitting in carts from before the
+ * packaging gate existed are cleared out this way too. Returns how many rows were removed. */
+export function pruneUncleared(app: AppContext): number {
+  const rows = app.db.all<{ product_id: string; v_id: string | null; qa: string | null; status: string | null }>(`SELECT x.product_id, v.id AS v_id, v.qa_status AS qa, v.status FROM (
+      SELECT i.product_id FROM pack_cart_items i JOIN pack_carts c ON c.id = i.cart_id WHERE c.status = 'open'
+      UNION SELECT product_id FROM packing_backlog) x
+    JOIN products p ON p.id = x.product_id LEFT JOIN product_versions v ON v.id = p.current_version_id`);
+  let removed = 0;
+  app.db.tx(() => {
+    for (const r of rows) {
+      if (!cleared(app, r.v_id, r.qa, r.status)) continue;
+      removed += app.db.run("DELETE FROM pack_cart_items WHERE product_id = ? AND cart_id IN (SELECT id FROM pack_carts WHERE status = 'open')", r.product_id).changes;
+      removed += app.db.run('DELETE FROM packing_backlog WHERE product_id = ?', r.product_id).changes;
+    }
+  });
+  return removed;
+}
+
 /** Everything the Factory floor page shows. */
 export function floor(app: AppContext) {
+  pruneUncleared(app);
   const thumb = `(SELECT a.id FROM assets a WHERE a.version_id = p.current_version_id AND a.role = 'preview' ORDER BY a.page_index LIMIT 1)`;
   const items = (cartId: string) => app.db.all(`SELECT p.id, p.title, p.product_type, i.score, ${thumb} AS thumb FROM pack_cart_items i JOIN products p ON p.id = i.product_id WHERE i.cart_id = ? ORDER BY i.position`, cartId).map((r) => ({ ...r }));
   const c = cfg(app);
@@ -411,12 +444,14 @@ export function floor(app: AppContext) {
   return { slots: c.maxOpenCarts, open, closed, backlog, conveyor: conveyorCount(app), settings: c };
 }
 
-/** Hook: a version finished its pipeline (or was approved). Feeds it and, if the line is now empty, takes a break. */
-export function onProductFinished(app: AppContext, versionId: string, event: 'qa_passed' | 'approved'): void {
+/** Hook: you approved a version. Feeds it and, if the line is now empty, takes a break.
+ * Feeding only happens on approval: the old "feed when QA passes" setting (feedOn) no longer applies,
+ * because nothing unapproved may pass the packaging gate. */
+export function onProductFinished(app: AppContext, versionId: string, event: 'approved'): void {
   const c = cfg(app);
-  if (!c.autoFeed || c.feedOn !== event) return;
+  if (!c.autoFeed || event !== 'approved') return;
   const v = app.db.get<{ product_id: string; status: string; qa_status: string; type: string; current: string | null }>('SELECT v.product_id, v.status, v.qa_status, p.product_type AS type, p.current_version_id AS current FROM product_versions v JOIN products p ON p.id = v.product_id WHERE v.id = ?', versionId);
-  if (!v || v.type === 'bundle' || v.current !== versionId || !['passed', 'passed_with_warnings'].includes(v.qa_status) || !['ready', 'approved'].includes(v.status)) return;
+  if (!v || v.type === 'bundle' || v.current !== versionId || cleared(app, versionId, v.qa_status, v.status)) return;
   try {
     feedProduct(app, v.product_id);
     if (conveyorCount(app) === 0) runBreak(app);

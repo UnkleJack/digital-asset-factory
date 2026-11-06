@@ -13,7 +13,6 @@ import type { AssetRecord } from '../storage/assetStore.ts';
 import { getVersion, updateVersion } from '../db/repos.ts';
 import { enqueue, type JobRow, type JobType } from './queue.ts';
 import { permanent } from '../core/errors.ts';
-import { onProductFinished } from '../engine/packing/service.ts';
 import type { ArtworkItem } from '../engine/producttypes/types.ts';
 
 export const STAGES: JobType[] = ['generate_content', 'generate_artwork', 'render', 'qa', 'package', 'prepare_listings'];
@@ -144,7 +143,7 @@ export async function runStage(app: AppContext, job: JobRow): Promise<unknown> {
 
 export function onPipelineEnded(app: AppContext, versionId: string, planRunId: string | null): void {
   refreshBatchesForVersion(app, versionId);
-  onProductFinished(app, versionId, 'qa_passed');
+  // Packing waits for your approval now (see onProductFinished), so a finished pipeline doesn't feed the packer.
   const runs = new Set<string>();
   if (planRunId) runs.add(planRunId);
   for (const b of batchesContaining(app, versionId)) {

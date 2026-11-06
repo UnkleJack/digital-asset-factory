@@ -36,7 +36,25 @@ function oneLine(s: string, max: number): string {
  * A compact text block describing what the operator has liked and disliked, built from recent
  * approval decisions that carried notes. Empty string when there is nothing to learn from yet.
  */
+const MAX_LESSON_CHARS = 1800;
+
+/**
+ * The repeat-problems list the AI wrote from all of the owner's notes (plus lessons the owner wrote or
+ * edited). Kept separate from the recent-notes list so an old, repeated problem never drops off.
+ */
+export function lessonsBrief(app: AppContext): string {
+  const rows = app.db.all<{ text: string; times: number; source: string; pinned: number }>('SELECT text, times, source, pinned FROM note_lessons ORDER BY pinned DESC, times DESC, updated_at DESC LIMIT 20');
+  if (!rows.length) return '';
+  const lines = rows.map((r) => `- ${oneLine(r.text, 240)}${r.source === 'ai' && r.times > 1 ? ` (noted ${r.times} times)` : ''}`);
+  const brief = `\n## Standing rules from the owner's review notes\nThese come from everything the owner has noted over time. Follow them in all new work.\n${lines.join('\n')}`;
+  return brief.length <= MAX_LESSON_CHARS ? brief : `${brief.slice(0, MAX_LESSON_CHARS - 1)}…`;
+}
+
 export function learningBrief(app: AppContext): string {
+  return lessonsBrief(app) + recentNotesBrief(app);
+}
+
+function recentNotesBrief(app: AppContext): string {
   // Approvals that were later invalidated (e.g. the product was then rejected) no longer count.
   const rows = app.db.all<DecisionRow>(
     `SELECT d.decision, d.notes, p.title, p.product_type

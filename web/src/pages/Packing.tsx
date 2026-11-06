@@ -20,7 +20,7 @@ export function Packing() {
     <div className="page">
       <PageHead
         title="Factory floor"
-        sub="Finished products roll off the line and are sorted onto carts by their tags. A full cart becomes a pack and goes to review. What fits no cart waits in the backlog and is re-sorted at the next break, when nothing is being made."
+        sub="Products you approve in batch review are sorted onto carts by their tags (nothing unapproved, and no unreviewed warnings, gets past this gate). A full cart becomes a pack and goes to review. What fits no cart waits in the backlog and is re-sorted at the next break, when nothing is being made."
         actions={<>
           <ActionButton onClick={run('/packing/remix', (r) => `Remix cart opened around "${r.tag.tag}" with ${r.added} item(s)`)} title="Open a cart around a tag your best sellers share but haven't been packed under">↻ Remix winners</ActionButton>
           <ActionButton onClick={run('/packing/break', (r) => `Break done: ${r.placed} re-sorted, ${r.sealed.length} packed, ${r.stillWaiting} still waiting`)} title="Re-sort the backlog now, even if products are still being made">☕ Take a break now</ActionButton>

@@ -49,8 +49,8 @@ export function CompactRow({ main, sub, actions, children, className = '' }: { m
 }
 
 /** One open preview per list. `toggle(id)` opens that one and closes any other. */
-export function usePreview() {
-  const [open, setOpen] = useState<string | null>(null);
+export function usePreview(initial: string | null = null) {
+  const [open, setOpen] = useState<string | null>(initial);
   return { open, toggle: (id: string) => setOpen((cur) => (cur === id ? null : id)), close: () => setOpen(null) };
 }
 

@@ -22,7 +22,7 @@ export function PackBuilder({ initial = [], onClose, onDone }: { initial?: strin
   const [markets, setMarkets] = useState<string[]>(['etsy', 'gumroad']);
   const [err, setErr] = useState<string | null>(null);
 
-  const eligible = useMemo(() => (list.data?.items ?? []).filter((p: any) => p.product_type !== 'bundle' && ['ready', 'approved'].includes(p.version_status) && ['passed', 'passed_with_warnings'].includes(p.qa_status)), [list.data]);
+  const eligible = useMemo(() => (list.data?.items ?? []).filter((p: any) => p.product_type !== 'bundle' && p.version_status === 'approved' && ['passed', 'passed_with_warnings'].includes(p.qa_status)), [list.data]);
   const categories = [...new Set(eligible.map((p: any) => p.category).filter(Boolean))] as string[];
   const shown = eligible.filter((p: any) => (!category || p.category === category) && (!filter || p.title.toLowerCase().includes(filter.toLowerCase())));
   const toggle = (id: string) => setPicked((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : cur.length >= 20 ? cur : [...cur, id]));
@@ -52,13 +52,13 @@ export function PackBuilder({ initial = [], onClose, onDone }: { initial?: strin
     <Modal title="Build a pack" wide onClose={onClose} footer={<><span className="small muted" style={{ marginRight: 'auto' }}>{picked.length} picked{picked.length < 2 ? ' — pick at least 2' : ''}</span><button onClick={onClose}>Cancel</button><ActionButton className="primary" disabled={picked.length < 2} onClick={create}>Create pack ({picked.length})</ActionButton></>}>
       <div className="stack">
         <h3>1. Pick what goes in</h3>
-        <p className="small muted" style={{ margin: 0 }}>Only finished products that passed QA are shown. The pack becomes its own product with its own review and listings; the originals stay for sale on their own.</p>
+        <p className="small muted" style={{ margin: 0 }}>Only products you approved in batch review are shown (any QA warnings must be accepted first). The pack becomes its own product with its own review and listings; the originals stay for sale on their own.</p>
         <div className="row">
           <input placeholder="Search titles…" value={filter} onChange={(e) => setFilter(e.target.value)} />
           <div className="chips"><button className={`chip${!category ? ' on' : ''}`} onClick={() => setCategory('')}>All</button>{categories.map((c) => <button key={c} className={`chip${c === category ? ' on' : ''}`} onClick={() => setCategory(c)}>{c}</button>)}</div>
         </div>
-        <Async state={list}>{() => eligible.length < 2 ? <Empty title="Not enough finished products yet">At least two products that passed QA are needed. Make some from Product library → New product.</Empty> : (
-          <CompactList total={shown.length} shown={shown.length} noun="finished products" height={360} tools={picked.length ? <span className="small">{picked.length} picked</span> : undefined}>
+        <Async state={list}>{() => eligible.length < 2 ? <Empty title="Not enough approved products yet">At least two approved products are needed. Approve some in Batch review, or make more from Product library → New product.</Empty> : (
+          <CompactList total={shown.length} shown={shown.length} noun="approved products" height={360} tools={picked.length ? <span className="small">{picked.length} picked</span> : undefined}>
             {shown.map((p: any) => (
               <CompactRow key={p.id} className={picked.includes(p.id) ? 'on' : ''}
                 main={<label className="check"><input type="checkbox" checked={picked.includes(p.id)} onChange={() => toggle(p.id)} /> <b>{p.title}</b></label>}

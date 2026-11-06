@@ -6,7 +6,8 @@ import { bootstrap, type App } from '../src/app/bootstrap.ts';
 import { MemorySecretStore } from '../src/config/secrets.ts';
 import { createProduct } from '../src/engine/specification/service.ts';
 import { newId } from '../src/core/ids.ts';
-import { feedProduct, runBreak, floor, setExtraTags, productTags, openCart, sealCart, remixWinners, matchScore, onProductFinished } from '../src/engine/packing/service.ts';
+import { feedProduct, runBreak, floor, setExtraTags, productTags, openCart, sealCart, remixWinners, matchScore, onProductFinished, pruneUncleared } from '../src/engine/packing/service.ts';
+import { createBundle } from '../src/engine/bundling/service.ts';
 import { addPerformance } from '../src/engine/analytics/service.ts';
 import { tempDir } from './helpers.ts';
 
@@ -30,10 +31,10 @@ function theme(name: string): string {
   return nid;
 }
 
-/** A finished, QA-passed product (no rendering needed for packing logic). */
-function finished(title: string, themeName: string | null, opts: { type?: string; extra?: string[] } = {}): string {
+/** A finished, QA-passed, approved product (no rendering needed for packing logic). Packing only takes approved products. */
+function finished(title: string, themeName: string | null, opts: { type?: string; extra?: string[]; status?: string; qa?: string } = {}): string {
   const { product, version } = createProduct(app, { productType: opts.type ?? TYPES[n++ % TYPES.length], title, ...(themeName && { themeId: theme(themeName) }) });
-  app.db.update('product_versions', version.id, { status: 'ready', qa_status: 'passed' });
+  app.db.update('product_versions', version.id, { status: opts.status ?? 'approved', qa_status: opts.qa ?? 'passed' });
   app.assets.write(`products/${product.id}/${version.id}/item.pdf`, '%PDF-1.4 stand-in', { productId: product.id, versionId: version.id, kind: 'pdf', role: 'deliverable', mime: 'application/pdf', pageCount: 3 });
   if (opts.extra) setExtraTags(app, product.id, opts.extra.map((tag) => ({ kind: 'custom' as const, tag })));
   return product.id;
@@ -138,12 +139,31 @@ test('remixing winners opens a cart around a tag the best sellers share and fill
   assert.equal(floor(app).open.find((c) => c.id === r.cartId)!.origin, 'remix');
 });
 
-test('the pipeline hook feeds finished products automatically only for the configured event', () => {
-  const id = finished('Halloween A', 'Halloween');
-  const v = app.db.value<string>('SELECT current_version_id FROM products WHERE id = ?', id)!;
-  app.settings.update('packing', { feedOn: 'approved' });
-  onProductFinished(app, v, 'qa_passed');
-  assert.equal(floor(app).open.length, 0);
-  onProductFinished(app, v, 'approved');
-  assert.equal(floor(app).open.length, 1);
+test('the packaging gate: only approved products are fed, packed or bundled, whatever the old feedOn setting says', () => {
+  app.settings.update('packing', { feedOn: 'qa_passed' });
+  const ready = finished('Halloween ready', 'Halloween', { status: 'ready' });
+  const warned = finished('Halloween warned', 'Halloween', { status: 'ready', qa: 'passed_with_warnings' });
+  const readyV = app.db.value<string>('SELECT current_version_id FROM products WHERE id = ?', ready)!;
+  onProductFinished(app, readyV, 'approved');
+  assert.equal(floor(app).open.length, 0, 'a ready (unapproved) product is not fed');
+  assert.match(feedProduct(app, warned).backlog ?? '', /not approved yet/, 'ready with warnings cannot pass the gate');
+  assert.throws(() => createBundle(app, { productIds: [ready, warned] }), /must be approved/);
+
+  const ok = finished('Halloween approved', 'Halloween');
+  onProductFinished(app, app.db.value<string>('SELECT current_version_id FROM products WHERE id = ?', ok)!, 'approved');
+  assert.equal(floor(app).open.length, 1, 'approval feeds the packer even with feedOn = qa_passed saved');
+});
+
+test('products sitting in carts or the backlog from before the gate are taken out until approved', () => {
+  const a = finished('Snow A', 'Winter');
+  const b = finished('Snow B', 'Winter');
+  const cart = feedProduct(app, a).opened!;
+  feedProduct(app, b);
+  // Simulate an item that got in under the old rule: its version is only "ready".
+  app.db.run('UPDATE product_versions SET status = ? WHERE id = (SELECT current_version_id FROM products WHERE id = ?)', 'ready', b);
+  app.db.run("INSERT INTO packing_backlog (product_id, passes, reason, created_at, updated_at) VALUES (?, 1, 'old', ?, ?)", b, now.toISOString(), now.toISOString());
+  assert.equal(pruneUncleared(app), 2);
+  const f = floor(app);
+  assert.deepEqual(f.open.find((c) => c.id === cart)!.items.map((i: any) => i.id), [a]);
+  assert.equal(f.backlog.length, 0);
 });
