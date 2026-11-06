@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
-import { assetUrl, errorText } from './api.ts';
+import { assetUrl, errorText, thumbUrl } from './api.ts';
 import { label } from './format.ts';
 
 type Toast = { id: number; text: string; kind: 'ok' | 'bad' };
@@ -95,9 +95,10 @@ export function ActionButton({ onClick, children, className = '', confirm, disab
   );
 }
 
-export function AssetImg({ id, alt, className }: { id?: string | null; alt: string; className?: string }) {
+/** `thumb` loads a small copy that many px wide instead of the full image. */
+export function AssetImg({ id, alt, className, thumb }: { id?: string | null; alt: string; className?: string; thumb?: number }) {
   if (!id) return <span className="muted small">No preview</span>;
-  return <img src={assetUrl(id)} alt={alt} loading="lazy" className={className} />;
+  return <img src={thumb ? thumbUrl(id, thumb) : assetUrl(id)} alt={alt} loading="lazy" className={className} />;
 }
 
 export function Card({ title, actions, children, className = '' }: { title?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string }) {
