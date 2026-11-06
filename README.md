@@ -24,6 +24,8 @@ What it does today, honestly:
 
 **New here? Start with [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md)** — every key to get, where to get it, and the daily routine. On Windows, see [docs/WINDOWS.md](docs/WINDOWS.md).
 
+**Want a tour of every screen?** [docs/guide/WALKTHROUGH.md](docs/guide/WALKTHROUGH.md) walks through each back-office page and the HAPPY DAFFY arcade, button by button, with screenshots.
+
 See [docs/ACCEPTANCE_REPORT.md](docs/ACCEPTANCE_REPORT.md) for what was verified and how.
 
 ## Requirements
