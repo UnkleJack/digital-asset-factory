@@ -299,3 +299,38 @@ span.chip:not(.on) { border: 1px solid var(--border); }
 .opp-preview .banner { position: absolute; left: 0; right: 0; bottom: 0; font-size: 11px; font-weight: 600; letter-spacing: .08em; padding: 3px 0; background: rgba(0, 0, 0, .7); color: #fff; }
 .opp-preview .about { flex: 1; min-width: 240px; display: flex; flex-direction: column; gap: 8px; }
 .row-title { display: flex; gap: 10px; align-items: center; }
+
+/* Compact lists (web/src/compact.tsx): one slim line per item, a box of fixed height, pictures only on Preview. */
+.clist-wrap { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.clist-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.clist { max-height: 480px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); }
+.clist:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.clist table.t { background: var(--surface); }
+.clist table.t thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; }
+.clist table.t td { padding: 7px 12px; }
+.clist-more { padding: 8px; text-align: center; border-top: 1px solid var(--border); background: var(--surface); }
+.crow { border-bottom: 1px solid var(--border); padding: 7px 10px; background: var(--surface); }
+.crow:last-child { border-bottom: none; }
+.crow-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.crow-main { flex: 1 1 220px; min-width: 0; }
+.crow-title { overflow-wrap: anywhere; }
+.crow-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.crow-actions { flex-wrap: wrap; }
+.crow.done .crow-title { opacity: .7; }
+.cpreview { margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px; }
+.cpreview img { max-width: 100%; max-height: 320px; object-fit: contain; display: block; background: #fff; }
+.one-line { display: block; max-width: 420px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.view-switch { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.view-switch button { border: none; border-radius: 0; }
+.view-switch button.on { background: var(--primary); color: var(--surface); }
+.lane { margin-bottom: 14px; }
+.lane h3 { margin: 0 0 8px; display: flex; gap: 8px; align-items: baseline; }
+.lane .product-cards { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+.made-strip { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.made-box { flex: 1 1 150px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+.made-num { font-size: 28px; font-weight: 700; color: var(--primary); line-height: 1.1; }
+.cal .made { font-size: 11px; font-weight: 600; color: var(--ok, var(--primary)); }
+.cal .more-ev { font-size: 11px; color: var(--muted); }
+.rework-section + .rework-section { margin-top: 14px; }
+.cart-item { grid-template-columns: 1fr auto; } /* names only now; pictures open from the product */
+.clist > .stack { padding: 8px; }

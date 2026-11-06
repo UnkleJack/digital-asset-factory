@@ -20,7 +20,7 @@ import { seededRandom } from '../../core/hash.ts';
 import { newId } from '../../core/ids.ts';
 import { validation, notFound, conflict } from '../../core/errors.ts';
 import { audit } from '../../logging/logger.ts';
-import { int, parse, type Q, type P } from './util.ts';
+import { int, parse, LIST_MAX, type Q, type P } from './util.ts';
 
 const CreateBody = z.object({
   productType: z.string(),
@@ -55,8 +55,25 @@ export function registerProductRoutes(s: FastifyInstance, { app }: ServerDeps): 
       (SELECT a.id FROM assets a WHERE a.version_id = v.id AND a.role = 'preview' ORDER BY a.page_index LIMIT 1) AS thumb,
       (SELECT count(*) FROM listings l WHERE l.product_id = p.id) AS listings,
       (SELECT count(*) FROM external_listings e JOIN listings l2 ON l2.id = e.listing_id WHERE l2.product_id = p.id) AS published
-      ${sql} ORDER BY p.updated_at DESC LIMIT ? OFFSET ?`, ...args, int(q.limit, 50, 1, 200), int(q.offset, 0, 0, 1_000_000));
+      ${sql} ORDER BY p.updated_at DESC LIMIT ? OFFSET ?`, ...args, int(q.limit, 50, 1, LIST_MAX), int(q.offset, 0, 0, 1_000_000));
     return { total, items: rows };
+  });
+
+  // The library's gallery: the last few product types that had something approved, a few of the newest approved items of each.
+  // Approved only: this is the work that cleared review and is ready to package and sell.
+  s.get('/api/products/spread', async (req) => {
+    const q = req.query as Q;
+    const types = int(q.types, 5, 1, 20);
+    const per = int(q.per, 4, 1, 20);
+    const base = "FROM products p JOIN product_versions v ON v.id = p.current_version_id WHERE v.status = 'approved' AND p.status = 'active'";
+    const lanes = app.db.all<{ product_type: string; last: string; total: number }>(`SELECT p.product_type, max(v.created_at) AS last, count(*) AS total ${base} GROUP BY p.product_type ORDER BY last DESC LIMIT ?`, types);
+    return lanes.map((l) => ({
+      type: l.product_type,
+      total: l.total,
+      items: app.db.all(`SELECT p.id, p.title, p.product_type, v.version_no, v.created_at, (SELECT name FROM categories c WHERE c.id = p.category_id) AS category,
+          (SELECT a.id FROM assets a WHERE a.version_id = v.id AND a.role = 'preview' ORDER BY a.page_index LIMIT 1) AS thumb
+        ${base} AND p.product_type = ? ORDER BY v.created_at DESC LIMIT ?`, l.product_type, per),
+    }));
   });
 
   s.post('/api/products', async (req) => {

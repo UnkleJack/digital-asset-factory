@@ -4,13 +4,17 @@ import type { ServerDeps } from '../app.ts';
 import { getJob, retryJob, cancelJob, mapJob } from '../../jobs/queue.ts';
 import { listBatches, batchDetail, decide, itemDetail } from '../../engine/approval/service.ts';
 import { createBatch, addToBatch } from '../../engine/approval/batches.ts';
+import { reworkList, reworkCount, markFixed } from '../../engine/approval/rework.ts';
 import { listPlans, createPlan, updatePlan, deletePlan, runPlanNow, nextSlot, dueSlots } from '../../scheduler/scheduler.ts';
 import { textMode } from '../../engine/generation/service.ts';
 import { adapters } from '../../engine/publishing/adapters.ts';
 import { json } from '../../db/sqlite.ts';
 import { publishListing } from '../../engine/publishing/service.ts';
 import { errorMessage } from '../../core/errors.ts';
-import { int, parse, type Q, type P } from './util.ts';
+import { int, parse, LIST_MAX, totalHeader, type Q, type P } from './util.ts';
+
+/** Version states that mean the factory finished making it, whatever happened at review. */
+const MADE_STATUSES = "'ready','qa_failed','superseded','rejected','approved'";
 
 export function registerOperationsRoutes(s: FastifyInstance, deps: ServerDeps): void {
   const { app } = deps;
@@ -33,6 +37,7 @@ export function registerOperationsRoutes(s: FastifyInstance, deps: ServerDeps): 
         openOpportunities: app.db.value<number>("SELECT count(*) FROM opportunities WHERE status IN ('new','evaluating','approved')"),
         needsReconciliation: app.db.value<number>("SELECT count(*) FROM listings WHERE status = 'needs_reconciliation'"),
         packingBacklog: app.db.value<number>('SELECT count(*) FROM packing_backlog'),
+        rework: reworkCount(app),
       },
       jobs: {
         queued: app.db.value<number>("SELECT count(*) FROM jobs WHERE status = 'queued'"),
@@ -53,15 +58,20 @@ export function registerOperationsRoutes(s: FastifyInstance, deps: ServerDeps): 
     };
   });
 
-  s.get('/api/jobs', async (req) => {
+  s.get('/api/jobs', async (req, reply) => {
     const q = req.query as Q;
     const where: string[] = [];
     const args: unknown[] = [];
     if (q.status) { where.push('j.status = ?'); args.push(q.status); }
+    // open=1 hides finished work (succeeded, cancelled) unless a status is chosen.
+    else if (q.open === '1') where.push("j.status IN ('queued','running','failed')");
     if (q.type) { where.push('j.type = ?'); args.push(q.type); }
     if (q.versionId) { where.push('j.version_id = ?'); args.push(q.versionId); }
-    const rows = app.db.all<Record<string, unknown>>(`SELECT j.*, p.title AS product_title FROM jobs j LEFT JOIN products p ON p.id = j.product_id ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY j.created_at DESC LIMIT ?`, ...args, int(q.limit, 100, 1, 500));
-    return { items: rows.map((r) => ({ ...mapJob(r), product_title: r.product_title })), counts: app.db.all('SELECT status, count(*) AS n FROM jobs GROUP BY status') };
+    const w = where.length ? 'WHERE ' + where.join(' AND ') : '';
+    const total = app.db.value<number>(`SELECT count(*) FROM jobs j ${w}`, ...args) ?? 0;
+    const rows = app.db.all<Record<string, unknown>>(`SELECT j.*, p.title AS product_title FROM jobs j LEFT JOIN products p ON p.id = j.product_id ${w} ORDER BY j.created_at DESC LIMIT ?`, ...args, int(q.limit, 100, 1, LIST_MAX));
+    totalHeader(reply, total);
+    return { total, items: rows.map((r) => ({ ...mapJob(r), product_title: r.product_title })), counts: app.db.all('SELECT status, count(*) AS n FROM jobs GROUP BY status') };
   });
   s.get('/api/jobs/:id', async (req) => {
     const job = getJob(app, (req.params as P).id);
@@ -70,15 +80,25 @@ export function registerOperationsRoutes(s: FastifyInstance, deps: ServerDeps): 
   s.post('/api/jobs/:id/retry', async (req) => retryJob(app, (req.params as P).id));
   s.post('/api/jobs/:id/cancel', async (req) => cancelJob(app, (req.params as P).id));
 
-  s.get('/api/qa', async (req) => {
+  s.get('/api/qa', async (req, reply) => {
     const q = req.query as Q;
+    totalHeader(reply, app.db.value<number>(`SELECT count(*) FROM qa_runs q ${q.status ? 'WHERE q.status = ?' : ''}`, ...(q.status ? [q.status] : [])));
     const rows = app.db.all<Record<string, unknown>>(`SELECT q.*, v.version_no, v.product_id, p.title, p.product_type FROM qa_runs q JOIN product_versions v ON v.id = q.version_id JOIN products p ON p.id = v.product_id
-      ${q.status ? 'WHERE q.status = ?' : ''} ORDER BY q.id DESC LIMIT ?`, ...(q.status ? [q.status] : []), int(q.limit, 100, 1, 500));
+      ${q.status ? 'WHERE q.status = ?' : ''} ORDER BY q.id DESC LIMIT ?`, ...(q.status ? [q.status] : []), int(q.limit, 100, 1, LIST_MAX));
     return rows.map((r) => ({ ...r, results: app.db.all('SELECT check_code, severity, passed, message FROM qa_results WHERE qa_run_id = ? ORDER BY passed, severity', r.id) }));
   });
   s.get('/api/qa/summary', async () => app.db.all(`SELECT r.check_code, r.severity, sum(CASE WHEN r.passed = 0 THEN 1 ELSE 0 END) AS failed, count(*) AS total FROM qa_results r GROUP BY r.check_code, r.severity ORDER BY failed DESC`));
 
-  s.get('/api/batches', async (req) => listBatches(app, (req.query as Q).status));
+  s.get('/api/rework', async (req) => reworkList(app, { showFixed: (req.query as Q).showFixed === '1' }));
+  s.post('/api/rework/:versionId/fixed', async (req) => markFixed(app, (req.params as P).versionId, true));
+  s.delete('/api/rework/:versionId/fixed', async (req) => markFixed(app, (req.params as P).versionId, false));
+
+  s.get('/api/batches', async (req, reply) => {
+    const q = req.query as Q;
+    const r = listBatches(app, { status: q.status, open: q.open === '1', limit: int(q.limit, 200, 1, LIST_MAX) });
+    totalHeader(reply, r.total);
+    return r.rows;
+  });
   s.post('/api/batches', async (req) => {
     const b = parse(z.object({ name: z.string().trim().min(2).max(120), versionIds: z.array(z.string()).max(100).default([]) }), req.body, 'batch');
     const id = createBatch(app, b.name, 'manual');
@@ -115,6 +135,16 @@ export function registerOperationsRoutes(s: FastifyInstance, deps: ServerDeps): 
   });
   s.post('/api/plans/:id/run', async (req) => ({ planRunId: runPlanNow(app, (req.params as P).id) }));
 
+  // Totals of things made since each of the given moments (the page sends the start of today, this week and this month in its own time zone).
+  s.get('/api/made-counts', async (req) => {
+    const since = String((req.query as Q).since ?? '').split(',').filter(Boolean).slice(0, 10);
+    return since.map((iso) => {
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return 0;
+      return app.db.value<number>(`SELECT count(*) FROM product_versions WHERE status IN (${MADE_STATUSES}) AND created_at >= ?`, d.toISOString()) ?? 0;
+    });
+  });
+
   s.get('/api/calendar', async (req) => {
     const q = req.query as Q;
     const from = new Date(q.from ?? new Date(Date.now() - 14 * 86_400_000).toISOString());
@@ -126,6 +156,8 @@ export function registerOperationsRoutes(s: FastifyInstance, deps: ServerDeps): 
       for (const sl of dueSlots(p, to, tz, Math.ceil((to.getTime() - Date.now()) / 86_400_000))) if (sl > app.clock.now() && sl >= from) upcoming.push({ plan: p.name, at: sl.toISOString() });
     }
     const seasonal = app.db.all<{ id: string; title: string; seasonal_months: string; status: string }>("SELECT id, title, seasonal_months, status FROM opportunities WHERE seasonal_months <> '[]' AND status NOT IN ('archived','rejected')").map((o) => ({ ...o, seasonal_months: json<number[]>(o.seasonal_months, []) }));
-    return { from: from.toISOString(), to: to.toISOString(), timezone: tz, runs, upcoming: upcoming.sort((a, b) => a.at.localeCompare(b.at)), seasonal, note: 'Scheduled runs only happen while the app is running. Runs missed while the computer was off or asleep are recorded; the most recent one is caught up when the app starts.' };
+    // Everything the factory finished making in this window, before anyone passed or rejected it (failed production is not counted).
+    const made = app.db.all<{ created_at: string }>(`SELECT created_at FROM product_versions WHERE status IN (${MADE_STATUSES}) AND created_at >= ? AND created_at <= ?`, from.toISOString(), to.toISOString()).map((r) => r.created_at);
+    return { from: from.toISOString(), to: to.toISOString(), timezone: tz, runs, made, upcoming: upcoming.sort((a, b) => a.at.localeCompare(b.at)), seasonal, note: 'Scheduled runs only happen while the app is running. Runs missed while the computer was off or asleep are recorded; the most recent one is caught up when the app starts.' };
   });
 }

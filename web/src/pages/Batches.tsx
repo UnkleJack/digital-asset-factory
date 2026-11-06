@@ -1,22 +1,26 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
-import { api, assetUrl, useApi } from '../api.ts';
-import { ActionButton, AssetImg, Async, Card, CheckList, Empty, Modal, PageHead, Pill, useToast } from '../ui.tsx';
+import { api, assetUrl, useApi, usePagedApi } from '../api.ts';
+import { CompactList, CompactRow, PreviewButton, PreviewPane, ShowDone, usePreview, useReveal } from '../compact.tsx';
+import { ActionButton, Async, Card, CheckList, Empty, Modal, PageHead, Pill, useToast } from '../ui.tsx';
 import { ago, bytes, fmtDate, generatorLabel, label, money, pct, usd } from '../format.ts';
 
 export function Batches() {
   const [status, setStatus] = useState('');
-  const st = useApi<any[]>(`/batches${status ? `?status=${status}` : ''}`, { poll: 8000 });
+  const [done, setDone] = useState(false);
+  const st = usePagedApi<any[]>(`/batches${status ? `?status=${status}` : done ? '' : '?open=1'}`, { poll: 8000 });
   return (
     <div className="page">
       <PageHead title="Batch approval" sub="Review finished products in batches. Nothing is exported or published without an approval recorded here for the exact version and marketplace listing." />
-      <div className="row" style={{ marginBottom: 12 }}><select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status"><option value="">All batches</option><option value="ready_for_review">Ready for review</option><option value="collecting">Still producing</option><option value="closed">Closed</option></select></div>
+      <div className="row" style={{ marginBottom: 12 }}><select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status"><option value="">All batches</option><option value="ready_for_review">Ready for review</option><option value="collecting">Still producing</option><option value="closed">Closed</option></select>{!status && <ShowDone value={done} onChange={setDone} text="Show closed batches" />}</div>
       <Card>
-        <Async state={st}>{(list) => list.length === 0 ? <Empty title="No batches yet">Production plans create a batch per run; manually created products get their own batch.</Empty> : (
+        <Async state={st}>{(list) => list.length === 0 ? <Empty title={status || done ? 'No batches yet' : 'Nothing waiting for review'}>{status || done ? 'Production plans create a batch per run; manually created products get their own batch.' : 'Closed batches are hidden. Tick “Show closed batches” to see them.'}</Empty> : (
+          <CompactList total={st.total} shown={list.length} onMore={st.more} noun="batches">
           <table className="t">
             <thead><tr><th>Batch</th><th>Status</th><th>Items</th><th>Awaiting decision</th><th>Created</th></tr></thead>
             <tbody>{list.map((b) => <tr key={b.id}><td><Link to={`/batches/${b.id}`}><b>{b.name}</b></Link><div className="small muted">{b.origin === 'scheduler' ? 'From a production plan' : 'Manual'}</div></td><td><Pill value={b.status} /></td><td>{b.items}</td><td>{b.awaiting}</td><td className="small">{ago(b.created_at)}</td></tr>)}</tbody>
           </table>
+          </CompactList>
         )}</Async>
       </Card>
     </div>
@@ -32,9 +36,43 @@ export function BatchReview() {
         <>
           <PageHead title={d.batch.name} sub={<><Pill value={d.batch.status} /> · {d.items.length} item(s) · created {fmtDate(d.batch.created_at)}</>} actions={<Link className="btn" to="/batches">All batches</Link>} />
           {d.batch.status === 'collecting' && <div className="banner info"><span className="spinner" /> Some items are still being produced. Finished items can be reviewed now.</div>}
-          {d.items.length === 0 ? <Empty title="This batch is empty" /> : d.items.map((it: any) => <ItemCard key={it.item.id} it={it} reload={st.reload} />)}
+          {d.items.length === 0 ? <Empty title="This batch is empty" /> : <BatchItems items={d.items} reload={st.reload} />}
         </>
       )}</Async>
+    </div>
+  );
+}
+
+/** Every item as one slim line. Opening a line shows today's full review card; only one is open at a time. */
+function BatchItems({ items, reload }: { items: any[]; reload: () => void }) {
+  const { shown, total, more } = useReveal(items, 50);
+  const { open, toggle } = usePreview();
+  return (
+    <CompactList total={total} shown={shown.length} onMore={more} noun="items" height={open ? 'none' : 640}>
+      {shown.map((it: any) => {
+        const decided = it.decisions.find((x: any) => !x.invalidated_at);
+        const isOpen = open === it.item.id;
+        return (
+          <CompactRow key={it.item.id} className={isOpen ? 'on' : ''}
+            main={<><Link to={`/products/${it.product.id}`}><b>{it.product.title}</b></Link> <span className="muted small">v{it.version.version_no}</span></>}
+            sub={<>{label(it.product.product_type)}{it.product.category ? ` · ${it.product.category}` : ''}{decided ? ` · ${label(decided.decision)} ${ago(decided.decided_at)}` : ''}</>}
+            actions={<><Pill value={it.version.status} /><Pill value={it.qa.status} text={`QA ${label(it.qa.status)}`} /><button className={`small${isOpen ? '' : ' primary'}`} aria-expanded={isOpen} onClick={() => toggle(it.item.id)}>{isOpen ? 'Close' : 'Review'}</button></>}>
+            {isOpen && <div style={{ marginTop: 8 }}><ItemCard it={it} reload={reload} /></div>}
+          </CompactRow>
+        );
+      })}
+    </CompactList>
+  );
+}
+
+/** Page previews and the main listing image, loaded only when asked for. */
+function ItemPreviews({ it }: { it: any }) {
+  const [open, setOpen] = useState(false);
+  const count = Math.min(4, it.previews.length) + (it.listingImages[0] ? 1 : 0);
+  return (
+    <div>
+      <PreviewButton open={open} disabled={!count} onClick={() => setOpen(!open)} label={`Show previews (${count})`} />
+      {open && <PreviewPane assets={[...it.previews.slice(0, 4).map((p: any) => p.id), it.listingImages[0]]} alt={it.product.title} />}
     </div>
   );
 }
@@ -61,8 +99,7 @@ function ItemCard({ it, reload }: { it: any; reload: () => void }) {
       {!it.current && <div className="banner info">A newer version exists — review that one instead.</div>}
       <div className="item-card">
         <div className="stack">
-          <div className="thumbs" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>{it.previews.slice(0, 4).map((p: any) => <a key={p.id} href={assetUrl(p.id)} target="_blank" rel="noreferrer" className="thumb"><AssetImg id={p.id} alt={`Page ${p.page}`} /></a>)}</div>
-          {it.listingImages[0] && <a href={assetUrl(it.listingImages[0])} target="_blank" rel="noreferrer" className="thumb sq"><AssetImg id={it.listingImages[0]} alt="Main listing image" /></a>}
+          <ItemPreviews it={it} />
           {busy && <div className="small muted"><span className="spinner" /> {label(v.stage)}…</div>}
         </div>
         <div className="stack">

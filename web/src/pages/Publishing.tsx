@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { api, assetUrl, errorText, useApi } from '../api.ts';
+import { api, assetUrl, errorText, useApi, usePagedApi } from '../api.ts';
+import { CompactList } from '../compact.tsx';
 import { ActionButton, Async, Card, Empty, Modal, PageHead, Pill, useToast } from '../ui.tsx';
 import { ago, label } from '../format.ts';
 
 export function Publishing() {
-  const st = useApi<any[]>('/publishing', { poll: 8000 });
+  const st = usePagedApi<any[]>('/publishing', { poll: 8000 });
   const markets = useApi<any[]>('/marketplaces');
   const [recording, setRecording] = useState<any>(null);
   const [reconciling, setReconciling] = useState<any>(null);
@@ -23,6 +24,7 @@ export function Publishing() {
       )}</Async>
       <Card>
         <Async state={st}>{(list) => list.length === 0 ? <Empty title="Nothing to publish yet">Approve products in Batch approval to prepare export packages.</Empty> : (
+          <CompactList total={st.total} shown={list.length} onMore={st.more} noun="listings">
           <table className="t">
             <thead><tr><th>Listing</th><th>Status</th><th>Approval</th><th>Live listing</th><th>Last action</th><th /></tr></thead>
             <tbody>{list.map(({ listing: l, adapter, approval, external, lastAttempt, exportAssetId }) => (
@@ -42,6 +44,7 @@ export function Publishing() {
               </tr>
             ))}</tbody>
           </table>
+          </CompactList>
         )}</Async>
       </Card>
       {recording && <RecordModal listing={recording} onClose={() => setRecording(null)} onDone={() => { setRecording(null); st.reload(); }} />}

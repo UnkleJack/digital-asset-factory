@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { api, errorText, useApi } from '../api.ts';
-import { ActionButton, AssetImg, Async, Card, Empty, Modal, PageHead, Pill, useToast } from '../ui.tsx';
+import { CompactList, CompactRow, PreviewButton, PreviewPane, usePreview, useReveal } from '../compact.tsx';
+import { ActionButton, Async, Card, Empty, Modal, PageHead, Pill, useToast } from '../ui.tsx';
 import { ago, label } from '../format.ts';
 
 const KINDS = ['theme', 'category', 'audience', 'season', 'style', 'type', 'custom'];
@@ -41,14 +42,7 @@ export function Packing() {
           </div>
           <div className="grid g2" style={{ marginTop: 14 }}>
             <Card title={`Backlog (${d.backlog.length})`}>
-              {d.backlog.length === 0 ? <p className="muted small" style={{ margin: 0 }}>Nothing waiting.</p> : (
-                <div className="stack">{d.backlog.map((b: any) => (
-                  <div key={b.id} className="spread small backlog-row">
-                    <span className="row"><span className="mini-thumb"><AssetImg id={b.thumb} alt="" /></span><span><Link to={`/products/${b.id}`}><b>{b.title}</b></Link><br /><span className="muted">{b.reason} · tried {b.passes}× · since {ago(b.created_at)}</span></span></span>
-                    <AddToCart productId={b.id} carts={d.open} onDone={st.reload} />
-                  </div>
-                ))}</div>
-              )}
+              {d.backlog.length === 0 ? <p className="muted small" style={{ margin: 0 }}>Nothing waiting.</p> : <Backlog items={d.backlog} carts={d.open} onDone={st.reload} />}
             </Card>
             <Card title="Recently packed">
               {d.closed.length === 0 ? <p className="muted small" style={{ margin: 0 }}>No packs built from carts yet.</p> : (
@@ -68,6 +62,25 @@ export function Packing() {
   );
 }
 
+/** Waiting products as slim lines, newest first. Pictures only on Preview, one at a time. */
+function Backlog({ items, carts, onDone }: { items: any[]; carts: any[]; onDone: () => void }) {
+  const newest = [...items].reverse();
+  const { shown, total, more } = useReveal(newest, 50);
+  const preview = usePreview();
+  return (
+    <CompactList total={total} shown={shown.length} onMore={more} noun="waiting" height={420}>
+      {shown.map((b: any) => (
+        <CompactRow key={b.id}
+          main={<Link to={`/products/${b.id}`}><b>{b.title}</b></Link>}
+          sub={<>{b.reason} · tried {b.passes}× · since {ago(b.created_at)}</>}
+          actions={<><PreviewButton open={preview.open === b.id} disabled={!b.thumb} onClick={() => preview.toggle(b.id)} /><AddToCart productId={b.id} carts={carts} onDone={onDone} /></>}>
+          {preview.open === b.id && <PreviewPane assets={[b.thumb]} alt={b.title} />}
+        </CompactRow>
+      ))}
+    </CompactList>
+  );
+}
+
 function CartCard({ cart, onChange }: { cart: any; onChange: () => void }) {
   const toast = useToast();
   const full = cart.items.length >= cart.target_size;
@@ -81,7 +94,6 @@ function CartCard({ cart, onChange }: { cart: any; onChange: () => void }) {
       <div className="small muted">{cart.items.length} / {cart.target_size} {cart.items.length < cart.min_size ? `(needs ${cart.min_size} to pack)` : ''}</div>
       <div className="cart-items">{cart.items.map((p: any) => (
         <div key={p.id} className="cart-item" title={`${p.title} — match ${Math.round(p.score * 100)}%`}>
-          <span className="mini-thumb"><AssetImg id={p.thumb} alt="" /></span>
           <Link to={`/products/${p.id}`} className="small">{p.title}</Link>
           <button className="small ghost" aria-label={`Take ${p.title} out`} onClick={async () => { await api(`/packing/carts/${cart.id}/items/${p.id}`, { method: 'DELETE' }); onChange(); }}>×</button>
         </div>

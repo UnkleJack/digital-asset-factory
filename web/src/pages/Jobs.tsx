@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { api, useApi } from '../api.ts';
+import { api, useApi, usePagedApi } from '../api.ts';
+import { CompactList, ShowDone } from '../compact.tsx';
 import { ActionButton, Async, Card, Empty, Modal, PageHead, Pill } from '../ui.tsx';
 import { ago, fmtDate, label } from '../format.ts';
 
@@ -9,8 +10,9 @@ const TYPES = ['generate_content', 'generate_artwork', 'render', 'qa', 'package'
 export function Jobs() {
   const [status, setStatus] = useState('');
   const [type, setType] = useState('');
-  const qs = new URLSearchParams({ ...(status && { status }), ...(type && { type }), limit: '200' });
-  const st = useApi<any>(`/jobs?${qs}`, { poll: 3000 });
+  const [done, setDone] = useState(false);
+  const qs = new URLSearchParams({ ...(status && { status }), ...(type && { type }), ...(!done && !status && { open: '1' }) });
+  const st = usePagedApi<any>(`/jobs?${qs}`, { poll: 3000 });
   const [open, setOpen] = useState<string | null>(null);
   return (
     <div className="page">
@@ -18,10 +20,12 @@ export function Jobs() {
       <div className="row" style={{ marginBottom: 12 }}>
         <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status"><option value="">All statuses</option>{['queued', 'running', 'succeeded', 'failed', 'cancelled'].map((s) => <option key={s} value={s}>{label(s)}</option>)}</select>
         <select value={type} onChange={(e) => setType(e.target.value)} aria-label="Type"><option value="">All types</option>{TYPES.map((t) => <option key={t} value={t}>{label(t)}</option>)}</select>
+        <ShowDone value={done} onChange={setDone} text="Show finished jobs" />
         <Async state={st}>{(d) => <span className="small muted">{d.counts.map((c: any) => `${label(c.status)}: ${c.n}`).join(' · ')}</span>}</Async>
       </div>
       <Card>
-        <Async state={st}>{(d) => d.items.length === 0 ? <Empty title="No jobs" >Jobs appear when products are produced.</Empty> : (
+        <Async state={st}>{(d) => d.items.length === 0 ? <Empty title={done || status ? 'No jobs' : 'Nothing running or failed'}>{done || status ? 'Jobs appear when products are produced.' : 'Finished jobs are hidden. Tick “Show finished jobs” to see them.'}</Empty> : (
+          <CompactList total={d.total} shown={d.items.length} onMore={st.more} noun="jobs">
           <table className="t">
             <thead><tr><th>Job</th><th>Product</th><th>Status</th><th>Attempts</th><th>Created</th><th>Last error</th><th /></tr></thead>
             <tbody>{d.items.map((j: any) => (
@@ -31,7 +35,7 @@ export function Jobs() {
                 <td><Pill value={j.status} />{j.status === 'queued' && new Date(j.run_after) > new Date() && <div className="small muted">retry {ago(j.run_after)}</div>}</td>
                 <td>{j.attempts}/{j.max_attempts}</td>
                 <td className="small">{ago(j.created_at)}</td>
-                <td className="small" style={{ color: j.status === 'failed' ? 'var(--bad)' : 'var(--muted)', maxWidth: 360 }}>{j.last_error ?? ''}</td>
+                <td className="small" style={{ color: j.status === 'failed' ? 'var(--bad)' : 'var(--muted)' }}><span className="one-line" title={j.last_error ?? ''}>{j.last_error ?? ''}</span></td>
                 <td className="right" onClick={(e) => e.stopPropagation()}>
                   {['failed', 'cancelled'].includes(j.status) && <ActionButton className="small" onClick={async () => { await api(`/jobs/${j.id}/retry`, { body: {} }); st.reload(); }}>Retry</ActionButton>}
                   {j.status === 'queued' && <ActionButton className="small" onClick={async () => { await api(`/jobs/${j.id}/cancel`, { body: {} }); st.reload(); }}>Cancel</ActionButton>}
@@ -39,6 +43,7 @@ export function Jobs() {
               </tr>
             ))}</tbody>
           </table>
+          </CompactList>
         )}</Async>
       </Card>
       {open && <JobModal id={open} onClose={() => setOpen(null)} />}
