@@ -2,7 +2,7 @@
 
 This is the canonical record of what Asset Foundry is, where it lives, the rules it runs by, and where it stands. Where any other file, plan, note or chat disagrees with it, this file wins.
 
-**Amending it.** Only the owner (O'Jayme, GitHub `UnkleJack`) changes Articles 1 to 6. Each change is dated in the Amendment log at the bottom. Articles 7 to 9 describe the current state. Whoever merges a change that makes them untrue updates them in the same pull request.
+**Amending it.** Only the owner (GitHub `UnkleJack`) changes Articles 1 to 6. Each change is dated in the Amendment log at the bottom. Articles 7 to 9 describe the current state. Whoever merges a change that makes them untrue updates them in the same pull request.
 
 ---
 
