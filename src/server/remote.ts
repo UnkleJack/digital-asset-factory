@@ -1,16 +1,51 @@
 // Hub mode: let another computer (your Windows laptop, say) use this app over the home network or
 // Tailscale. Off by default. When on, requests from this computer work as before; requests from
 // anywhere else must carry the access token, set as a cookie by the /login page.
+//
+// Public access (docs/PUBLIC_ACCESS.md): a tunnel such as cloudflared runs on this computer and
+// connects from 127.0.0.1, so the socket address alone would make internet visitors look local.
+// A request is only local when it comes from this computer AND shows no sign of a tunnel or proxy:
+// no forwarding header, and not addressed to one of the public addresses in remote.publicHosts.
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { networkInterfaces } from 'node:os';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { App } from '../app/bootstrap.ts';
 import { SUITE_NAME } from '../core/brand.ts';
+import { normalizeHost } from '../config/settings.ts';
 
 export const TOKEN_COOKIE = 'daf_token';
 const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 
 export const isLoopback = (req: FastifyRequest) => LOOPBACK.has(req.socket.remoteAddress ?? '');
+
+const header = (req: FastifyRequest, name: string): string => {
+  const v = req.headers[name];
+  return (Array.isArray(v) ? v.join(',') : String(v ?? '')).trim();
+};
+
+/** The Host header's name without the port, in lower case. */
+export const requestHostName = (req: FastifyRequest): string => normalizeHost(String(req.headers.host ?? ''));
+
+/** True when the request names one of the public addresses, or a proxy has stamped it with the visitor's address. */
+export function viaProxy(req: FastifyRequest, publicHosts: readonly string[]): boolean {
+  if (req.headers['cf-connecting-ip'] !== undefined || req.headers['x-forwarded-for'] !== undefined) return true;
+  return publicHosts.includes(requestHostName(req));
+}
+
+/** Who is really asking. Forwarding headers are only believed when the proxy is on this computer;
+ * from anywhere else they could be made up to dodge the wrong-token brake. */
+export function clientAddress(req: FastifyRequest, publicHosts: readonly string[]): string {
+  const socket = req.socket.remoteAddress ?? '?';
+  if (!isLoopback(req) || !viaProxy(req, publicHosts)) return socket;
+  const cf = header(req, 'cf-connecting-ip');
+  if (cf) return cf;
+  // Cloudflare adds the visitor to the end of X-Forwarded-For; anything before it came from the visitor and can't be trusted.
+  const xff = header(req, 'x-forwarded-for').split(',').map((x) => x.trim()).filter(Boolean);
+  return xff.at(-1) ?? 'proxy';
+}
+
+/** True when the request reached the proxy over https (so the sign-in cookie can be marked Secure). */
+export const arrivedOverHttps = (req: FastifyRequest): boolean => header(req, 'x-forwarded-proto').split(',')[0]!.trim().toLowerCase() === 'https';
 
 export function newAccessToken(): string {
   return randomBytes(24).toString('base64url');
@@ -51,6 +86,19 @@ export class RemoteGate {
     return this.app.settings.get('remote').enabled;
   }
 
+  get publicHosts(): readonly string[] {
+    return this.app.settings.get('remote').publicHosts;
+  }
+
+  /** From this computer, with no tunnel or proxy in between. Only these requests skip the access token. */
+  isLocal(req: FastifyRequest): boolean {
+    return isLoopback(req) && !viaProxy(req, this.publicHosts);
+  }
+
+  clientAddress(req: FastifyRequest): string {
+    return clientAddress(req, this.publicHosts);
+  }
+
   async load(): Promise<void> {
     this.token = await this.app.secrets.get('remote_access_token');
   }
@@ -80,7 +128,7 @@ export class RemoteGate {
 
   /** True when the request may go on; otherwise the reply has been sent. */
   check(req: FastifyRequest, reply: FastifyReply): boolean {
-    if (isLoopback(req)) return true;
+    if (this.isLocal(req)) return true;
     if (!this.enabled || !this.token) {
       reply.code(403).send({ error: { code: 'remote_off', message: 'Remote access is turned off on this computer.' } });
       return false;
@@ -106,7 +154,7 @@ export function registerRemoteRoutes(server: FastifyInstance, app: App, gate: Re
   server.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string' }, (_req, body, done) => done(null, Object.fromEntries(new URLSearchParams(String(body)))));
   server.get('/login', async (_req, reply) => reply.type('text/html').send(LOGIN_PAGE()));
   server.post('/api/login', async (req, reply) => {
-    const ip = req.socket.remoteAddress ?? '?';
+    const ip = gate.clientAddress(req);
     if (gate.tooManyFailures(ip)) return reply.code(429).type('text/html').send(LOGIN_PAGE('Too many wrong tokens. Wait 10 minutes.'));
     const token = String((req.body as Record<string, unknown> | null)?.token ?? '').trim();
     if (!gate.valid(token)) {
@@ -115,13 +163,13 @@ export function registerRemoteRoutes(server: FastifyInstance, app: App, gate: Re
       return reply.code(401).type('text/html').send(LOGIN_PAGE('That token is not right.'));
     }
     app.log.info('Remote sign-in', { ip });
-    reply.header('Set-Cookie', `${TOKEN_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${60 * 60 * 24 * 30}`);
+    reply.header('Set-Cookie', `${TOKEN_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${60 * 60 * 24 * 30}${arrivedOverHttps(req) ? '; Secure' : ''}`);
     return reply.redirect('/', 303);
   });
-  server.get('/api/remote', async () => ({ enabled: gate.enabled, hasToken: gate.hasToken(), addresses: lanAddresses(), port: Number(process.env.DAF_PORT ?? 4317), bindAddress: app.settings.get('remote').bindAddress }));
+  server.get('/api/remote', async () => ({ enabled: gate.enabled, hasToken: gate.hasToken(), addresses: lanAddresses(), port: Number(process.env.DAF_PORT ?? 4317), bindAddress: app.settings.get('remote').bindAddress, publicHosts: gate.publicHosts }));
   // Generates a new token (the old one stops working) and shows it once.
   server.post('/api/remote/token', async (req, reply) => {
-    if (!isLoopback(req)) return reply.code(403).send({ error: { code: 'local_only', message: 'A new token can only be made on the computer running the app.' } });
+    if (!gate.isLocal(req)) return reply.code(403).send({ error: { code: 'local_only', message: 'A new token can only be made on the computer running the app.' } });
     const token = newAccessToken();
     await app.secrets.set('remote_access_token', token);
     gate.setToken(token);

@@ -124,10 +124,11 @@ Adopted 2026-11-03.
 | Arcade screens | `web/src/arcade/` (`Arcade.tsx` cabinet and Hub, `Worlds.tsx`, `Ai.tsx`, `Ticker.tsx`, `input.ts`, `arcade.css`) |
 | Back-office screens | `web/src/pages/` |
 | Settings schema | `src/config/settings.ts` |
+| Hub mode and public access (the access-token sign-in, who counts as local) | `src/server/remote.ts`, used by `src/server/app.ts`; owner guide `docs/PUBLIC_ACCESS.md` |
 | Database migrations | `src/db/migrations/` (001 to 010; 008 is World Builder drafts, from pull request #13, 009 is rework marks, and 010 is notes for the AI, from pull request #19) |
 | Tests | `tests/` (`npm test`) |
 | Mac Dock app (`npm run make-mac-app`) | `src/ops/macApp.ts` (bundle and launcher), `src/ops/macIcon.ts` (GAGE icon), `scripts/make-mac-app.ts`; built into `dist-mac/` (not in git) |
-| Setup and daily use | `README.md`, `docs/GETTING_STARTED.md`, `docs/WINDOWS.md` |
+| Setup and daily use | `README.md`, `docs/GETTING_STARTED.md`, `docs/WINDOWS.md`, `docs/PUBLIC_ACCESS.md` (opening the app at `daf.promptpimps.com`) |
 | Architecture and data model | `docs/ARCHITECTURE.md`, `docs/DATA_MODEL.md` |
 | Arcade UX spec | `docs/ASSET_FOUNDRY_UX_SPEC.md` |
 | Factory task log with evidence | `TASKS.md` |
@@ -135,7 +136,7 @@ Adopted 2026-11-03.
 
 ## Article 8: Current state
 
-As of 2026-11-06: `main` after pull requests #12 (backup AI models), #15 (sample previews), #16 (the Mac Dock app), #18 (compact lists and Rework) and #19 (warning gate and notes for the AI), plus the Hub, the stats ticker, World Builder drafts, smarter AI help and the test-data cleanup on branch `claude/arcade-start-flow` (pull request #13, not merged yet).
+As of 2026-11-06: `main` after pull requests #12 (backup AI models), #13 (the Hub, the stats ticker, World Builder drafts, smarter AI help and the test-data cleanup), #15 (sample previews), #16 (the Mac Dock app), #18 (compact lists and Rework) and #19 (warning gate and notes for the AI), plus public access on branch `claude/public-access` (not merged yet).
 
 **Working**
 - All 17 product types produce offline with the built-in content library: QA, packaging, listings, batch approval and export packages.
@@ -167,12 +168,18 @@ As of 2026-11-06: `main` after pull requests #12 (backup AI models), #15 (sample
 - Compact output lists (2026-11-06): every page that lists output uses one shared compact list (`web/src/compact.tsx`) with slim rows, a box of fixed height, the real total and Load more. Pictures load only when Preview is pressed. Lists no longer stop silently at 100 to 300 items. Product library has Gallery (the last 5 types with approved work, 4 of each) and List. Production calendar shows things made today, this week and this month. New **Rework** screen: failed by the machine on top, rejected by you below, each sortable. An item leaves only when Mark fixed is pressed.
 - Warning gate (2026-11-06): a version with open QA warnings (yellow flags) can't be approved until the owner ticks "I accept these warnings" in batch review. The note is optional and is kept in the audit log, not in the decision notes that feed prompts. Each warning has an optional "Help me with this" AI button, which only suggests a fix and needs an AI key. Packs, carts and bundles take **approved** products only. Products waiting in carts or the backlog that aren't approved get taken out, and come back once approved. The old `packing.feedOn` setting is ignored and hidden. Items approved before the gate that carry unaccepted warnings keep their approval, but they are held back from packing, bundling and export/publishing until accepted. Batch approval lists them at the top.
 - Notes for the AI (2026-11-06): every review note is kept in one list on a new **Notes for the AI** screen. That covers reject, send back, regenerate, approve and accepted-warning notes, plus notes added with "Add note" on Rework. After every 10 new notes, or when "Read my notes now" is pressed, the AI reads them all and writes a list of repeat problems. That list goes into every AI prompt ahead of the 12 most recent notes. You can edit, pin, delete or add lessons; the AI only replaces its own unpinned ones. Reading needs an AI key. Migration 010.
+- **Public access** (owner request, 2026-11-06; not merged yet). The app can be opened at `https://daf.promptpimps.com` through a Cloudflare Tunnel (`cloudflared` on the Mac, forwarding to `127.0.0.1:4317`). The owner's steps are in `docs/PUBLIC_ACCESS.md`.
+  - The tunnel connects from the Mac itself, so the app no longer trusts the connection's address alone. A request counts as local only when it comes from this computer, carries no `CF-Connecting-IP` or `X-Forwarded-For` header, and isn't addressed to a public address. Everything else needs the access token, and only works while hub mode is on with a token made.
+  - Public addresses are listed in Settings → System (**Public web address**, saved as `remote.publicHosts`, empty by default). `https://` writes are accepted only from a listed address. The sign-in cookie is marked Secure when the visit came over https.
+  - The wrong-token brake counts each visitor by `CF-Connecting-IP`, never the tunnel's 127.0.0.1. Those headers are only believed when the tunnel is on the Mac, so a home-network computer can't make them up to dodge the brake. A new access token still can only be made on the Mac, never through the tunnel.
+  - A new tick box, **Only through the web address**, sets `remote.bindAddress` to `127.0.0.1` so the home-network door stays shut while the tunnel works.
+  - The guide recommends Cloudflare Access (an emailed one-time code, the owner's email only) as a second lock. It rules out cloudflared's `httpHostHeader` trick.
 - Parked, not to be forgotten: a tool for drawing a box on a page preview in reject/revise notes. It waits for an AI model that can look at pictures, because today's app AI reads text only.
 - **Cleanup of old test data** (owner request, 2026-11-05).
   - `npm run clean-verification` lists folders inside `verification-output/` (the throwaway copies used for browser checks) that have not changed for 7 days. `-- --apply` removes them. This is the same pattern as `tidy-folders`, chosen by the owner.
   - It never removes `verification-output/` itself, loose files or links, and never touches anything outside it, `data/` above all. It skips any folder a running copy of the app is using, and checks again just before deleting.
   - The app runs it once a week while open. Turn that off in Settings → Scheduler → `cleanVerificationWeekly`. The last run is noted in `verification-output/.last-cleanup`.
-- Tests: 168 tests, 168 pass, 0 skipped, 0 fail (branch `claude/arcade-start-flow` with `main` merged in, run on the Mac, 2026-11-06).
+- Tests: 169 tests, 169 pass, 0 skipped, 0 fail (branch `claude/public-access`, run on the Mac, 2026-11-06).
 
 **Built but not proven live**
 - Of the AI providers, only NVIDIA text has worked with a real key (2026-11-05). On 2026-11-04 and 2026-11-05 the log showed the others failing:
@@ -181,7 +188,7 @@ As of 2026-11-06: `main` after pull requests #12 (backup AI models), #15 (sample
   - OpenRouter: its key was rejected (missing).
   - Groq: its Llama model was not found.
 - Untested live: the rest of the providers, and the new TIDY MY NOTES and suggestion modes, which have only run against a stand-in AI.
-- Gumroad direct posting, the research digest email, Windows and hub mode have also never had a live run.
+- Gumroad direct posting, the research digest email, Windows, hub mode and public access at `daf.promptpimps.com` have also never had a live run. Public access needs the owner's DNS move and Cloudflare set-up first.
 
 **Data**
 - The Mac's `data/daf.sqlite` was replaced by an empty database on 2026-10-29, so product records were lost. The product folders survived.
@@ -197,14 +204,15 @@ As of 2026-11-06: `main` after pull requests #12 (backup AI models), #15 (sample
 
 **Next, in order**
 1. **On the Mac:** `git pull`, `npm ci`, `npm run backup`, then `npm run restore-products` (dry run), then `-- --apply`. Then try `/arcade`. To get the Dock app, run `npm run make-mac-app`, drag `dist-mac/Asset Foundry.app` into Applications and keep it in the Dock.
-2. **Try the new AI help with the real NVIDIA key.** LET THE AI BUILD A WORLD already worked live on 2026-11-05. Still to try live:
+2. **Public access, if wanted** (owner request, 2026-11-06). After the pull request is reviewed and merged, follow `docs/PUBLIC_ACCESS.md`: move `promptpimps.com` DNS to Cloudflare (copying every IONOS record first), add the Cloudflare Access lock, enter `daf.promptpimps.com` in Settings → System, then start `cloudflared`. Try it from a phone on mobile data. The Mac must be awake with the app running.
+3. **Try the new AI help with the real NVIDIA key.** LET THE AI BUILD A WORLD already worked live on 2026-11-05. Still to try live:
    - TIDY MY NOTES, BUILD ON WHAT I HAVE and SHOW ME UNEXPLORED GROUND.
    - Starting a world, leaving the page and finding the draft waiting.
    - Re-running the `prepare_listings` jobs that failed on 2026-11-04.
-3. **A guide in each area** (owner request, 2026-11-05). A HOW THIS WORKS button on each arcade area opens a short guide for just that screen, describing only what exists (Art. 5.2). The owner reviews the wording. Order: Hub, World Detail, World Builder (including the AI parts).
-4. **HAPPY DAFFY milestone 3, the Task Workspace** (the screen behind OPEN TASK). Its questions are the spec's section H.
-5. **Factory upgrades from the 2026-10-28 plan:** mandala engine expansion, then geometric pattern art.
-6. **AI-drawn opportunity pictures** (the owner's "later" choice, 2026-11-04): a Draw with AI button beside the free sample preview, once an image provider key works. It costs credits per idea and must be labelled as an AI impression, not the product.
+4. **A guide in each area** (owner request, 2026-11-05). A HOW THIS WORKS button on each arcade area opens a short guide for just that screen, describing only what exists (Art. 5.2). The owner reviews the wording. Order: Hub, World Detail, World Builder (including the AI parts).
+5. **HAPPY DAFFY milestone 3, the Task Workspace** (the screen behind OPEN TASK). Its questions are the spec's section H.
+6. **Factory upgrades from the 2026-10-28 plan:** mandala engine expansion, then geometric pattern art.
+7. **AI-drawn opportunity pictures** (the owner's "later" choice, 2026-11-04): a Draw with AI button beside the free sample preview, once an image provider key works. It costs credits per idea and must be labelled as an AI impression, not the product.
 
 **Undecided**
 - **A.** Answered 2026-11-03 and built: both. The owner builds from scratch, and the AI suggests and writes worlds. Possible later additions: more settings to tune, and effort points the AI estimates from past work.
@@ -230,3 +238,4 @@ As of 2026-11-06: `main` after pull requests #12 (backup AI models), #15 (sample
 | 2026-11-04 | Articles 7, 8 and 9 updated for sample previews on Research & opportunities. |
 | 2026-11-04 | Articles 7, 8 and 9 updated for the Mac Dock app (`npm run make-mac-app`). |
 | 2026-11-05 | Articles 7, 8 and 9 updated for the Hub, the stats ticker, World Builder drafts, smarter AI help and the first live NVIDIA success. Undecided items F to I added. The UX spec is amended for the Hub, with the owner's approval. |
+| 2026-11-06 | Articles 7, 8 and 9 updated for public access at `daf.promptpimps.com` (Cloudflare Tunnel, `remote.publicHosts`, `docs/PUBLIC_ACCESS.md`). Pull request #13 recorded as merged. |
