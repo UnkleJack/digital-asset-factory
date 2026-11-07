@@ -4,7 +4,117 @@ import { api, errorText, useApi } from '../api.ts';
 import { ActionButton, Async, Card, Empty, PageHead, Pill, useToast } from '../ui.tsx';
 import { fmtDate } from '../format.ts';
 
-const TOOLS = ['Grok Imagine', 'ChatGPT images', 'Gemini (Nano Banana)', 'arena.ai', 'Flux', 'Venice AI', 'Midjourney', 'Canva'];
+const TOOLS = ['Grok Imagine', 'ChatGPT images', 'Gemini (Nano Banana)', 'arena.ai', 'Flux', 'Venice AI', 'Midjourney', 'Canva', 'Pollinations'];
+
+const AVAILABLE_MODELS = [
+  { id: 'pollinations', label: 'Pollinations (FLUX, free, no key)', free: true, supportsRef: true },
+  { id: 'gemini', label: 'Gemini 3 Pro Image (free tier)', free: true, supportsRef: true },
+  { id: 'together', label: 'Together FLUX.1-schnell (free tier)', free: true, supportsRef: false },
+  { id: 'huggingface', label: 'Hugging Face FLUX (free tier)', free: true, supportsRef: false },
+  { id: 'openai', label: 'OpenAI GPT Image (paid)', free: false, supportsRef: true },
+  { id: 'replicate', label: 'Replicate FLUX (paid)', free: false, supportsRef: true },
+  { id: 'fal', label: 'Fal.ai FLUX (paid)', free: false, supportsRef: true },
+  { id: 'grok', label: 'xAI Grok (paid)', free: false, supportsRef: true },
+];
+
+function VariationsModal({
+  open,
+  onClose,
+  referenceId,
+  count,
+  modelIds,
+  prompt,
+  onSubmit,
+  onCountChange,
+  onModelIdsChange,
+  onPromptChange,
+}: {
+  open: boolean;
+  onClose: () => void;
+  referenceId: string;
+  count: number;
+  modelIds: string[];
+  prompt: string;
+  onSubmit: (referenceId: string, count: number, modelIds: string[], prompt: string) => Promise<void>;
+  onCountChange: (c: number) => void;
+  onModelIdsChange: (m: string[]) => void;
+  onPromptChange: (p: string) => void;
+}) {
+  if (!open) return null;
+  const [err, setErr] = useState<string | null>(null);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErr(null);
+    try {
+      await onSubmit(referenceId, count, modelIds, prompt);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    }
+  };
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h3>Make variations of {referenceId}</h3>
+        <form onSubmit={handleSubmit} className="stack">
+          <label className="f">How many per model<input type="number" min="1" max="20" value={count} onChange={(e) => onCountChange(Number(e.target.value))} /></label>
+          <label className="f">Prompt (optional, empty = use reference prompt)<textarea rows={3} value={prompt} onChange={(e) => onPromptChange(e.target.value)} /></label>
+          <div className="stack">
+            <div className="small muted">Pick models (max 4):</div>
+            {AVAILABLE_MODELS.map((m) => (
+              <label key={m.id} className="check">
+                <input type="checkbox" checked={modelIds.includes(m.id)} onChange={(e) => onModelIdsChange(e.target.checked ? [...modelIds, m.id] : modelIds.filter((x) => x !== m.id))} />
+                {m.label} {m.free ? <span className="pill ready">free</span> : <span className="pill pending">paid</span>} {m.supportsRef && <span className="pill ready">ref</span>}
+              </label>
+            ))}
+          </div>
+          {err ? <div className="err">{err}</div> : null}
+          <div className="row">
+            <ActionButton className="danger" onClick={onClose}>Cancel</ActionButton>
+            <ActionButton className="primary" type="submit" disabled={modelIds.length === 0}>Generate {modelIds.length} × {count}</ActionButton>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function ImageThumb({ r, n, sel, toggle, onMakeVariations }: { r: any; n: number; sel: string[]; toggle: (id: string) => void; onMakeVariations: (refId: string) => void }) {
+  return (
+    <div key={r.id} className={`ref-card${n >= 0 ? ' on' : ''}`}>
+      <button className="thumb sq ref-pick" onClick={() => toggle(r.id)} title={r.original_name}>
+        <img src={`/api/references/${r.id}/file`} alt={r.label} loading="lazy" />
+        {n >= 0 && <span className="ref-n">{n + 1}</span>}
+      </button>
+      <div className="small"><b>{r.rel_path?.split('/').pop()}</b></div>
+      <div className="small muted">{r.source_tool || 'tool not recorded'} · {r.width_px}×{r.height_px} · {fmtDate(r.made_at)}</div>
+      {r.usedBy.length > 0 && <div className="small">In {r.usedBy.map((u: any, i: number) => <span key={u.id}>{i ? ', ' : ''}<Link to={`/products/${u.id}`}>{u.title}</Link></span>)}</div>
+      <div className="row">
+        <EditTool item={r} onSaved={() => {}} />
+        <ActionButton className="small danger" disabled={r.usedBy.length > 0} title={r.usedBy.length > 0 ? 'Used by a product' : 'Delete this image from the library'} confirm={`Delete ${r.rel_path?.split('/').pop()}? This removes the file.`} onClick={async () => { await api(`/references/${r.id}`, { method: 'DELETE' }); }}>Delete</ActionButton>
+      </div>
+    </div>
+  );
+}
+
+const renderThumb = (r: any, n: number, toggle: (id: string) => void) => {
+    const cardClass = `ref-card${n >= 0 ? ' on' : ''}`;
+    return (
+        <div key={r.id} className={cardClass}>
+            <button className="thumb sq ref-pick" onClick={() => toggle(r.id)} title={r.original_name}>
+                <img src={`/api/references/${r.id}/file`} alt={r.label} loading="lazy" />
+                {n >= 0 && <span className="ref-n">{n + 1}</span>}
+            </button>
+            <div className="small"><b>{r.rel_path?.split('/').pop()}</b></div>
+            <div className="small muted">{r.source_tool || 'tool not recorded'} · {r.width_px}×{r.height_px} · {fmtDate(r.made_at)}</div>
+            {r.usedBy.length > 0 && <div className="small">In {r.usedBy.map((u: any, i: number) => <span key={u.id}>{i ? ', ' : ''}<Link to={`/products/${u.id}`}>{u.title}</Link></span>)}</div>
+            <div className="row">
+                <EditTool item={r} onSaved={() => {}} />
+                <ActionButton className="small danger" disabled={r.usedBy.length > 0} title={r.usedBy.length > 0 ? 'Used by a product' : 'Delete this image from the library'} confirm={`Delete ${r.rel_path?.split('/').pop()}? This removes the file.`} onClick={async () => { await api(`/references/${r.id}`, { method: 'DELETE' }); }}>Delete</ActionButton>
+            </div>
+        </div>
+    );
+};
+
 const FIELDS: { id: string; label: string; hint: string }[] = [
   { id: 'title', label: 'Titles', hint: 'Product or listing titles you like' },
   { id: 'description', label: 'Descriptions', hint: 'Listing descriptions you like' },
@@ -38,9 +148,23 @@ function ToolPicker({ value, onChange }: { value: string; onChange: (v: string) 
   );
 }
 
+interface ImageLibraryProps {
+  state: any;
+  onMakeVariations: (refId: string) => void;
+}
+
 export function Imports() {
   const images = useApi<any[]>('/references?kind=image');
   const texts = useApi<any[]>('/references?kind=text');
+  const [makeVar, setMakeVar] = useState<{ open: boolean; count: number; modelIds: string[]; prompt: string; referenceId: string } | null>(null);
+  const toast = useToast();
+
+  const handleSubmitVariations = async (referenceId: string, count: number, modelIds: string[], prompt: string) => {
+    setMakeVar(prev => prev ? { ...prev, open: false } : null);
+    const r = await api<any>('/api/tournaments/variations', { body: { referenceId, count, modelIds, prompt } });
+    toast(`Variations started: ${r.results.filter((x: any) => x.result).length}/${r.results.length} succeeded`);
+  };
+
   return (
     <div className="page">
       <PageHead title="Imports" sub="Bring in things you made with other tools. Images become coloring-page products; text you like becomes style examples for the AI. Exact duplicates are skipped automatically." />
@@ -48,8 +172,22 @@ export function Imports() {
         <ImageUpload onDone={() => images.reload()} />
         <TextUpload onDone={() => texts.reload()} />
       </div>
-      <ImageLibrary state={images} />
+      <ImageLibrary state={images} onMakeVariations={(refId) => setMakeVar({ open: true, count: 5, modelIds: ['pollinations', 'gemini', 'together', 'huggingface'], prompt: '', referenceId: refId })} />
       <TextLibrary state={texts} />
+      {makeVar ? (
+        <VariationsModal
+          open={makeVar.open}
+          onClose={() => setMakeVar(null)}
+          referenceId={makeVar.referenceId}
+          count={makeVar.count}
+          modelIds={makeVar.modelIds}
+          prompt={makeVar.prompt}
+          onSubmit={handleSubmitVariations}
+          onCountChange={(c) => setMakeVar({ ...makeVar, count: c })}
+          onModelIdsChange={(m) => setMakeVar({ ...makeVar, modelIds: m })}
+          onPromptChange={(p) => setMakeVar({ ...makeVar, prompt: p })}
+        />
+      ) : null}
     </div>
   );
 }
@@ -142,7 +280,7 @@ function TextUpload({ onDone }: { onDone: () => void }) {
   );
 }
 
-function ImageLibrary({ state }: { state: any }) {
+function ImageLibrary({ state, onMakeVariations }: { state: any; onMakeVariations: (refId: string) => void }) {
   const [sel, setSel] = useState<string[]>([]);
   const [title, setTitle] = useState('');
   const toast = useToast();
@@ -160,30 +298,63 @@ function ImageLibrary({ state }: { state: any }) {
           state.reload();
           nav(`/products/${r.productId}`);
         }}>Make coloring product from {sel.length} selected</ActionButton>
+        {sel.length === 1 && (
+          <ActionButton onClick={() => onMakeVariations(sel[0])}>Make variations</ActionButton>
+        )}
       </>
     )}>
       <Async state={state}>{(d: any[]) => d.length === 0 ? <Empty title="No images yet">Add some above.</Empty> : (
         <>
           <p className="small muted">Click images to pick them, in the order you want the pages. {sel.length ? `${sel.length} picked.` : ''}</p>
           <div className="thumbs">
-            {d.map((r) => {
-              const n = sel.indexOf(r.id);
-              return (
-                <div key={r.id} className={`ref-card${n >= 0 ? ' on' : ''}`}>
-                  <button className="thumb sq ref-pick" onClick={() => toggle(r.id)} title={r.original_name}>
-                    <img src={`/api/references/${r.id}/file`} alt={r.label} loading="lazy" />
-                    {n >= 0 && <span className="ref-n">{n + 1}</span>}
-                  </button>
-                  <div className="small"><b>{r.rel_path?.split('/').pop()}</b></div>
-                  <div className="small muted">{r.source_tool || 'tool not recorded'} · {r.width_px}×{r.height_px} · {fmtDate(r.made_at)}</div>
-                  {r.usedBy.length > 0 && <div className="small">In {r.usedBy.map((u: any, i: number) => <span key={u.id}>{i ? ', ' : ''}<Link to={`/products/${u.id}`}>{u.title}</Link></span>)}</div>}
-                  <div className="row">
-                    <EditTool item={r} onSaved={() => state.reload()} />
-                    <ActionButton className="small danger" disabled={r.usedBy.length > 0} title={r.usedBy.length ? 'Used by a product' : 'Delete this image from the library'} confirm={`Delete ${r.rel_path?.split('/').pop()}? This removes the file.`} onClick={async () => { await api(`/references/${r.id}`, { method: 'DELETE' }); setSel(sel.filter((x) => x !== r.id)); state.reload(); }}>Delete</ActionButton>
-                  </div>
-                </div>
-              );
-            })}
+            {(() => {
+              const thumbs = d.map((r) => {
+                const n = sel.indexOf(r.id);
+                const cardClass = `ref-card${n >= 0 ? ' on' : ''}`;
+                const row = React.createElement('div', { className: 'row' },
+                  React.createElement(EditTool, { item: r, onSaved: () => state.reload() }),
+                  React.createElement(ActionButton, {
+                    className: 'small danger',
+                    disabled: r.usedBy.length > 0,
+                    title: r.usedBy.length > 0 ? 'Used by a product' : 'Delete this image from the library',
+                    confirm: `Delete ${r.rel_path?.split('/').pop()}? This removes the file.`,
+                    onClick: async () => { await api(`/references/${r.id}`, { method: 'DELETE' }); setSel(sel.filter((x) => x !== r.id)); state.reload(); }
+                  }, 'Delete')
+                );
+                return React.createElement('div', { key: r.id, className: `ref-card${n >= 0 ? ' on' : ''}` },
+                  React.createElement('button', {
+                    className: 'thumb sq ref-pick',
+                    onClick: () => toggle(r.id),
+                    title: r.original_name
+                  },
+                    React.createElement('img', { src: `/api/references/${r.id}/file`, alt: r.label, loading: 'lazy' }),
+                    n >= 0 && React.createElement('span', { className: 'ref-n' }, n + 1)
+                  ),
+                  React.createElement('div', { className: 'small' },
+                    React.createElement('b', {}, r.rel_path?.split('/').pop())
+                  ),
+                  React.createElement('div', { className: 'small muted' },
+                    r.source_tool || 'tool not recorded', ' · ', r.width_px, '×', r.height_px, ' · ', fmtDate(r.made_at)
+                  ),
+                  r.usedBy.length > 0 && React.createElement('div', { className: 'small' },
+                    'In ',
+                    r.usedBy.map((u: any, i: number) => React.createElement('span', { key: u.id }, i ? ', ' : '', React.createElement(Link, { to: `/products/${u.id}` }, u.title)))
+                  ),
+                  React.createElement('div', { className: 'row' },
+                    React.createElement(EditTool, { item: r, onSaved: () => state.reload() }),
+                    React.createElement(ActionButton, {
+                      className: 'small danger',
+                      disabled: r.usedBy.length > 0,
+                      title: r.usedBy.length > 0 ? 'Used by a product' : 'Delete this image from the library',
+                      confirm: `Delete ${r.rel_path?.split('/').pop()}? This removes the file.`,
+                      onClick: async () => { await api(`/references/${r.id}`, { method: 'DELETE' }); setSel(sel.filter((x) => x !== r.id)); state.reload(); }
+                    }, 'Delete')
+                  )
+                );
+              });
+              return thumbs;
+            })()}
+          </div>
           </div>
         </>
       )}</Async>

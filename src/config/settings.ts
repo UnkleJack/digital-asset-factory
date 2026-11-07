@@ -66,8 +66,8 @@ export const SettingsSchema = z.object({
     // production. Free-tier providers first; Anthropic last since it's pay-per-use.
     // Owner's order (2026-11-04): NVIDIA first, and Groq is a late backup, never the first one.
     fallbackOrder: z.array(z.enum(['anthropic', 'openrouter', 'groq', 'nvidia', 'cerebras', 'together', 'gemini', 'mistral', 'github', 'huggingface'])).default(['nvidia', 'gemini', 'openrouter', 'cerebras', 'mistral', 'github', 'together', 'groq', 'huggingface', 'anthropic']),
-    imageProvider: z.enum(['openai', 'gemini', 'together', 'huggingface', 'pollinations', 'replicate', 'fal', 'grok', 'none']).default('openai'),
-    imageFallbackOrder: z.array(z.enum(['openai', 'gemini', 'together', 'huggingface', 'pollinations', 'replicate', 'fal', 'grok'])).default(['gemini', 'together', 'huggingface', 'pollinations', 'openai', 'replicate', 'fal', 'grok']),
+    imageProvider: z.enum(['pollinations', 'gemini', 'together', 'huggingface', 'openai', 'replicate', 'fal', 'grok', 'none']).default('pollinations'),
+    imageFallbackOrder: z.array(z.enum(['pollinations', 'gemini', 'together', 'huggingface', 'openai', 'replicate', 'fal', 'grok'])).default(['pollinations', 'gemini', 'together', 'huggingface', 'openai', 'replicate', 'fal', 'grok']),
     allowPaidFallback: z.boolean().default(false),
     // Spreads calls out to stay inside free-tier limits. dailyCallLimits: per provider, 0 or absent = no app limit.
     // Defaults sit just under what the free tiers allowed when checked (Groq ~1,000/day per model, OpenRouter free models ~50/day without credit).
@@ -204,8 +204,14 @@ export const SettingsSchema = z.object({
       maxRetries: z.number().int().min(0).max(6).default(2),
     }).prefault({}),
     pollinations: z.object({
-      model: z.string().min(1).default('flux'),
-      baseUrl: z.url().default('https://image.pollinations.ai'),
+      // Modern gateway (needs a key): 78 image models, reference images, no per-IP rate limit.
+      model: z.string().min(1).default('black-forest-labs/flux.1-schnell'),
+      // Used when a reference image is supplied; FLUX.2 Klein 4B takes up to 10 references and is free-tier.
+      editModel: z.string().min(1).default('black-forest-labs/flux.2-klein-4b'),
+      baseUrl: z.url().default('https://gen.pollinations.ai'),
+      // Classic gateway (no key): one FLUX model, 768px, one image per 45 seconds.
+      classicModel: z.string().min(1).default('flux'),
+      classicBaseUrl: z.url().default('https://image.pollinations.ai'),
       timeoutMs: z.number().int().min(5000).max(600000).default(180000),
       maxRetries: z.number().int().min(0).max(6).default(2),
     }).prefault({}),

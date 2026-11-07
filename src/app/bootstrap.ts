@@ -88,7 +88,7 @@ export function bootstrap(opts: BootstrapOptions = {}): App {
       const grokImage = new GrokImageProvider(() => secrets.get('grok_api_key'), () => settings.get('generation').grok);
       const togetherImage = new TogetherImageProvider(() => secrets.get('together_api_key'), () => settings.get('generation').togetherImage);
       const hfImage = new HuggingFaceImageProvider(() => secrets.get('huggingface_token'), () => settings.get('generation').huggingfaceImage);
-      const pollinationsImage = new PollinationsImageProvider(() => settings.get('generation').pollinations);
+      const pollinationsImage = new PollinationsImageProvider(() => secrets.get('pollinations_api_key'), () => settings.get('generation').pollinations);
 
       const imageProviders: Partial<Record<AiImageProviderId, ImageProvider>> = {
         openai: openAiImage,

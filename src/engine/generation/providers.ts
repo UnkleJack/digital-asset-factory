@@ -47,11 +47,26 @@ export interface ImageResult {
   servedByFallback?: boolean;
 }
 
+/** A reference image handed to a provider so it can steer the output (style match, edit, variation). */
+export interface ReferenceImage {
+  data: Buffer;
+  mime: string;
+}
+
+export interface ImageGenRequest {
+  prompt: string;
+  size: 'portrait' | 'square' | 'landscape';
+  /** Optional image the model should follow: same style, an edit, or a variation of it. */
+  referenceImage?: ReferenceImage;
+  /** Optional seed for reproducible output. */
+  seed?: number;
+}
+
 export interface ImageProvider {
   readonly id: string;
   isConfigured(): Promise<boolean>;
   model(): string;
-  generateImage(req: { prompt: string; size: 'portrait' | 'square' | 'landscape' }): Promise<ImageResult>;
+  generateImage(req: ImageGenRequest): Promise<ImageResult>;
 }
 
 const FALLBACK_MODELS = new Set(['claude-fable-5-1', 'claude-opus-5-5', 'claude-opus-5', 'claude-sonnet-5-5']);
@@ -153,6 +168,7 @@ export const SECRET_KEY_LINKS: Partial<Record<SecretName, { url: string; free: b
   fal_api_key: { url: 'https://fal.ai/dashboard/keys', free: true },
   gemini_api_key: { url: 'https://aistudio.google.com/app/apikey', free: true },
   grok_api_key: { url: 'https://console.x.ai/', free: false },
+  pollinations_api_key: { url: 'https://enter.pollinations.ai/keys', free: true },
   huggingface_token: { url: 'https://huggingface.co/settings/tokens', free: true },
   gumroad_token: { url: 'https://app.gumroad.com/settings/advanced', free: true },
   tavily_api_key: { url: 'https://app.tavily.com', free: true },
@@ -1084,32 +1100,45 @@ export class HuggingFaceImageProvider implements ImageProvider {
 }
 
 const POLLINATIONS_SIZES = { portrait: { width: 768, height: 1024 }, square: { width: 1024, height: 1024 }, landscape: { width: 1024, height: 768 } } as const;
+const POLLINATIONS_MODERN_SIZES = { portrait: { width: 1024, height: 1536 }, square: { width: 1024, height: 1024 }, landscape: { width: 1536, height: 1024 } } as const;
 
+/**
+ * Pollinations.ai, two ways:
+ *
+ *  - With a key (free pollen from enter.pollinations.ai): the modern gateway at gen.pollinations.ai.
+ *    78 image models — including the DesignArena front-runners (GPT Image 2.6 Sunburst, FLUX.2 Pro,
+ *    Nano Banana Pro, MAI Image 2.6) — no per-IP rate limit, no logo, and reference images.
+ *  - Without a key: the Classic API (image.pollinations.ai). One FLUX model, 768px, one image per
+ *    45 seconds, JPEG. Always works, so the app never needs a key to make a picture.
+ */
 export class PollinationsImageProvider implements ImageProvider {
   readonly id = 'pollinations';
+  private getKey: () => Promise<string | null>;
   private cfg: () => Settings['generation']['pollinations'];
   private sleep: (ms: number) => Promise<void>;
 
-  constructor(cfg: () => Settings['generation']['pollinations'], sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))) {
+  constructor(getKey: () => Promise<string | null>, cfg: () => Settings['generation']['pollinations'], sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))) {
+    this.getKey = getKey;
     this.cfg = cfg;
     this.sleep = sleep;
   }
 
   async isConfigured(): Promise<boolean> {
-    return true; // 100% free, no key required
+    return true; // the classic API needs no key, so this provider is always usable
   }
 
   model(): string {
     return this.cfg().model;
   }
 
-  async generateImage(req: { prompt: string; size: 'portrait' | 'square' | 'landscape' }): Promise<ImageResult> {
+  async generateImage(req: ImageGenRequest): Promise<ImageResult> {
     const cfg = this.cfg();
+    const key = await this.getKey();
     let lastErr: ProviderError | null = null;
     for (let attempt = 0; attempt <= cfg.maxRetries; attempt++) {
       if (attempt > 0) await this.sleep(Math.min(60_000, 2000 * 2 ** attempt));
       try {
-        return await this.once(cfg, req);
+        return key ? await this.modern(key, cfg, req) : await this.classic(cfg, req);
       } catch (err) {
         lastErr = err instanceof ProviderError ? err : new ProviderError('pollinations', 'server', String(err), err);
         if (lastErr.errorClass !== 'transient' || lastErr.kind === 'invalid_output') break;
@@ -1118,10 +1147,58 @@ export class PollinationsImageProvider implements ImageProvider {
     throw lastErr!;
   }
 
-  private async once(cfg: Settings['generation']['pollinations'], req: { prompt: string; size: keyof typeof POLLINATIONS_SIZES }): Promise<ImageResult> {
+  /** The modern gateway: any catalog model, reference images, no per-IP limit. */
+  private async modern(key: string, cfg: Settings['generation']['pollinations'], req: ImageGenRequest): Promise<ImageResult> {
+    const dims = POLLINATIONS_MODERN_SIZES[req.size];
+    const model = req.referenceImage ? cfg.editModel : cfg.model;
+    const body: Record<string, unknown> = { model, prompt: req.prompt, width: dims.width, height: dims.height, n: 1 };
+    if (req.referenceImage) body.image = [`data:${req.referenceImage.mime};base64,${req.referenceImage.data.toString('base64')}`];
+    if (req.seed !== undefined) body.seed = req.seed;
+    let res: Response;
+    try {
+      res = await fetch(`${cfg.baseUrl.replace(/\/$/, '')}/v1/images/generations`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(cfg.timeoutMs),
+      });
+    } catch (err) {
+      const name = (err as Error)?.name;
+      if (name === 'TimeoutError' || name === 'AbortError') throw new ProviderError('pollinations', 'timeout', 'The image request timed out.', err);
+      throw new ProviderError('pollinations', 'connection', 'Could not reach Pollinations.ai.', err);
+    }
+    const text = await res.text();
+    let parsed: { data?: { b64_json?: string; url?: string }[]; images?: { url: string }[]; error?: { message?: string } | string; model?: string } = {};
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      if (res.ok) throw new ProviderError('pollinations', 'invalid_output', 'The Pollinations API returned a non-JSON response.');
+    }
+    if (!res.ok) {
+      const msg = (typeof parsed.error === 'string' ? parsed.error : parsed.error?.message)?.slice(0, 200) ?? `HTTP ${res.status}`;
+      if (res.status === 401 || res.status === 403) throw new ProviderError('pollinations', 'auth', `Key rejected: ${msg}`);
+      if (res.status === 402) throw new ProviderError('pollinations', 'rate_limit', `Out of pollen: ${msg}`);
+      if (res.status === 429) throw new ProviderError('pollinations', 'rate_limit', msg);
+      if (res.status >= 500) throw new ProviderError('pollinations', 'server', msg);
+      throw new ProviderError('pollinations', 'bad_request', msg);
+    }
+    const b64 = parsed.data?.[0]?.b64_json;
+    const url = parsed.data?.[0]?.url ?? parsed.images?.[0]?.url;
+    let buf: Buffer;
+    if (b64) buf = Buffer.from(b64, 'base64');
+    else if (url) {
+      const img = await fetch(url, { signal: AbortSignal.timeout(30_000) });
+      if (!img.ok) throw new ProviderError('pollinations', 'connection', 'Could not download the generated image.');
+      buf = Buffer.from(await img.arrayBuffer());
+    } else throw new ProviderError('pollinations', 'invalid_output', 'The Pollinations API response contained no image data.');
+    return toPngResult('pollinations', buf, model);
+  }
+
+  /** The classic gateway: one FLUX model, no key, 768px, one image per 45 seconds. */
+  private async classic(cfg: Settings['generation']['pollinations'], req: ImageGenRequest): Promise<ImageResult> {
     const dims = POLLINATIONS_SIZES[req.size];
-    const seed = Math.floor(Math.random() * 1_000_000_000);
-    const url = `${cfg.baseUrl.replace(/\/$/, '')}/prompt/${encodeURIComponent(req.prompt)}?model=${encodeURIComponent(cfg.model)}&width=${dims.width}&height=${dims.height}&nologo=true&seed=${seed}`;
+    const seed = req.seed ?? Math.floor(Math.random() * 1_000_000_000);
+    const url = `${cfg.classicBaseUrl.replace(/\/$/, '')}/prompt/${encodeURIComponent(req.prompt)}?model=${encodeURIComponent(cfg.classicModel)}&width=${dims.width}&height=${dims.height}&nologo=true&seed=${seed}`;
     let res: Response;
     try {
       res = await fetch(url, { signal: AbortSignal.timeout(cfg.timeoutMs) });
@@ -1132,16 +1209,28 @@ export class PollinationsImageProvider implements ImageProvider {
     }
     if (!res.ok) {
       const text = await res.text();
-      if (res.status === 429) throw new ProviderError('pollinations', 'rate_limit', text.slice(0, 200));
+      if (res.status === 429 || res.status === 402) throw new ProviderError('pollinations', 'rate_limit', text.slice(0, 200));
       if (res.status >= 500) throw new ProviderError('pollinations', 'server', text.slice(0, 200));
       throw new ProviderError('pollinations', 'bad_request', text.slice(0, 200));
     }
     const buf = Buffer.from(await res.arrayBuffer());
     if (!buf.length) throw new ProviderError('pollinations', 'invalid_output', 'Pollinations returned an empty response.');
-    const measured = imageSize(buf);
-    if (!measured) throw new ProviderError('pollinations', 'invalid_output', 'The returned image format is not valid.');
-    return { png: buf, widthPx: measured.width, heightPx: measured.height, usage: { inputTokens: null, outputTokens: null, images: 1 }, model: cfg.model };
+    return toPngResult('pollinations', buf, cfg.classicModel);
   }
+}
+
+/** Pollinations answers in JPEG; the rest of the app expects PNG. */
+async function toPngResult(provider: string, buf: Buffer, model: string): Promise<ImageResult> {
+  if (buf[0] === 0xFF && buf[1] === 0xD8) {
+    const { default: sharp } = await import('sharp');
+    const png = await sharp(buf).png().toBuffer();
+    const dims = imageSize(png);
+    if (!dims) throw new ProviderError(provider, 'invalid_output', 'Converted image is not valid.');
+    return { png, widthPx: dims.width, heightPx: dims.height, usage: { inputTokens: null, outputTokens: null, images: 1 }, model };
+  }
+  const dims = imageSize(buf);
+  if (!dims) throw new ProviderError(provider, 'invalid_output', 'The returned image format is not valid.');
+  return { png: buf, widthPx: dims.width, heightPx: dims.height, usage: { inputTokens: null, outputTokens: null, images: 1 }, model };
 }
 
 export const IMAGE_PROVIDER_IDS = [

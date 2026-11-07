@@ -119,12 +119,18 @@ test('PollinationsImageProvider: always configured, free fallback without keys',
   }));
   servers.push(srv);
 
-  const p = new PollinationsImageProvider(() => ({
-    model: 'flux',
-    baseUrl: srv.url,
-    timeoutMs: 5000,
-    maxRetries: 0,
-  }), async () => {});
+  const p = new PollinationsImageProvider(
+    async () => null, // getKey: no key -> classic mode
+    () => ({
+      model: 'flux',
+      classicModel: 'flux',
+      baseUrl: 'https://gen.pollinations.ai',
+      classicBaseUrl: srv.url,
+      timeoutMs: 5000,
+      maxRetries: 0,
+      editModel: 'black-forest-labs/flux.2-klein-4b',
+    }),
+  );
 
   assert.equal(await p.isConfigured(), true);
   const res = await p.generateImage({ prompt: 'Zen garden line art', size: 'landscape' });
