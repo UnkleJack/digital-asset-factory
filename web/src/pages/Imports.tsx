@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { api, errorText, useApi } from '../api.ts';
+import { api, ApiError, errorText, useApi } from '../api.ts';
 import { ActionButton, Async, Card, Empty, PageHead, Pill, useToast } from '../ui.tsx';
 import { fmtDate } from '../format.ts';
 
@@ -15,13 +15,77 @@ const FIELDS: { id: string; label: string; hint: string }[] = [
 
 type Result = { name: string; status: 'imported' | 'duplicate' | 'rejected' | 'error'; detail: string };
 
-function readBase64(file: File): Promise<string> {
+function readBase64(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
     r.onload = () => resolve(String(r.result).slice(String(r.result).indexOf(',') + 1));
     r.onerror = () => reject(r.error ?? new Error('Could not read the file'));
     r.readAsDataURL(file);
   });
+}
+
+/** One picture to import: a dropped or chosen file, or one fetched from a dragged web link. */
+type Incoming = { name: string; blob: Blob; madeAt?: number };
+
+const STORED = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+
+/** Pictures the factory doesn't store as-is (AVIF, BMP, SVG, ICO...) are redrawn by the browser and saved as PNG. */
+async function toStorable(item: Incoming): Promise<Incoming> {
+  if (!item.blob.type || STORED.includes(item.blob.type)) return item;
+  const url = URL.createObjectURL(item.blob);
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    const w = img.naturalWidth || 1200, h = img.naturalHeight || 1200;
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
+    const png = await new Promise<Blob | null>((ok) => canvas.toBlob(ok, 'image/png'));
+    if (!png) throw new Error('could not convert');
+    return { ...item, name: item.name.replace(/\.[A-Za-z0-9]{2,5}$/, '') + '.png', blob: png };
+  } catch {
+    throw new Error(`This browser can't open ${item.blob.type.replace('image/', '').toUpperCase() || 'this'} pictures, so it can't be imported.`);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+/**
+ * The pictures in a drag or paste from a web page: each <img> in its HTML, else its link list or plain text.
+ * Each picture is a list of links to try in order: the largest size the page offers first, then the one shown.
+ */
+function linksIn(dt: DataTransfer): string[][] {
+  const out: string[][] = [];
+  const html = dt.getData('text/html');
+  if (html) for (const img of new DOMParser().parseFromString(html, 'text/html').querySelectorAll('img')) {
+    const src = img.getAttribute('src') ?? '';
+    const set = img.getAttribute('srcset');
+    // srcset lists sizes; the last entry is usually the largest.
+    const best = set ? set.split(',').map((x) => x.trim().split(/\s+/)[0]).filter(Boolean).pop() : undefined;
+    const tries = [...new Set([best, src].filter((x): x is string => !!x))];
+    if (tries.length) out.push(tries);
+  }
+  if (!out.length) for (const line of (dt.getData('text/uri-list') || dt.getData('text/plain') || '').split(/\r?\n/)) {
+    const t = line.trim();
+    if (/^(https?:|data:image\/)/i.test(t)) out.push([t]);
+  }
+  return out.slice(0, 50);
+}
+
+async function fetchLink(link: string): Promise<Incoming> {
+  if (link.startsWith('data:')) {
+    const blob = await (await fetch(link)).blob();
+    return { name: `pasted-image.${blob.type.split('/')[1]?.replace('jpeg', 'jpg').replace(/\+.*/, '') || 'png'}`, blob };
+  }
+  const res = await fetch('/api/references/fetch-image', { method: 'POST', headers: { 'x-daf-client': '1', 'content-type': 'application/json' }, body: JSON.stringify({ url: link }) });
+  if (!res.ok) {
+    const e = await res.json().catch(() => null);
+    throw new ApiError(e?.error?.message ?? `Could not fetch the picture (${res.status}).`, res.status, e?.error?.code ?? 'error', null);
+  }
+  const name = decodeURIComponent(res.headers.get('x-file-name') ?? '') || 'web-image';
+  return { name, blob: await res.blob() };
 }
 
 function ToolPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
@@ -63,17 +127,55 @@ function ImageUpload({ onDone }: { onDone: () => void }) {
   const [drag, setDrag] = useState(false);
   const input = useRef<HTMLInputElement>(null);
 
-  const upload = async (files: File[]) => {
+  const fromFiles = (files: File[]): Incoming[] => files.map((f) => ({ name: f.name, blob: f, madeAt: f.lastModified }));
+
+  /** Files when the drag or paste carries them; otherwise the picture links a web page put in it. */
+  const take = async (dt: DataTransfer | null) => {
+    if (!dt) return;
+    const files = [...dt.files].filter((f) => f.type.startsWith('image/') || !f.type);
+    if (files.length) return upload(fromFiles(files));
+    const links = linksIn(dt);
+    if (!links.length) { setResults([{ name: 'Dropped item', status: 'rejected', detail: 'No picture found in what was dropped. Try dragging the picture itself, not its page.' }]); return; }
+    return upload(links.map((l) => ({ name: l[0].startsWith('data:') ? 'pasted image' : l[0].split('?')[0].split('/').pop() || l[0], links: l })));
+  };
+
+  // Paste (⌘V / Ctrl+V) anywhere on this page works like a drop, unless you are typing in a box.
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (!e.clipboardData) return;
+      const hasPicture = [...e.clipboardData.files].length > 0 || linksIn(e.clipboardData).length > 0;
+      if (!hasPicture) return;
+      e.preventDefault();
+      void take(e.clipboardData);
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  });
+
+  /** The first link that gives a picture (a page's "largest size" link sometimes doesn't exist). */
+  const fetchFirst = async (links: string[]): Promise<Incoming & { from: string }> => {
+    let err: unknown;
+    for (const l of links) {
+      try { return { ...(await fetchLink(l)), from: l }; } catch (e) { err = e; }
+    }
+    throw err;
+  };
+
+  const upload = async (items: (Incoming | { name: string; links: string[] })[]) => {
     const out: Result[] = [];
-    for (const [i, f] of files.entries()) {
-      setBusy(`Importing ${i + 1} of ${files.length}…`);
+    for (const [i, it] of items.entries()) {
+      setBusy(`Importing ${i + 1} of ${items.length}…`);
       try {
-        const r = await api<any>('/references/images', { body: { fileName: f.name, dataBase64: await readBase64(f), label: label || undefined, sourceTool: tool.trim() || undefined, prompt: prompt || undefined, madeAt: f.lastModified ? new Date(f.lastModified).toISOString() : undefined } });
+        const got = 'links' in it ? await fetchFirst(it.links) : null;
+        const f = await toStorable(got ?? (it as Incoming));
+        const r = await api<any>('/references/images', { body: { fileName: f.name, dataBase64: await readBase64(f.blob), label: label || undefined, sourceTool: tool.trim() || undefined, prompt: prompt || undefined, notes: got && !got.from.startsWith('data:') ? `Imported from ${got.from.slice(0, 1900)}` : undefined, madeAt: f.madeAt ? new Date(f.madeAt).toISOString() : undefined } });
         out.push(r.status === 'imported' ? { name: f.name, status: 'imported', detail: `saved as ${r.path}` }
           : r.status === 'duplicate' ? { name: f.name, status: 'duplicate', detail: `same image as ${r.existingPath ?? r.existingLabel}, skipped` }
           : { name: f.name, status: 'rejected', detail: r.reason });
       } catch (e) {
-        out.push({ name: f.name, status: 'error', detail: errorText(e) });
+        out.push({ name: it.name, status: 'error', detail: errorText(e) });
       }
       setResults([...out]);
     }
@@ -93,13 +195,13 @@ function ImageUpload({ onDone }: { onDone: () => void }) {
           className={`dropzone${drag ? ' on' : ''}`}
           onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
           onDragLeave={() => setDrag(false)}
-          onDrop={(e) => { e.preventDefault(); setDrag(false); upload([...e.dataTransfer.files]); }}
+          onDrop={(e) => { e.preventDefault(); setDrag(false); void take(e.dataTransfer); }}
           onClick={() => input.current?.click()}
           role="button"
           tabIndex={0}
         >
-          {busy ?? 'Drop images here, or click to choose (PNG, JPEG, WebP, GIF)'}
-          <input ref={input} type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif" hidden onChange={(e) => { upload([...(e.target.files ?? [])]); e.target.value = ''; }} />
+          {busy ?? 'Drop pictures here: files, or straight from a web page. You can also paste one (⌘V) or click to choose. Any picture type works; unusual ones are saved as PNG.'}
+          <input ref={input} type="file" multiple accept="image/*" hidden onChange={(e) => { void upload(fromFiles([...(e.target.files ?? [])])); e.target.value = ''; }} />
         </div>
         {results.length > 0 && (
           <div className="stack small">
