@@ -4,6 +4,8 @@ import { api, useApi } from '../api.ts';
 import { CompactList, CompactRow, PreviewButton, PreviewPane, ShowDone, usePreview } from '../compact.tsx';
 import { ActionButton, Async, Card, Empty, PageHead, Pill } from '../ui.tsx';
 import { ago, label } from '../format.ts';
+import { WaitingNotes, sentText } from '../waitingNotes.tsx';
+import { useToast } from '../ui.tsx';
 
 type Item = {
   versionId: string; productId: string; title: string; productType: string; category: string | null; versionNo: number; versions: number; current: boolean;
@@ -41,6 +43,7 @@ export function Rework() {
   return (
     <div className="page">
       <PageHead title="Rework" sub="Everything that was rejected or failed, in one place to work through. An item stays here until you press Mark fixed. Nothing is deleted." />
+      <WaitingNotes />
       <div className="row" style={{ marginBottom: 12 }}><ShowDone value={showFixed} onChange={setShowFixed} text="Show items already marked fixed" /></div>
       <Async state={st}>{(d) => (
         <>
@@ -92,10 +95,11 @@ function Section({ title, help, items, reload, empty }: { title: string; help: s
 /** A note for the AI about this item. It goes into the notes the AI reads for repeat problems (Notes for the AI page). */
 function AddNote({ versionId, onSaved }: { versionId: string; onSaved: () => void }) {
   const [text, setText] = useState('');
+  const toast = useToast();
   return (
     <div className="stack" style={{ marginTop: 6, gap: 6 }}>
       <textarea rows={2} value={text} onChange={(e) => setText(e.target.value)} placeholder="What's wrong, or what you'd like next time. Be specific: the AI reads all your notes for repeat problems." maxLength={4000} />
-      <div className="row"><ActionButton className="small primary" disabled={text.trim().length < 3} onClick={async () => { await api(`/rework/${versionId}/note`, { body: { notes: text } }); onSaved(); }} successText="Note saved">Save note</ActionButton></div>
+      <div className="row"><ActionButton className="small primary" disabled={text.trim().length < 3} onClick={async () => { const r = await api(`/rework/${versionId}/note`, { body: { notes: text } }); toast(sentText(r, 'Note saved')); onSaved(); }}>Save note</ActionButton></div>
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router';
 import { api, assetUrl, useApi, usePagedApi } from '../api.ts';
 import { CompactList, CompactRow, PreviewButton, PreviewPane, ShowDone, usePreview, useReveal } from '../compact.tsx';
 import { ActionButton, Async, Card, CheckList, Empty, Modal, PageHead, Pill, useToast } from '../ui.tsx';
+import { WaitingNotes, sentText } from '../waitingNotes.tsx';
 import { ago, bytes, fmtDate, generatorLabel, label, money, pct, usd } from '../format.ts';
 
 export function Batches() {
@@ -13,6 +14,7 @@ export function Batches() {
     <div className="page">
       <PageHead title="Batch approval" sub="Review finished products in batches. Nothing is exported or published without an approval recorded here for the exact version and marketplace listing." />
       <div className="row" style={{ marginBottom: 12 }}><select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status"><option value="">All batches</option><option value="ready_for_review">Ready for review</option><option value="collecting">Still producing</option><option value="closed">Closed</option></select>{!status && <ShowDone value={done} onChange={setDone} text="Show closed batches" />}</div>
+      <WaitingNotes />
       <WarningsToAccept />
       <Card>
         <Async state={st}>{(list) => list.length === 0 ? <Empty title={status || done ? 'No batches yet' : 'Nothing waiting for review'}>{status || done ? 'Production plans create a batch per run; manually created products get their own batch.' : 'Closed batches are hidden. Tick “Show closed batches” to see them.'}</Empty> : (
@@ -176,8 +178,8 @@ function ItemCard({ it, reload }: { it: any; reload: () => void }) {
   const [warningNote, setWarningNote] = useState('');
   const warnBlocked = hasWarnings && !accept;
   const decide = async (decision: string, extra: Record<string, unknown> = {}) => {
-    await api(`/batch-items/${it.item.id}/decision`, { body: { decision, ...extra } });
-    toast(decision === 'approved' ? 'Approved' : decision === 'rejected' ? 'Rejected' : 'New version is being produced');
+    const r = await api(`/batch-items/${it.item.id}/decision`, { body: { decision, ...extra } });
+    toast(sentText(r, decision === 'approved' ? 'Approved' : decision === 'rejected' ? 'Rejected' : 'New version is being produced'));
     setModal(null);
     setNotes('');
     reload();
