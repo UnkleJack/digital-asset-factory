@@ -52,18 +52,43 @@ async function toStorable(item: Incoming): Promise<Incoming> {
   }
 }
 
+/** The few HTML character codes that turn up inside picture links (&amp; in query strings, mostly). */
+function decodeEntities(v: string): string {
+  return v.replace(/&(#x[0-9a-f]+|#\d+|amp|quot|apos|lt|gt);/gi, (whole, code: string) => {
+    const named: Record<string, string> = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>' };
+    if (code[0] !== '#') return named[code.toLowerCase()] ?? whole;
+    const n = code[1].toLowerCase() === 'x' ? parseInt(code.slice(2), 16) : parseInt(code.slice(1), 10);
+    return Number.isFinite(n) && n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : whole;
+  });
+}
+
+/** One attribute's value from a single tag's text, quoted or not. `\s` before the name keeps data-src from matching src. */
+function attr(tag: string, name: string): string | undefined {
+  const m = new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'>]+))`, 'i').exec(tag);
+  return m ? decodeEntities(m[1] ?? m[2] ?? m[3] ?? '').trim() : undefined;
+}
+
+/** Only links the factory can fetch: web addresses (protocol-relative ones become https) and inline pictures. */
+function usableLink(v: string | undefined): string | undefined {
+  if (!v) return undefined;
+  const link = v.startsWith('//') ? `https:${v}` : v;
+  return /^(https?:|data:image\/)/i.test(link) ? link : undefined;
+}
+
 /**
  * The pictures in a drag or paste from a web page: each <img> in its HTML, else its link list or plain text.
  * Each picture is a list of links to try in order: the largest size the page offers first, then the one shown.
+ * The dragged HTML comes from another site, so it is only searched as text for picture links; it is never
+ * turned into a page or put on screen.
  */
-export function linksIn(dt: DataTransfer): string[][] {
+export function linksIn(dt: Pick<DataTransfer, 'getData'>): string[][] {
   const out: string[][] = [];
   const html = dt.getData('text/html');
-  if (html) for (const img of new DOMParser().parseFromString(html, 'text/html').querySelectorAll('img')) {
-    const src = img.getAttribute('src') ?? '';
-    const set = img.getAttribute('srcset');
+  if (html) for (const tag of html.match(/<img\b[^>]*>/gi) ?? []) {
+    const src = usableLink(attr(tag, 'src'));
+    const set = attr(tag, 'srcset');
     // srcset lists sizes; the last entry is usually the largest.
-    const best = set ? set.split(',').map((x) => x.trim().split(/\s+/)[0]).filter(Boolean).pop() : undefined;
+    const best = usableLink(set ? set.split(',').map((x) => x.trim().split(/\s+/)[0]).filter(Boolean).pop() : undefined);
     const tries = [...new Set([best, src].filter((x): x is string => !!x))];
     if (tries.length) out.push(tries);
   }
