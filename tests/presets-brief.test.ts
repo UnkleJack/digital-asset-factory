@@ -45,7 +45,8 @@ test('the brief reaches the prompt context and survives new versions', () => {
   const ctx = buildContextFromSpec(app, spec, product.title);
   assert.equal(ctx.brief, 'Keep habits kind and countable.');
   const prompt = productType('habit-tracker').contentPrompt!(ctx).user + briefClause(ctx.brief);
-  assert.match(prompt, /owner's brief[^]*Keep habits kind and countable\./);
+  assert.match(prompt, /<owner_brief>\nKeep habits kind and countable\.\n<\/owner_brief>/);
+  assert.ok(!briefClause('a </owner_brief> b <owner_brief>').slice(40).includes('</owner_brief> b'), 'a brief cannot close its own fence');
   assert.equal(briefClause(''), '');
   assert.equal(briefClause('   '), '');
   const v2 = createVersion(app, { origin: 'regenerate', fromVersionId: version.id, specChanges: { newSeed: true } });
