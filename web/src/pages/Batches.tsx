@@ -219,8 +219,8 @@ function ItemCard({ it, reload }: { it: any; reload: () => void }) {
       {modal && (
         <Modal title={modal === 'revise' ? 'Return for revision' : modal === 'regen' ? 'Regenerate' : 'Reject'} onClose={() => setModal(null)} footer={<><button onClick={() => setModal(null)}>Cancel</button><ActionButton className={modal === 'reject' ? 'danger' : 'primary'} onClick={() => decide(modal === 'revise' ? 'revision_requested' : modal === 'regen' ? 'regenerate_requested' : 'rejected', { notes })}>{modal === 'revise' ? 'Send back with notes' : modal === 'regen' ? 'Regenerate' : 'Reject version'}</ActionButton></>}>
           <p className="small muted" style={{ marginTop: 0 }}>{modal === 'revise' ? 'Your notes are given to the generator for the next version.' : modal === 'regen' ? 'A fresh version is produced with a new random seed.' : 'The version is marked rejected and can never be published.'}</p>
-          <textarea rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={modal === 'revise' ? 'What should change?' : modal === 'reject' ? 'Why are you rejecting it? (optional, e.g. "text too small", "colors clash")' : 'Notes (optional)'} />
-          <p className="small muted" style={{ marginBottom: 0 }}>Anything you write here is checked first: it has to be real words that say what's wrong. Keyboard-mash gets sent back and nothing changes.</p>
+          <textarea rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={modal === 'revise' ? 'What should change?' : modal === 'reject' ? 'Why are you rejecting it? Say which part and what is wrong, e.g. "the title on the cover is too small to read"' : 'Notes (optional)'} />
+          <p className="small muted" style={{ marginBottom: 0 }}>Anything you write here is checked first: it has to say which part is wrong and what is wrong with it, not just “too blurry”. Vague notes and keyboard-mash get sent back and nothing changes.</p>
         </Modal>
       )}
     </Card>

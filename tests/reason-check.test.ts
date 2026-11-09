@@ -48,8 +48,8 @@ test('with an AI: unintelligible or unusable notes are refused with its tip; goo
   const bad = await checkReason(app, 'looks fine to me whatever', 'rejected', { title: 'Pumpkin tracker' });
   assert.equal(bad.ok, false);
   assert.equal(bad.checkedBy, 'ai');
-  assert.match(bad.message, /doesn't say what's wrong.*grid lines/);
-  const good = await checkReason(app, 'too blurry', 'rejected');
+  assert.match(bad.message, /not specific enough.*grid lines/);
+  const good = await checkReason(app, 'the mandala lines on page 3 are blurry', 'rejected');
   assert.deepEqual(good, { ok: true, message: '', checkedBy: 'ai' });
   assert.match(prompts[0], /Pumpkin tracker/);
 });
