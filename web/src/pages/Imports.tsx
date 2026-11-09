@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { api, useApi } from '../api.ts';
 import { IMAGES_IMPORTED, NO_PICTURE, fromFiles, importPictures, linksIn, picturesIn, type ImportResult, type Pending } from '../imageImport.ts';
-import { ActionButton, Async, Card, Empty, PageHead, Pill, useToast } from '../ui.tsx';
+import { ActionButton, Async, Card, ClearViewControls, Empty, PageHead, Pill, useClearView, useToast } from '../ui.tsx';
 import { fmtDate } from '../format.ts';
 
 const TOOLS = ['Grok Imagine', 'ChatGPT images', 'Gemini (Nano Banana)', 'arena.ai', 'Flux', 'Venice AI', 'Midjourney', 'Canva'];
@@ -156,9 +156,14 @@ function ImageLibrary({ state }: { state: any }) {
   const toast = useToast();
   const nav = useNavigate();
   const toggle = (id: string) => setSel(sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id]);
+  // "Clear view" hides pictures imported before the clear. Nothing is deleted, new imports still show,
+  // and ticked pictures stay so a selection in progress never disappears.
+  const view = useClearView<any>('imports-images', state.data, (r) => r.created_at, (r) => sel.includes(r.id));
   return (
-    <Card title="Image library" className="imports-lib" actions={sel.length > 0 && (
+    <Card title="Image library" className="imports-lib" actions={(
       <>
+        <ClearViewControls view={view} noun="pictures" />
+        {sel.length > 0 && <>
         <input placeholder="Product title (optional)" value={title} onChange={(e) => setTitle(e.target.value)} style={{ width: 220 }} />
         <ActionButton className="primary" onClick={async () => {
           const r = await api<any>('/references/products', { body: { referenceIds: sel, title: title || undefined } });
@@ -168,13 +173,15 @@ function ImageLibrary({ state }: { state: any }) {
           state.reload();
           nav(`/products/${r.productId}`);
         }}>Make coloring product from {sel.length} selected</ActionButton>
+        </>}
       </>
     )}>
-      <Async state={state}>{(d: any[]) => d.length === 0 ? <Empty title="No images yet">Add some above.</Empty> : (
+      <Async state={state}>{(all: any[]) => all.length === 0 ? <Empty title="No images yet">Add some above.</Empty>
+        : view.visible.length === 0 ? <Empty title="View cleared">Nothing was deleted. New pictures show up here as you import them, and "Show {view.hiddenCount} cleared pictures" above brings the rest back.</Empty> : (
         <>
           <p className="small muted">Tick files to pick them, in the order you want the pages. Press Preview to see one. {sel.length ? `${sel.length} picked.` : ''}</p>
           <div className="ref-list" role="list">
-            {d.map((r) => {
+            {view.visible.map((r: any) => {
               const n = sel.indexOf(r.id);
               const name = r.rel_path?.split('/').pop() ?? r.original_name;
               const open = preview === r.id;
