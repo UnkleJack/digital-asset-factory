@@ -99,6 +99,10 @@ You'll see these on almost every screen, so they're explained once here.
 
 The first item in the sidebar opens the arcade cabinet at `/arcade`. It runs on the same factory as the back office, so it uses the same products, keys and data. Everything about it is in [Part 2](#part-2-happy-daffy). To come back, press **BACK OFFICE** at the top of the cabinet.
 
+Right under it, **Missions** opens the same mission list as the arcade's MISSIONS tab, in back-office style: Instructions (the guide chapter in a pop-up), Go, and Mark done or Undo. Progress is shared, so a mission cleared on one side shows as done on the other. See [MISSIONS](#missions) in Part 2.
+
+Every back-office screen also has a round **? Instructions** button in the bottom-right corner. It opens that screen's chapter of this guide in a pop-up, so you can check how something works without leaving the page. Product and batch-review pages show the Product library and Batch approval chapters.
+
 ---
 
 ## 2. Dashboard
@@ -796,7 +800,18 @@ Each world card shows its rank, a progress bar towards the next milestone, **TAS
 
 ### THE TABS AT THE BOTTOM
 
-**WORLDS** is where you are. **PACKS**, **LEADERBOARDS** and **CODEX** say **SOON**. Press one and the cabinet tells you it unlocks in a later build.
+**WORLDS** is where you are. **MISSIONS** opens your mission list (see below). **PACKS**, **LEADERBOARDS** and **CODEX** say **SOON**. Press one and the cabinet tells you it unlocks in a later build.
+
+## MISSIONS
+
+Want to learn the whole Foundry? Here's your quest log. There's one mission for every chapter of this guide, from the arcade menu link down to Settings, plus one for the arcade itself, plus locked ones for things still being built. The bar up top shows how many you've cleared.
+- **INSTRUCTIONS** pops up that chapter of this guide as plain text, right there in the cabinet, so you can read up on a screen without loading it. Arrow keys scroll it. **CLOSE**, Esc or B shuts it.
+- **GO** opens the screen the mission is about.
+- **MARK DONE** clears a mission and puts a **✓ DONE** beside it. **UNDO** takes it back.
+- **■ LOCKED** missions are for things that aren't built yet, like student product types. Their INSTRUCTIONS say what's coming and where it sits on the build list (`TASKS.md`). Some have to be earned too: **NEEDS** lists the missions to clear first. Student product types, for one, needs Product library and Templates cleared once the types are built. They can't be cleared until they unlock.
+- Missions don't earn XP yet. That waits until the XP rules are decided.
+- **BACK TO HUB** (or B) heads home.
+- Same list, same progress on the back-office side: **Missions** in the sidebar.
 
 ## WORLD DETAIL
 

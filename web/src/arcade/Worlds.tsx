@@ -45,15 +45,21 @@ export function ProgressBar({ value, label }: { value: number; label: string }) 
   );
 }
 
-const NAV_DESTINATIONS = ['WORLDS', 'PACKS', 'LEADERBOARDS', 'CODEX'] as const;
-export function ArcadeTabs({ onSoon }: { onSoon: (name: string) => void }) {
+const NAV_DESTINATIONS = ['WORLDS', 'MISSIONS', 'PACKS', 'LEADERBOARDS', 'CODEX'] as const;
+type NavDestination = (typeof NAV_DESTINATIONS)[number];
+const BUILT: readonly NavDestination[] = ['WORLDS', 'MISSIONS'];
+
+export function ArcadeTabs({ current = 'WORLDS', onGo, onSoon }: { current?: NavDestination; onGo: (d: 'WORLDS' | 'MISSIONS') => void; onSoon: (name: string) => void }) {
   return (
     <nav className="arcade-tabs" aria-label="Arcade">
-      {NAV_DESTINATIONS.map((d) => (
-        <button key={d} type="button" className={`arcade-tab${d === 'WORLDS' ? ' active' : ' unavailable'}`} data-nav aria-current={d === 'WORLDS' ? 'page' : undefined} aria-disabled={d !== 'WORLDS'} onClick={() => d !== 'WORLDS' && onSoon(d)}>
-          {d}{d !== 'WORLDS' ? <small>SOON</small> : null}
-        </button>
-      ))}
+      {NAV_DESTINATIONS.map((d) => {
+        const built = BUILT.includes(d);
+        return (
+          <button key={d} type="button" className={`arcade-tab${d === current ? ' active' : built ? '' : ' unavailable'}`} data-nav aria-current={d === current ? 'page' : undefined} aria-disabled={!built} onClick={() => (built ? onGo(d as 'WORLDS' | 'MISSIONS') : onSoon(d))}>
+            {d}{built ? null : <small>SOON</small>}
+          </button>
+        );
+      })}
     </nav>
   );
 }

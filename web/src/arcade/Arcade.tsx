@@ -8,6 +8,7 @@ import { api, errorText, useApi } from '../api.ts';
 import { useArcadeInput, type Direction } from './input.ts';
 import { WorldList, WorldDetail, BuilderScreen, BuilderWorldScreen, ArcadeTabs } from './Worlds.tsx';
 import { StatsTicker } from './Ticker.tsx';
+import { MissionsScreen } from './Missions.tsx';
 import { ARCADE_GAME_NAME, ARCADE_TAGLINE, ENGINE_NAME } from '../../../src/core/brand.ts';
 
 // HAPPY DAFFY: the arcade front end of Asset Foundry.
@@ -37,9 +38,9 @@ interface ArcadeData {
 
 const TITLE_WORDS = ARCADE_GAME_NAME.split(' ');
 
-type Screen = 'hub' | 'world' | 'builder' | 'builderWorld';
-const SCREEN_TITLES: Record<Screen, string> = { hub: 'HUB', world: 'WORLD DETAIL', builder: 'WORLD BUILDER', builderWorld: 'WORLD BUILDER' };
-const BACK: Partial<Record<Screen, Screen>> = { world: 'hub', builder: 'hub', builderWorld: 'builder' };
+type Screen = 'hub' | 'world' | 'builder' | 'builderWorld' | 'missions';
+const SCREEN_TITLES: Record<Screen, string> = { hub: 'HUB', world: 'WORLD DETAIL', builder: 'WORLD BUILDER', builderWorld: 'WORLD BUILDER', missions: 'MISSIONS' };
+const BACK: Partial<Record<Screen, Screen>> = { world: 'hub', builder: 'hub', builderWorld: 'builder', missions: 'hub' };
 const CHARACTER_KEY = 'daf.arcade.character';
 const MOTION_KEY = 'daf.arcade.reducedMotion';
 
@@ -100,6 +101,9 @@ export function Arcade() {
     setScreen(s);
   }, []);
   const back = useCallback(() => {
+    // An open popup (mission instructions) closes first, so B on a controller doesn't leave the screen.
+    const popup = document.querySelector<HTMLDialogElement>('.crt-screen dialog[open]');
+    if (popup) return popup.close();
     const to = BACK[screen];
     if (to) go(to);
   }, [screen, go]);
@@ -148,6 +152,7 @@ export function Arcade() {
   let body: ReactNode;
   if (loading && !data) body = <Loading />;
   else if (screen === 'world' && worldId) body = <WorldDetail worldId={worldId} character={active} onBack={() => go('hub')} />;
+  else if (screen === 'missions') body = <MissionsScreen onBack={() => go('hub')} />;
   else if (screen === 'builder') body = <BuilderScreen onOpen={(id) => { setBuilderWorldId(id); go('builderWorld'); }} onBack={() => go('hub')} />;
   else if (screen === 'builderWorld' && builderWorldId) body = <BuilderWorldScreen worldId={builderWorldId} defaultCharacter={character} onBack={() => go('builder')} onHub={() => go('hub')} />;
   else {
@@ -166,6 +171,7 @@ export function Arcade() {
         onEnterWorld={enterWorld}
         onBuilder={() => go('builder')}
         onSoon={(d) => setNotice(`${d} UNLOCKS IN A LATER BUILD`)}
+        onMissions={() => go('missions')}
       />
     );
   }
@@ -346,11 +352,11 @@ function PortraitControls({ character, onChanged }: { character: Character; onCh
 }
 
 /** The opening screen: pick a player, pick one of their worlds, check the stats. */
-function Hub({ data, chosen, highlight, onHighlight, onChoose, onPortraitChanged, locked, lockText, notice, reduced, onEnterWorld, onBuilder, onSoon }: {
+function Hub({ data, chosen, highlight, onHighlight, onChoose, onPortraitChanged, locked, lockText, notice, reduced, onEnterWorld, onBuilder, onSoon, onMissions }: {
   data: ArcadeData | null; chosen: string | null; highlight: string | null;
   onHighlight: (id: string) => void; onChoose: (id: string) => void; onPortraitChanged: () => void;
   locked: boolean; lockText: string; notice: string | null; reduced: boolean;
-  onEnterWorld: (id: string) => void; onBuilder: () => void; onSoon: (name: string) => void;
+  onEnterWorld: (id: string) => void; onBuilder: () => void; onSoon: (name: string) => void; onMissions: () => void;
 }) {
   const characters = data?.characters ?? [];
   const player = characters.find((c) => c.id === chosen) ?? null;
@@ -423,7 +429,7 @@ function Hub({ data, chosen, highlight, onHighlight, onChoose, onPortraitChanged
         <StatsTicker character={chosen} reduced={reduced} />
       </section>
 
-      <ArcadeTabs onSoon={onSoon} />
+      <ArcadeTabs onGo={(d) => d === 'MISSIONS' && onMissions()} onSoon={onSoon} />
     </div>
   );
 }
