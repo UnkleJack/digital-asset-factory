@@ -279,6 +279,9 @@ span.chip:not(.on) { border: 1px solid var(--border); }
 /* Imports */
 .dropzone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 28px 16px; text-align: center; color: var(--muted); cursor: pointer; background: var(--surface-2); }
 .dropzone.on, .dropzone:hover { border-color: var(--primary); color: var(--primary); }
+.drop-anywhere { position: fixed; inset: 12px; z-index: 90; pointer-events: none; display: flex; align-items: center; justify-content: center; border: 3px dashed var(--primary); border-radius: var(--radius); background: color-mix(in srgb, var(--bg) 70%, transparent); }
+.drop-anywhere > div { background: var(--primary); color: var(--primary-ink); padding: 14px 22px; border-radius: var(--radius); font-size: 18px; font-weight: 600; box-shadow: var(--shadow); }
+.drop-busy { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 100; background: var(--surface-2); color: var(--text); border: 1px solid var(--primary); padding: 10px 18px; border-radius: 8px; box-shadow: var(--shadow); }
 .ref-list { max-height: 480px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); }
 .ref-row { border-bottom: 1px solid var(--border); padding: 8px 10px; }
 .ref-row:last-child { border-bottom: none; }
