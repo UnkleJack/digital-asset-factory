@@ -17,6 +17,7 @@ interface Mission {
   completedAt: string | null;
   hasInstructions: boolean;
   locked: boolean;
+  needs: string[];
 }
 interface Instructions { id: string; title: string; text: string; source: string }
 
@@ -61,7 +62,7 @@ export function MissionsScreen({ onBack }: { onBack: () => void }) {
           {missions.map((m, i) => (
             <li key={m.id} className={`mission${m.done ? ' done' : ''}${m.locked ? ' locked' : ''}`}>
               <span className="mission-num" aria-hidden="true">{String(m.number).padStart(2, '0')}</span>
-              <span className="mission-title">{m.title}{m.done ? <span className="mission-check"> ✓ DONE</span> : null}{m.locked ? <span className="mission-lock"> ■ LOCKED</span> : null}</span>
+              <span className="mission-title">{m.title}{m.done ? <span className="mission-check"> ✓ DONE</span> : null}{m.locked ? <span className="mission-lock"> ■ LOCKED</span> : null}{m.needs.length ? <span className="mission-needs">NEEDS: {m.needs.join(', ')}</span> : null}</span>
               <span className="mission-actions">
                 <button type="button" className="arc-btn small" data-nav {...(i === 0 ? { 'data-autofocus': true } : {})} disabled={!m.hasInstructions} title={m.hasInstructions ? 'Read this chapter of the guide' : 'This chapter is missing from the guide'} onClick={() => setOpen(m)}>
                   INSTRUCTIONS

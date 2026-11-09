@@ -804,7 +804,7 @@ Want to learn the whole Foundry? Here's your quest log. There's one mission for 
 - **INSTRUCTIONS** pops up that chapter of this guide as plain text, right there in the cabinet, so you can read up on a screen without loading it. Arrow keys scroll it. **CLOSE**, Esc or B shuts it.
 - **GO** opens the screen the mission is about.
 - **MARK DONE** clears a mission and puts a **✓ DONE** beside it. **UNDO** takes it back.
-- **■ LOCKED** missions are for things that aren't built yet, like student product types. Their INSTRUCTIONS say what's coming and where it sits on the build list (`TASKS.md`). They can't be cleared until they unlock.
+- **■ LOCKED** missions are for things that aren't built yet, like student product types. Their INSTRUCTIONS say what's coming and where it sits on the build list (`TASKS.md`). Some have to be earned too: **NEEDS** lists the missions to clear first. Student product types, for one, needs Product library and Templates cleared once the types are built. They can't be cleared until they unlock.
 - Missions don't earn XP yet. That waits until the XP rules are decided.
 - **BACK TO HUB** (or B) heads home.
 

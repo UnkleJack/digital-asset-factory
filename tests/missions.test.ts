@@ -77,6 +77,12 @@ test('missions: mark done and undo', async () => {
   const note = await call('GET', '/api/arcade/missions/student-types/instructions');
   assert.match(note.body.text, /NOT BUILT YET/);
   assert.match(note.body.text, /B1/);
+  // It's earned: it lists the missions to clear first, and drops each one as it's cleared.
+  const needsOf = async () => (await call('GET', '/api/arcade/missions')).body.missions[0].needs as string[];
+  assert.deepEqual(await needsOf(), ['Product library', 'Templates']);
+  await call('PUT', '/api/arcade/missions/templates/done');
+  assert.deepEqual(await needsOf(), ['Product library']);
+  await call('DELETE', '/api/arcade/missions/templates/done');
 });
 
 test('parseGuide: numbered chapters end at the next heading; Part 2 keeps its sections', () => {

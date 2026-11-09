@@ -90,4 +90,4 @@ Things to build that aren't in the Factory yet. Each one that teaches a new scre
 
 | ID | Build | Status | Notes |
 |---|---|---|---|
-| B1 | Student product types | [ ] | Each is a new product type in the registry. Named so far: assignment trackers, timetables, reading logs. The full list isn't decided. Mission #1 "Student product types" unlocks when they exist. |
+| B1 | Student product types | [ ] | Each is a new product type in the registry. Named so far: assignment trackers, timetables, reading logs. The full list isn't decided. Mission #1 "Student product types" unlocks when they exist and the Product library and Templates missions are cleared. |

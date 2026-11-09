@@ -24,6 +24,8 @@ export interface MissionDef {
    * guide chapter) once the feature ships.
    */
   locked?: string;
+  /** Missions that must be done first: the mission stays locked until they are (it's earned). */
+  requires?: readonly string[];
 }
 
 // Order follows the guide, after any locked missions the owner put first. Ids are fixed so a renamed chapter keeps its done mark (update `chapter` only).
@@ -33,8 +35,10 @@ export const MISSIONS: readonly MissionDef[] = [
     id: 'student-types',
     chapter: 'Student product types',
     route: '/library',
+    // Owner, 2026-11-09: earned, not given. Clear the screens where new types get made first.
+    requires: ['library', 'templates'],
     locked:
-      "LOCKED: NOT BUILT YET.\n\nStudent product types don't exist in the Factory yet, so there's nothing to learn here so far. Building them is item **B1** on the build list in `TASKS.md`.\n\nThe ones named so far are assignment trackers, timetables and reading logs. The full list isn't decided yet.\n\nThis mission unlocks once those types exist and the guide has a chapter on them.",
+      "LOCKED: NOT BUILT YET.\n\nStudent product types don't exist in the Factory yet, so there's nothing to learn here so far. Building them is item **B1** on the build list in `TASKS.md`.\n\nThe ones named so far are assignment trackers, timetables and reading logs. The full list isn't decided yet.\n\nIt's earned, not given: once those types exist, it unlocks after you clear the **Product library** and **Templates** missions, the screens where new types get made.",
   },
   { id: 'arcade-link', chapter: 'HAPPY DAFFY arcade (menu link)', route: '/arcade' },
   { id: 'dashboard', chapter: 'Dashboard', route: '/' },
@@ -67,8 +71,10 @@ export interface Mission {
   completedAt: string | null;
   /** False when the guide is missing or this chapter can't be found in it. A locked mission has its note. */
   hasInstructions: boolean;
-  /** Not built yet: can't be marked done. */
+  /** Not built yet, or still to be earned: can't be marked done. */
   locked: boolean;
+  /** Titles of the missions still to clear before this one unlocks. */
+  needs: string[];
 }
 
 const PART2_TITLE = 'HAPPY DAFFY';
@@ -141,7 +147,9 @@ export function listMissions(app: AppContext): { missions: Mission[]; guideFound
   const done = new Map(app.db.all<{ mission_id: string; completed_at: string }>('SELECT mission_id, completed_at FROM arcade_missions_done').map((r) => [r.mission_id, r.completed_at]));
   return {
     guideFound: chapters !== null,
-    missions: MISSIONS.map((m, i) => ({
+    missions: MISSIONS.map((m, i) => {
+      const needs = unmet(m, done);
+      return {
       id: m.id,
       number: i + 1,
       title: m.chapter,
@@ -149,9 +157,15 @@ export function listMissions(app: AppContext): { missions: Mission[]; guideFound
       done: done.has(m.id),
       completedAt: done.get(m.id) ?? null,
       hasInstructions: m.locked ? true : !!chapters?.get(m.chapter),
-      locked: !!m.locked,
-    })),
+      locked: !!m.locked || needs.length > 0,
+      needs,
+    };
+    }),
   };
+}
+
+function unmet(m: MissionDef, done: Map<string, string> | Set<string>): string[] {
+  return (m.requires ?? []).filter((id) => !done.has(id)).map((id) => MISSIONS.find((x) => x.id === id)?.chapter ?? id);
 }
 
 function mission(id: string): MissionDef {
@@ -171,6 +185,11 @@ export function missionInstructions(id: string): { id: string; title: string; te
 export function setMissionDone(app: AppContext, id: string, done: boolean): void {
   const m = mission(id);
   if (done && m.locked) throw validation(`"${m.chapter}" is locked until it's built, so it can't be marked done yet.`);
+  if (done) {
+    const finished = new Set(app.db.all<{ mission_id: string }>('SELECT mission_id FROM arcade_missions_done').map((r) => r.mission_id));
+    const needs = unmet(m, finished);
+    if (needs.length) throw validation(`"${m.chapter}" unlocks after you clear: ${needs.join(', ')}.`);
+  }
   if (done) app.db.run('INSERT OR IGNORE INTO arcade_missions_done (mission_id, completed_at) VALUES (?, ?)', id, iso());
   else app.db.run('DELETE FROM arcade_missions_done WHERE mission_id = ?', id);
 }

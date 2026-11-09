@@ -685,3 +685,4 @@ a.arc-btn:hover { text-decoration: none; }
 .mission.locked { border-style: dashed; }
 .mission.locked .mission-title { color: var(--muted); }
 .mission-lock { font-family: var(--pixel); font-size: 8px; color: var(--gold); }
+.mission-needs { display: block; font-family: var(--read); font-size: 12px; color: var(--muted); }
