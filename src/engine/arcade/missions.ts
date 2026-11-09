@@ -1,4 +1,4 @@
-import { readFileSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AppContext } from '../../app/context.ts';
 import { notFound } from '../../core/errors.ts';
@@ -6,7 +6,8 @@ import { iso } from '../../core/time.ts';
 
 // HAPPY DAFFY missions: a list for learning the whole suite, one mission per chapter of the walkthrough
 // guide (owner's choice, 2026-11-09). Each mission's instructions are that chapter's text, read straight
-// from docs/guide/WALKTHROUGH.md, so the instructions are written once and the popup never goes stale.
+// from docs/guide/WALKTHROUGH.md, so the instructions are written once and the popup matches the guide
+// as of the last app start.
 // The list only sends titles; a chapter's text is fetched when its INSTRUCTIONS popup is opened.
 
 export const GUIDE_REL = 'docs/guide/WALKTHROUGH.md';
@@ -56,8 +57,6 @@ export interface Mission {
 
 const PART2_TITLE = 'HAPPY DAFFY';
 
-let cache: { file: string; mtime: number; chapters: Map<string, string> } | null = null;
-
 /** Every chapter of the guide by heading: Part 1's numbered "## N. Title" chapters and Part 2 ("# Part 2: Title"). */
 export function parseGuide(md: string): Map<string, string> {
   const chapters = new Map<string, string>();
@@ -104,25 +103,25 @@ function cleanChapter(lines: string[]): string {
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-function guideChapters(app: AppContext): Map<string, string> | null {
-  const file = join(app.paths.root, GUIDE_REL);
-  let mtime: number;
+// The guide is read once, when the server starts (the app is restarted after every pull anyway), so no
+// request ever touches the disk. Null means the guide isn't in this copy.
+let chapters: Map<string, string> | null = null;
+
+/** Reads the guide's chapters. Called once at server start, before any mission route runs. */
+export function loadGuide(app: AppContext): void {
+  let md: string;
   try {
-    mtime = statSync(file).mtimeMs;
+    md = readFileSync(join(app.paths.root, GUIDE_REL), 'utf8');
   } catch {
-    return null;
+    chapters = null;
+    return;
   }
-  if (!cache || cache.file !== file || cache.mtime !== mtime) {
-    const md = readFileSync(file, 'utf8');
-    // "Things this guide found" closes Part 2; cut there so it never lands in a popup.
-    const end = md.search(/^## Things this guide found/m);
-    cache = { file, mtime, chapters: parseGuide(end === -1 ? md : md.slice(0, end)) };
-  }
-  return cache.chapters;
+  // "Things this guide found" closes Part 2; cut there so it never lands in a popup.
+  const end = md.search(/^## Things this guide found/m);
+  chapters = parseGuide(end === -1 ? md : md.slice(0, end));
 }
 
 export function listMissions(app: AppContext): { missions: Mission[]; guideFound: boolean } {
-  const chapters = guideChapters(app);
   const done = new Map(app.db.all<{ mission_id: string; completed_at: string }>('SELECT mission_id, completed_at FROM arcade_missions_done').map((r) => [r.mission_id, r.completed_at]));
   return {
     guideFound: chapters !== null,
@@ -144,9 +143,9 @@ function mission(id: string): MissionDef {
   return m;
 }
 
-export function missionInstructions(app: AppContext, id: string): { id: string; title: string; text: string; source: string } {
+export function missionInstructions(id: string): { id: string; title: string; text: string; source: string } {
   const m = mission(id);
-  const text = guideChapters(app)?.get(m.chapter);
+  const text = chapters?.get(m.chapter);
   if (!text) throw notFound('Instructions for mission', id);
   return { id: m.id, title: m.chapter, text, source: GUIDE_REL };
 }
