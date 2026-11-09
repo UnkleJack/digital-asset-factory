@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AppContext } from '../../app/context.ts';
-import { notFound } from '../../core/errors.ts';
+import { notFound, validation } from '../../core/errors.ts';
 import { iso } from '../../core/time.ts';
 
 // HAPPY DAFFY missions: a list for learning the whole suite, one mission per chapter of the walkthrough
@@ -18,10 +18,24 @@ export interface MissionDef {
   chapter: string;
   /** The screen the mission is about. */
   route: string;
+  /**
+   * Set while the thing the mission teaches isn't built yet. The mission shows as LOCKED, can't be marked
+   * done, and its INSTRUCTIONS popup shows this note instead of a guide chapter. Remove it (and add the
+   * guide chapter) once the feature ships.
+   */
+  locked?: string;
 }
 
-// Order follows the guide. Ids are fixed so a renamed chapter keeps its done mark (update `chapter` only).
+// Order follows the guide, after any locked missions the owner put first. Ids are fixed so a renamed chapter keeps its done mark (update `chapter` only).
 export const MISSIONS: readonly MissionDef[] = [
+  // Owner, 2026-11-09: student product types are both a build job and mission #1, shown now as locked.
+  {
+    id: 'student-types',
+    chapter: 'Student product types',
+    route: '/library',
+    locked:
+      "LOCKED: NOT BUILT YET.\n\nStudent product types don't exist in the Factory yet, so there's nothing to learn here so far. Building them is item **B1** on the build list in `TASKS.md`.\n\nThe ones named so far are assignment trackers, timetables and reading logs. The full list isn't decided yet.\n\nThis mission unlocks once those types exist and the guide has a chapter on them.",
+  },
   { id: 'arcade-link', chapter: 'HAPPY DAFFY arcade (menu link)', route: '/arcade' },
   { id: 'dashboard', chapter: 'Dashboard', route: '/' },
   { id: 'calendar', chapter: 'Production calendar', route: '/calendar' },
@@ -51,8 +65,10 @@ export interface Mission {
   route: string;
   done: boolean;
   completedAt: string | null;
-  /** False when the guide is missing or this chapter can't be found in it. */
+  /** False when the guide is missing or this chapter can't be found in it. A locked mission has its note. */
   hasInstructions: boolean;
+  /** Not built yet: can't be marked done. */
+  locked: boolean;
 }
 
 const PART2_TITLE = 'HAPPY DAFFY';
@@ -132,7 +148,8 @@ export function listMissions(app: AppContext): { missions: Mission[]; guideFound
       route: m.route,
       done: done.has(m.id),
       completedAt: done.get(m.id) ?? null,
-      hasInstructions: !!chapters?.get(m.chapter),
+      hasInstructions: m.locked ? true : !!chapters?.get(m.chapter),
+      locked: !!m.locked,
     })),
   };
 }
@@ -145,13 +162,15 @@ function mission(id: string): MissionDef {
 
 export function missionInstructions(id: string): { id: string; title: string; text: string; source: string } {
   const m = mission(id);
+  if (m.locked) return { id: m.id, title: m.chapter, text: m.locked, source: 'TASKS.md (build list)' };
   const text = chapters?.get(m.chapter);
   if (!text) throw notFound('Instructions for mission', id);
   return { id: m.id, title: m.chapter, text, source: GUIDE_REL };
 }
 
 export function setMissionDone(app: AppContext, id: string, done: boolean): void {
-  mission(id);
+  const m = mission(id);
+  if (done && m.locked) throw validation(`"${m.chapter}" is locked until it's built, so it can't be marked done yet.`);
   if (done) app.db.run('INSERT OR IGNORE INTO arcade_missions_done (mission_id, completed_at) VALUES (?, ?)', id, iso());
   else app.db.run('DELETE FROM arcade_missions_done WHERE mission_id = ?', id);
 }

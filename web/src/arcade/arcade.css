@@ -682,3 +682,6 @@ a.arc-btn:hover { text-decoration: none; }
 .guide-table th, .guide-table td { border: 1px solid #2f3a1a; padding: 4px 8px; text-align: left; vertical-align: top; }
 .guide-table th { color: var(--gold); }
 .guide-text code { font-size: 12px; color: var(--cyan); }
+.mission.locked { border-style: dashed; }
+.mission.locked .mission-title { color: var(--muted); }
+.mission-lock { font-family: var(--pixel); font-size: 8px; color: var(--gold); }

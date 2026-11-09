@@ -83,3 +83,11 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done and verified (evidence not
 | F33 | World Builder drafts: AI worlds and tidied notes are stored as drafts (writing / ready / failed) so leaving the page loses nothing; REVIEW, DISCARD; SAVE WORLD removes the draft; a draft cut off by a shutdown is marked failed on restart (migration 008) | [~] | `tests/arcade.test.ts` (draft flow, failed draft, discard, restart); browser with TEST drafts; **not yet run live with the real NVIDIA key** |
 | F34 | Smarter AI help: BUILD ON WHAT I HAVE and SHOW ME UNEXPLORED GROUND (facts from real rows only); TIDY MY NOTES with original beside the tidy version, questions kept apart, hand-off to LET THE AI BUILD A WORLD | [~] | `tests/arcade.test.ts` against a stand-in AI; browser: no-key message, tidy review and hand-off with a TEST draft; **no live AI run yet** |
 | F35 | Cleanup of old test data: `npm run clean-verification` lists folders inside `verification-output/` that have not changed for 7 days, and `-- --apply` removes them (same pattern as `tidy-folders`). Never removes the folder itself, loose files, links, or anything outside it (never `data/`); skips any folder a running copy of the app is using (live `daf.lock`) and re-checks just before deleting. Runs once a week while the app is open (Settings → Scheduler → `cleanVerificationWeekly`; last run noted in `verification-output/.last-cleanup`) | [x] | `tests/cleanVerification.test.ts` (dry run changes nothing; only old unused folders go; in-use, recent, links, loose files, outside and `data/` stay; a folder that becomes busy mid-run stays; wrong folder name refused; weekly due logic); dry run on the worktree kept the in-use test copy |
+
+## Build list (owner, 2026-11-09)
+
+Things to build that aren't in the Factory yet. Each one that teaches a new screen or type also gets a HAPPY DAFFY mission, shown as locked until it ships (`src/engine/arcade/missions.ts`).
+
+| ID | Build | Status | Notes |
+|---|---|---|---|
+| B1 | Student product types | [ ] | Each is a new product type in the registry. Named so far: assignment trackers, timetables, reading logs. The full list isn't decided. Mission #1 "Student product types" unlocks when they exist. |

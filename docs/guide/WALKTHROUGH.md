@@ -800,10 +800,11 @@ Each world card shows its rank, a progress bar towards the next milestone, **TAS
 
 ## MISSIONS
 
-Want to learn the whole Foundry? Here's your quest log. There's one mission for every chapter of this guide, from the arcade menu link down to Settings, plus one for the arcade itself. The bar up top shows how many you've cleared.
+Want to learn the whole Foundry? Here's your quest log. There's one mission for every chapter of this guide, from the arcade menu link down to Settings, plus one for the arcade itself, plus locked ones for things still being built. The bar up top shows how many you've cleared.
 - **INSTRUCTIONS** pops up that chapter of this guide as plain text, right there in the cabinet, so you can read up on a screen without loading it. Arrow keys scroll it. **CLOSE**, Esc or B shuts it.
 - **GO** opens the screen the mission is about.
 - **MARK DONE** clears a mission and puts a **✓ DONE** beside it. **UNDO** takes it back.
+- **■ LOCKED** missions are for things that aren't built yet, like student product types. Their INSTRUCTIONS say what's coming and where it sits on the build list (`TASKS.md`). They can't be cleared until they unlock.
 - Missions don't earn XP yet. That waits until the XP rules are decided.
 - **BACK TO HUB** (or B) heads home.
 

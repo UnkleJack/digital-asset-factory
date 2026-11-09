@@ -16,6 +16,7 @@ interface Mission {
   done: boolean;
   completedAt: string | null;
   hasInstructions: boolean;
+  locked: boolean;
 }
 interface Instructions { id: string; title: string; text: string; source: string }
 
@@ -45,7 +46,7 @@ export function MissionsScreen({ onBack }: { onBack: () => void }) {
     <div className="scr missions">
       <div className="hub-zone">
         <h2 className="zone-title">MISSIONS: LEARN THE WHOLE FOUNDRY</h2>
-        <p className="fine">One mission for each chapter of the walkthrough guide. INSTRUCTIONS shows that chapter as text, without opening the screen. GO opens the screen itself.</p>
+        <p className="fine">One mission for each chapter of the walkthrough guide, plus locked ones for things still being built. INSTRUCTIONS shows that chapter as text, without opening the screen. GO opens the screen itself.</p>
         {data ? <ProgressBar value={missions.length ? doneCount / missions.length : 0} label={`${doneCount} of ${missions.length} missions done`} /> : null}
         {data ? <p className="fine">{doneCount} OF {missions.length} DONE</p> : null}
       </div>
@@ -58,17 +59,19 @@ export function MissionsScreen({ onBack }: { onBack: () => void }) {
       {missions.length ? (
         <ol className="mission-list">
           {missions.map((m, i) => (
-            <li key={m.id} className={`mission${m.done ? ' done' : ''}`}>
+            <li key={m.id} className={`mission${m.done ? ' done' : ''}${m.locked ? ' locked' : ''}`}>
               <span className="mission-num" aria-hidden="true">{String(m.number).padStart(2, '0')}</span>
-              <span className="mission-title">{m.title}{m.done ? <span className="mission-check"> ✓ DONE</span> : null}</span>
+              <span className="mission-title">{m.title}{m.done ? <span className="mission-check"> ✓ DONE</span> : null}{m.locked ? <span className="mission-lock"> ■ LOCKED</span> : null}</span>
               <span className="mission-actions">
                 <button type="button" className="arc-btn small" data-nav {...(i === 0 ? { 'data-autofocus': true } : {})} disabled={!m.hasInstructions} title={m.hasInstructions ? 'Read this chapter of the guide' : 'This chapter is missing from the guide'} onClick={() => setOpen(m)}>
                   INSTRUCTIONS
                 </button>
-                {m.route === '/arcade' ? null : <Link className="arc-btn small" data-nav to={m.route} title={`Open ${m.title}`}>GO</Link>}
-                <button type="button" className="arc-btn small" data-nav disabled={busy === m.id} aria-pressed={m.done} onClick={() => void toggle(m)}>
-                  {m.done ? 'UNDO' : 'MARK DONE'}
-                </button>
+                {m.route === '/arcade' || m.locked ? null : <Link className="arc-btn small" data-nav to={m.route} title={`Open ${m.title}`}>GO</Link>}
+                {m.locked ? null : (
+                  <button type="button" className="arc-btn small" data-nav disabled={busy === m.id} aria-pressed={m.done} onClick={() => void toggle(m)}>
+                    {m.done ? 'UNDO' : 'MARK DONE'}
+                  </button>
+                )}
               </span>
             </li>
           ))}
@@ -113,7 +116,7 @@ function InstructionsPopup({ mission, onClose }: { mission: Mission; onClose: ()
         {error ? <p className="crt-error" role="alert">{error}</p> : null}
         {data ? <GuideText text={data.text} /> : null}
       </div>
-      {data ? <p className="fine">From the walkthrough guide ({data.source}).</p> : null}
+      {data ? <p className="fine">From {data.source === 'docs/guide/WALKTHROUGH.md' ? `the walkthrough guide (${data.source})` : data.source}.</p> : null}
     </dialog>
   );
 }

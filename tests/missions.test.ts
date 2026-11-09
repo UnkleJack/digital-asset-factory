@@ -39,6 +39,10 @@ test('missions: every guide chapter has a mission and every mission finds its ch
   assert.equal(r.body.guideFound, true);
   assert.equal(r.body.missions.length, MISSIONS.length);
   for (const m of r.body.missions) assert.equal(m.hasInstructions, true, `no guide chapter for mission "${m.title}"`);
+  // Owner, 2026-11-09: student product types come first, locked until they're built.
+  assert.equal(r.body.missions[0].id, 'student-types');
+  assert.equal(r.body.missions[0].locked, true);
+  assert.equal(r.body.missions.filter((m: any) => m.locked).length, 1);
   // The list sends titles only, never the chapter text.
   assert.equal('text' in r.body.missions[0], false);
   assert.deepEqual(r.body.missions.map((m: any) => m.number), MISSIONS.map((_, i) => i + 1));
@@ -68,6 +72,11 @@ test('missions: mark done and undo', async () => {
   lib = (await call('GET', '/api/arcade/missions')).body.missions.find((m: any) => m.id === 'library');
   assert.equal(lib.done, false);
   assert.equal((await call('PUT', '/api/arcade/missions/nope/done')).status, 404);
+  // A locked mission can't be marked done, and its popup shows the lock note.
+  assert.equal((await call('PUT', '/api/arcade/missions/student-types/done')).status, 422);
+  const note = await call('GET', '/api/arcade/missions/student-types/instructions');
+  assert.match(note.body.text, /NOT BUILT YET/);
+  assert.match(note.body.text, /B1/);
 });
 
 test('parseGuide: numbered chapters end at the next heading; Part 2 keeps its sections', () => {
