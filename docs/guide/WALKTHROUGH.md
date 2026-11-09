@@ -99,6 +99,8 @@ You'll see these on almost every screen, so they're explained once here.
 
 The first item in the sidebar opens the arcade cabinet at `/arcade`. It runs on the same factory as the back office, so it uses the same products, keys and data. Everything about it is in [Part 2](#part-2-happy-daffy). To come back, press **BACK OFFICE** at the top of the cabinet.
 
+Right under it, **Missions** opens the same mission list as the arcade's MISSIONS tab, in back-office style: Instructions (the guide chapter in a pop-up), Go, and Mark done or Undo. Progress is shared, so a mission cleared on one side shows as done on the other. See [MISSIONS](#missions) in Part 2.
+
 ---
 
 ## 2. Dashboard
@@ -807,6 +809,7 @@ Want to learn the whole Foundry? Here's your quest log. There's one mission for 
 - **■ LOCKED** missions are for things that aren't built yet, like student product types. Their INSTRUCTIONS say what's coming and where it sits on the build list (`TASKS.md`). Some have to be earned too: **NEEDS** lists the missions to clear first. Student product types, for one, needs Product library and Templates cleared once the types are built. They can't be cleared until they unlock.
 - Missions don't earn XP yet. That waits until the XP rules are decided.
 - **BACK TO HUB** (or B) heads home.
+- Same list, same progress on the back-office side: **Missions** in the sidebar.
 
 ## WORLD DETAIL
 
