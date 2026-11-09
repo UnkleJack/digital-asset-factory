@@ -47,3 +47,26 @@ export async function idle(a: { db: { value<T>(sql: string): T | undefined; all(
   }
   throw new Error('Jobs did not finish in time: ' + JSON.stringify(a.db.all("SELECT type, status, last_error FROM jobs WHERE status IN ('queued','running')")));
 }
+
+/**
+ * Runs `fn` with a stand-in AI that passes every review-note check (reasonCheck.ts), then puts the real
+ * provider back. Review notes need the AI; without one they wait in the reason queue.
+ */
+export async function withReasonAi<T>(app: { providers: { text: unknown } }, fn: () => Promise<T>, verdict = { intelligible: true, usable: true, tip: '' }): Promise<T> {
+  const real = app.providers.text as Record<string, unknown>;
+  const standIn = {
+    ...real,
+    id: 'standin',
+    isConfigured: async () => true,
+    model: () => 'stand-in-model',
+    generateStructured: async (req: { schema: { parse: (x: unknown) => unknown } }) => ({ data: req.schema.parse(verdict), usage: { inputTokens: 1, outputTokens: 1, images: null }, model: 'stand-in-model', servedByFallback: false }),
+  };
+  const holder = app as unknown as { providers: Record<string, unknown> };
+  const before = holder.providers;
+  holder.providers = { ...before, text: standIn };
+  try {
+    return await fn();
+  } finally {
+    holder.providers = before;
+  }
+}

@@ -3,6 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router';
 import { api, assetUrl, useApi, usePagedApi } from '../api.ts';
 import { CompactList, CompactRow, PreviewButton, PreviewPane, ShowDone, usePreview, useReveal } from '../compact.tsx';
 import { ActionButton, Async, Card, CheckList, Empty, Modal, PageHead, Pill, useToast } from '../ui.tsx';
+import { WaitingNotes, sentText } from '../waitingNotes.tsx';
 import { ago, bytes, fmtDate, generatorLabel, label, money, pct, usd } from '../format.ts';
 
 export function Batches() {
@@ -13,6 +14,7 @@ export function Batches() {
     <div className="page">
       <PageHead title="Batch approval" sub="Review finished products in batches. Nothing is exported or published without an approval recorded here for the exact version and marketplace listing." />
       <div className="row" style={{ marginBottom: 12 }}><select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status"><option value="">All batches</option><option value="ready_for_review">Ready for review</option><option value="collecting">Still producing</option><option value="closed">Closed</option></select>{!status && <ShowDone value={done} onChange={setDone} text="Show closed batches" />}</div>
+      <WaitingNotes />
       <WarningsToAccept />
       <Card>
         <Async state={st}>{(list) => list.length === 0 ? <Empty title={status || done ? 'No batches yet' : 'Nothing waiting for review'}>{status || done ? 'Production plans create a batch per run; manually created products get their own batch.' : 'Closed batches are hidden. Tick “Show closed batches” to see them.'}</Empty> : (
@@ -139,6 +141,28 @@ function WarningRow({ versionId, w }: { versionId: string; w: any }) {
   );
 }
 
+/** Common reasons, as quick picks. A pick starts the note; you still finish it by saying which part. Edit this list freely. */
+const COMMON_REASONS = [
+  'Blurry or low quality:',
+  'Text too small or hard to read:',
+  'Typo or wrong wording:',
+  'Wrong dates or days:',
+  'Layout cramped or messy:',
+  'Colors clash or look off:',
+  'Not on theme / not what I asked for:',
+  'Too close to the edge for printing:',
+];
+
+function ReasonPicks({ notes, setNotes }: { notes: string; setNotes: (s: string) => void }) {
+  return (
+    <div className="row" style={{ flexWrap: 'wrap', gap: 6, marginBottom: 8 }} aria-label="Common reasons">
+      {COMMON_REASONS.map((r) => (
+        <button key={r} type="button" className="small" onClick={() => setNotes(notes.trim() ? `${notes.trim()}\n${r} ` : `${r} `)}>{r.replace(/:$/, '')}</button>
+      ))}
+    </div>
+  );
+}
+
 function ItemCard({ it, reload }: { it: any; reload: () => void }) {
   const toast = useToast();
   const [markets, setMarkets] = useState<string[]>(it.listings.filter((l: any) => !l.validation.issues.length).map((l: any) => l.marketplace));
@@ -154,8 +178,8 @@ function ItemCard({ it, reload }: { it: any; reload: () => void }) {
   const [warningNote, setWarningNote] = useState('');
   const warnBlocked = hasWarnings && !accept;
   const decide = async (decision: string, extra: Record<string, unknown> = {}) => {
-    await api(`/batch-items/${it.item.id}/decision`, { body: { decision, ...extra } });
-    toast(decision === 'approved' ? 'Approved' : decision === 'rejected' ? 'Rejected' : 'New version is being produced');
+    const r = await api(`/batch-items/${it.item.id}/decision`, { body: { decision, ...extra } });
+    toast(sentText(r, decision === 'approved' ? 'Approved' : decision === 'rejected' ? 'Rejected' : 'New version is being produced'));
     setModal(null);
     setNotes('');
     reload();
@@ -217,9 +241,11 @@ function ItemCard({ it, reload }: { it: any; reload: () => void }) {
         </div>
       </div>
       {modal && (
-        <Modal title={modal === 'revise' ? 'Return for revision' : modal === 'regen' ? 'Regenerate' : 'Reject'} onClose={() => setModal(null)} footer={<><button onClick={() => setModal(null)}>Cancel</button><ActionButton className={modal === 'reject' ? 'danger' : 'primary'} onClick={() => decide(modal === 'revise' ? 'revision_requested' : modal === 'regen' ? 'regenerate_requested' : 'rejected', { notes })}>{modal === 'revise' ? 'Send back with notes' : modal === 'regen' ? 'Regenerate' : 'Reject version'}</ActionButton></>}>
+        <Modal title={modal === 'revise' ? 'Return for revision' : modal === 'regen' ? 'Regenerate' : 'Reject'} onClose={() => setModal(null)} footer={<><button onClick={() => setModal(null)}>Cancel</button><ActionButton className={modal === 'reject' ? 'danger' : 'primary'} disabled={modal !== 'regen' && notes.trim().length < 3} title={modal !== 'regen' && notes.trim().length < 3 ? 'Write a reason first' : ''} onClick={() => decide(modal === 'revise' ? 'revision_requested' : modal === 'regen' ? 'regenerate_requested' : 'rejected', { notes })}>{modal === 'revise' ? 'Send back with notes' : modal === 'regen' ? 'Regenerate' : 'Reject version'}</ActionButton></>}>
           <p className="small muted" style={{ marginTop: 0 }}>{modal === 'revise' ? 'Your notes are given to the generator for the next version.' : modal === 'regen' ? 'A fresh version is produced with a new random seed.' : 'The version is marked rejected and can never be published.'}</p>
-          <textarea rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={modal === 'revise' ? 'What should change?' : 'Notes (optional)'} />
+          {modal !== 'regen' && <ReasonPicks notes={notes} setNotes={setNotes} />}
+          <textarea rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={modal === 'revise' ? 'What should change? Say which part and what, e.g. "make the title on the cover bigger"' : modal === 'reject' ? 'Why are you rejecting it? Say which part and what is wrong, e.g. "the title on the cover is too small to read"' : 'Notes (optional)'} />
+          <p className="small muted" style={{ marginBottom: 0 }}>{modal === 'regen' ? 'Anything you write here is checked first:' : 'Pick a common reason to start, then finish it in your own words. It is checked first:'} it has to say which part is wrong and what is wrong with it, not just “too blurry”. Vague notes and keyboard-mash get sent back and nothing changes.</p>
         </Modal>
       )}
     </Card>

@@ -4,6 +4,8 @@ import { api, useApi, usePagedApi } from '../api.ts';
 import { CompactList, CompactRow } from '../compact.tsx';
 import { ActionButton, Async, Card, Empty, PageHead, Pill } from '../ui.tsx';
 import { ago, label } from '../format.ts';
+import { WaitingNotes, sentText } from '../waitingNotes.tsx';
+import { useToast } from '../ui.tsx';
 
 const KINDS: { id: string; text: string }[] = [
   { id: '', text: 'All notes' },
@@ -21,6 +23,7 @@ export function AiNotes() {
   return (
     <div className="page">
       <PageHead title="Notes for the AI" sub="Every note you write in review is kept here. After every 10 new notes the AI reads all of them and writes the repeat problems below, which go into every AI prompt. You can edit, pin, delete or add your own." />
+      <WaitingNotes />
       <Lessons />
       <AllNotes />
     </div>
@@ -28,6 +31,7 @@ export function AiNotes() {
 }
 
 function Lessons() {
+  const toast = useToast();
   const status = useApi<any>('/ai-notes/status', { poll: 10000 });
   const lessons = useApi<any[]>('/ai-lessons', { poll: 10000 });
   const [text, setText] = useState('');
@@ -53,13 +57,14 @@ function Lessons() {
       )}</Async>
       <div className="row" style={{ marginTop: 10 }}>
         <input type="text" value={text} onChange={(e) => setText(e.target.value)} placeholder="Add your own rule, e.g. Keep checklist items under 8 words" maxLength={300} style={{ flex: 1 }} />
-        <ActionButton disabled={text.trim().length < 3} onClick={async () => { await api('/ai-lessons', { body: { text } }); setText(''); reload(); }} successText="Added">Add</ActionButton>
+        <ActionButton disabled={text.trim().length < 3} onClick={async () => { const r = await api('/ai-lessons', { body: { text } }); toast(sentText(r, 'Added')); setText(''); reload(); }}>Add</ActionButton>
       </div>
     </Card>
   );
 }
 
 function LessonRow({ l, onChange }: { l: any; onChange: () => void }) {
+  const toast = useToast();
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(l.text);
   return (
@@ -67,7 +72,7 @@ function LessonRow({ l, onChange }: { l: any; onChange: () => void }) {
       main={editing ? <input type="text" value={text} onChange={(e) => setText(e.target.value)} maxLength={300} style={{ width: '100%' }} /> : <span>{l.pinned && <b title="Pinned: kept when the AI re-reads">📌 </b>}{l.text}</span>}
       sub={[l.source === 'ai' ? `AI · noted ${l.times} time${l.times === 1 ? '' : 's'}` : 'Yours (the AI never replaces it)', `updated ${ago(l.updated_at)}`].join(' · ')}
       actions={editing ? <>
-        <ActionButton className="small primary" onClick={async () => { await api(`/ai-lessons/${l.id}`, { method: 'PATCH', body: { text } }); setEditing(false); onChange(); }}>Save</ActionButton>
+        <ActionButton className="small primary" onClick={async () => { const r = await api(`/ai-lessons/${l.id}`, { method: 'PATCH', body: { text } }); toast(sentText(r, 'Saved')); setEditing(false); onChange(); }}>Save</ActionButton>
         <button className="small" onClick={() => { setText(l.text); setEditing(false); }}>Cancel</button>
       </> : <>
         <button className="small" onClick={() => setEditing(true)}>Edit</button>

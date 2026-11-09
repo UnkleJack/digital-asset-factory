@@ -15,6 +15,7 @@ import { json } from '../../db/sqlite.ts';
 import { publishListing } from '../../engine/publishing/service.ts';
 import { errorMessage } from '../../core/errors.ts';
 import { int, parse, LIST_MAX, totalHeader, type Q, type P } from './util.ts';
+import { submitWithReason, listReasonQueue, dismissQueuedNote } from '../../engine/approval/reasonQueue.ts';
 
 /** Version states that mean the factory finished making it, whatever happened at review. */
 const MADE_STATUSES = "'ready','qa_failed','superseded','rejected','approved'";
@@ -94,9 +95,9 @@ export function registerOperationsRoutes(s: FastifyInstance, deps: ServerDeps): 
 
   s.post('/api/rework/:versionId/note', async (req) => {
     const b = parse(z.object({ notes: z.string().max(4000) }), req.body, 'note');
-    const r = addReviewNote(app, (req.params as P).versionId, b.notes);
-    void maybeDigest(app);
-    return r;
+    // Every note is checked by the AI first; when it can't be reached the note waits in line (reasonQueue.ts).
+    const r = await submitWithReason(app, { action: 'note', versionId: (req.params as P).versionId, notes: b.notes });
+    return r.queued ? r : r.result;
   });
 
   // Notes for the AI: every note in one list, and the repeat-problems list the AI writes from them.
@@ -109,9 +110,24 @@ export function registerOperationsRoutes(s: FastifyInstance, deps: ServerDeps): 
   s.get('/api/ai-notes/status', async () => notesStatus(app));
   s.post('/api/ai-notes/digest', async () => digestNotes(app, 'manual'));
   s.get('/api/ai-lessons', async () => listLessons(app));
-  s.post('/api/ai-lessons', async (req) => addLesson(app, parse(z.object({ text: z.string().max(300) }), req.body, 'lesson').text));
-  s.patch('/api/ai-lessons/:id', async (req) => updateLesson(app, (req.params as P).id, parse(z.object({ text: z.string().max(300).optional(), pinned: z.boolean().optional() }), req.body, 'lesson')));
+  s.post('/api/ai-lessons', async (req) => {
+    const text = parse(z.object({ text: z.string().max(300) }), req.body, 'lesson').text;
+    const r = await submitWithReason(app, { action: 'lesson_add', text });
+    return r.queued ? r : r.result;
+  });
+  s.patch('/api/ai-lessons/:id', async (req) => {
+    const b = parse(z.object({ text: z.string().max(300).optional(), pinned: z.boolean().optional() }), req.body, 'lesson');
+    const id = (req.params as P).id;
+    if (b.text === undefined) return updateLesson(app, id, b);
+    const r = await submitWithReason(app, { action: 'lesson_edit', lessonId: id, text: b.text });
+    if (b.pinned !== undefined) updateLesson(app, id, { pinned: b.pinned });
+    return r.queued ? r : r.result;
+  });
   s.delete('/api/ai-lessons/:id', async (req) => { deleteLesson(app, (req.params as P).id); return { ok: true }; });
+
+  // Notes waiting for the AI to check them, and ones it refused or that couldn't be used any more.
+  s.get('/api/reason-queue', async () => listReasonQueue(app));
+  s.delete('/api/reason-queue/:id', async (req) => { dismissQueuedNote(app, (req.params as P).id); return { ok: true }; });
 
   s.get('/api/rework', async (req) => reworkList(app, { showFixed: (req.query as Q).showFixed === '1' }));
   s.post('/api/rework/:versionId/fixed', async (req) => markFixed(app, (req.params as P).versionId, true));
@@ -140,6 +156,13 @@ export function registerOperationsRoutes(s: FastifyInstance, deps: ServerDeps): 
   });
   s.post('/api/batch-items/:id/decision', async (req) => {
     const b = parse(z.object({ decision: z.enum(['approved', 'rejected', 'revision_requested', 'regenerate_requested']), marketplaces: z.array(z.string()).optional(), notes: z.string().max(4000).optional(), acceptWarnings: z.boolean().optional(), warningNote: z.string().max(2000).optional() }), req.body, 'decision');
+    // Reject / Return for revision / Regenerate with a note: the AI checks the note before anything happens.
+    // A refused note throws and leaves the item as it was; when the AI can't be reached it waits in line.
+    // (Regenerate's note is optional, so an empty one skips the check.)
+    if (b.decision !== 'approved' && (b.decision !== 'regenerate_requested' || b.notes?.trim())) {
+      const r = await submitWithReason(app, { action: 'decision', itemId: (req.params as P).id, decision: b.decision, notes: b.notes ?? '' });
+      return r.queued ? r : r.result;
+    }
     const result = decide(app, (req.params as P).id, b);
     // A note was written: once 10 have piled up, the AI reads them all in the background.
     if (b.notes?.trim() || b.warningNote?.trim()) void maybeDigest(app);
