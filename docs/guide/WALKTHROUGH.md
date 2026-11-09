@@ -796,7 +796,16 @@ Each world card shows its rank, a progress bar towards the next milestone, **TAS
 
 ### THE TABS AT THE BOTTOM
 
-**WORLDS** is where you are. **PACKS**, **LEADERBOARDS** and **CODEX** say **SOON**. Press one and the cabinet tells you it unlocks in a later build.
+**WORLDS** is where you are. **MISSIONS** opens your mission list (see below). **PACKS**, **LEADERBOARDS** and **CODEX** say **SOON**. Press one and the cabinet tells you it unlocks in a later build.
+
+## MISSIONS
+
+Want to learn the whole Foundry? Here's your quest log. There's one mission for every chapter of this guide, from the arcade menu link down to Settings, plus one for the arcade itself. The bar up top shows how many you've cleared.
+- **INSTRUCTIONS** pops up that chapter of this guide as plain text, right there in the cabinet, so you can read up on a screen without loading it. Arrow keys scroll it. **CLOSE**, Esc or B shuts it.
+- **GO** opens the screen the mission is about.
+- **MARK DONE** clears a mission and puts a **✓ DONE** beside it. **UNDO** takes it back.
+- Missions don't earn XP yet. That waits until the XP rules are decided.
+- **BACK TO HUB** (or B) heads home.
 
 ## WORLD DETAIL
 

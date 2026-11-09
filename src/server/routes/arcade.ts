@@ -11,6 +11,7 @@ import { generateWorld, checkGenerate, suggestWorlds, suggestTasks, tidyNotes, r
 import { startDraft, getDraft, listDrafts, discardDraft, DRAFT_KINDS } from '../../engine/arcade/drafts.ts';
 import { tickerCatalog, tickerValues, chosenTickerStats } from '../../engine/arcade/ticker.ts';
 import { setPortrait, clearPortrait, portraitFor, MAX_PORTRAIT_BYTES } from '../../engine/arcade/portraits.ts';
+import { listMissions, missionInstructions, setMissionDone } from '../../engine/arcade/missions.ts';
 import { notFound } from '../../core/errors.ts';
 import { parse, type P, type Q } from './util.ts';
 
@@ -100,6 +101,18 @@ export function registerArcadeRoutes(s: FastifyInstance, { app }: ServerDeps): v
   });
   s.delete('/api/arcade/characters/:id/portrait', async (req) => {
     clearPortrait(app, (req.params as P).id);
+    return { ok: true };
+  });
+
+  // Missions: one per guide chapter. The list is titles only; a chapter's text loads when its popup opens.
+  s.get('/api/arcade/missions', async () => listMissions(app));
+  s.get('/api/arcade/missions/:id/instructions', async (req) => missionInstructions(app, (req.params as P).id));
+  s.put('/api/arcade/missions/:id/done', async (req) => {
+    setMissionDone(app, (req.params as P).id, true);
+    return { ok: true };
+  });
+  s.delete('/api/arcade/missions/:id/done', async (req) => {
+    setMissionDone(app, (req.params as P).id, false);
     return { ok: true };
   });
 
