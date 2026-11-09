@@ -101,6 +101,8 @@ The first item in the sidebar opens the arcade cabinet at `/arcade`. It runs on 
 
 Right under it, **Missions** opens the same mission list as the arcade's MISSIONS tab, in back-office style: Instructions (the guide chapter in a pop-up), Go, and Mark done or Undo. Progress is shared, so a mission cleared on one side shows as done on the other. See [MISSIONS](#missions) in Part 2.
 
+Every back-office screen also has a round **? Instructions** button in the bottom-right corner. It opens that screen's chapter of this guide in a pop-up, so you can check how something works without leaving the page. Product and batch-review pages show the Product library and Batch approval chapters.
+
 ---
 
 ## 2. Dashboard

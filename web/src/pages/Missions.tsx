@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { api, useApi } from '../api.ts';
 import { GuideText } from '../arcade/Missions.tsx';
 import { ActionButton, Async, Card, Modal, PageHead } from '../ui.tsx';
@@ -72,4 +72,31 @@ function InstructionsModal({ mission, onClose }: { mission: Mission; onClose: ()
       {state.data && <p className="small muted">From {state.data.source}.</p>}
     </Modal>
   );
+}
+
+/**
+ * The Instructions button on every back-office screen (owner, 2026-11-09). It finds the mission whose
+ * screen this is and opens that guide chapter in the same pop-up as the Missions page.
+ */
+export function ScreenInstructions() {
+  const { pathname } = useLocation();
+  const state = useApi<{ missions: Mission[] }>('/arcade/missions');
+  const [open, setOpen] = useState(false);
+  const mission = missionForPath(state.data?.missions ?? [], pathname);
+  if (!mission || pathname === '/missions') return null;
+  return (
+    <>
+      <button className="screen-guide" title={`Instructions for ${mission.title}, from the walkthrough guide`} onClick={() => setOpen(true)}>? Instructions</button>
+      {open && <InstructionsModal mission={mission} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+/** The mission for a screen: an exact route match, or the screen a sub-page belongs to (/products/x is the library). */
+export function missionForPath(missions: Mission[], pathname: string): Mission | null {
+  const usable = missions.filter((m) => !m.locked && m.hasInstructions && m.route !== '/arcade');
+  const exact = usable.find((m) => m.route === pathname);
+  if (exact) return exact;
+  const parent = pathname.startsWith('/products/') ? '/library' : pathname.startsWith('/batches/') ? '/batches' : null;
+  return parent ? usable.find((m) => m.route === parent) ?? null : null;
 }
