@@ -112,6 +112,8 @@ export function decide(app: AppContext, itemId: string, input: { decision: Decis
   }
 
   if (input.decision === 'rejected') {
+    // Everything turned away gets a reason, so the Factory can learn from it (owner, 2026-11-09).
+    if (notes.length < 3) throw validation('Say why you are rejecting it: which part is wrong and what is wrong with it.');
     const id = newId('apd');
     app.db.tx(() => {
       app.db.insert('approval_decisions', { id, item_id: item.id, version_id: version.id, decision: 'rejected', notes, decided_by: actor, decided_at: now });
