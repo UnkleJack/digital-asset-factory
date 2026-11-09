@@ -40,6 +40,8 @@ export async function requireRealReason(app: AppContext, text: string, kind: Rea
 export async function checkReason(app: AppContext, text: string, kind: ReasonKind, context: { title?: string; productType?: string } = {}): Promise<ReasonVerdict> {
   const t = text.trim();
   if (!t) return { ok: false, message: 'Write a reason first.', checkedBy: 'built-in' };
+  // Plain keyboard-mash is refused here without asking the AI.
+  if (obviousGibberish(t)) return { ok: false, message: `That doesn't read as real words. ${FRIENDLY}`, checkedBy: 'built-in' };
   const mode = await textMode(app).catch(() => ({ mode: 'deterministic' as const }));
   if (mode.mode === 'ai') {
     try {
@@ -104,17 +106,31 @@ function wordShaped(w: string): boolean {
   return true;
 }
 
-/** True when the text reads as words. Exported for tests. */
+function wordsOf(text: string): string[] {
+  return text.toLowerCase().replace(/[’']/g, '').match(/\p{L}+/gu) ?? [];
+}
+
+/**
+ * True only for text that is plainly not words: keyboard-mash, random letters, one junk word repeated.
+ * It never needs a word list, so real but rare words ("smudged", "hideous") are never caught by it.
+ * It runs before the AI so mash can't reach the AI at all, and no text can talk its way past it.
+ */
+export function obviousGibberish(text: string): boolean {
+  const words = wordsOf(text);
+  if (!words.length) return true;
+  if (words.some((w) => !/^[a-z]+$/.test(w))) return false; // not Latin script: can't judge it here
+  const shaped = words.filter((w) => COMMON.has(w) || wordShaped(w));
+  if (shaped.join('').length / words.join('').length < 0.7) return true;
+  if (new Set(words).size === 1 && words.length > 1 && !COMMON.has(words[0]!)) return true; // "blah blah blah"
+  return false;
+}
+
+/** The fallback when there is no AI: not gibberish, and at least one common word or three word-shaped words. */
 export function looksLikeWords(text: string): boolean {
-  const words = text.toLowerCase().replace(/[’']/g, '').match(/\p{L}+/gu) ?? [];
-  if (!words.length) return false;
-  // Not Latin script: the built-in check can't judge it, so leave it to the person.
+  if (obviousGibberish(text)) return false;
+  const words = wordsOf(text);
   if (words.some((w) => !/^[a-z]+$/.test(w))) return true;
   const known = words.filter((w) => COMMON.has(w)).length;
   const shaped = words.filter((w) => COMMON.has(w) || wordShaped(w));
-  const letters = words.join('').length;
-  const shapedLetters = shaped.join('').length;
-  if (shapedLetters / letters < 0.7) return false;
-  if (new Set(words).size === 1 && words.length > 1 && !COMMON.has(words[0]!)) return false; // "blah blah blah"
   return known >= 1 || shaped.length >= 3;
 }
