@@ -15,8 +15,16 @@ import { json } from '../../db/sqlite.ts';
 import { publishListing } from '../../engine/publishing/service.ts';
 import { errorMessage } from '../../core/errors.ts';
 import { int, parse, LIST_MAX, totalHeader, type Q, type P } from './util.ts';
+import { requireRealReason } from '../../engine/approval/reasonCheck.ts';
+import type { AppContext } from '../../app/context.ts';
 
 /** Version states that mean the factory finished making it, whatever happened at review. */
+/** Product title and type for a version, so the reason check knows what the note is about. */
+function productContext(app: AppContext, versionId: string): { title?: string; productType?: string } {
+  const r = app.db.get<{ title: string; product_type: string }>('SELECT p.title, p.product_type FROM product_versions v JOIN products p ON p.id = v.product_id WHERE v.id = ?', versionId);
+  return r ? { title: r.title, productType: r.product_type } : {};
+}
+
 const MADE_STATUSES = "'ready','qa_failed','superseded','rejected','approved'";
 
 export function registerOperationsRoutes(s: FastifyInstance, deps: ServerDeps): void {
@@ -94,6 +102,7 @@ export function registerOperationsRoutes(s: FastifyInstance, deps: ServerDeps): 
 
   s.post('/api/rework/:versionId/note', async (req) => {
     const b = parse(z.object({ notes: z.string().max(4000) }), req.body, 'note');
+    if (b.notes.trim().length >= 3) await requireRealReason(app, b.notes, 'note', productContext(app, (req.params as P).versionId));
     const r = addReviewNote(app, (req.params as P).versionId, b.notes);
     void maybeDigest(app);
     return r;
@@ -109,8 +118,16 @@ export function registerOperationsRoutes(s: FastifyInstance, deps: ServerDeps): 
   s.get('/api/ai-notes/status', async () => notesStatus(app));
   s.post('/api/ai-notes/digest', async () => digestNotes(app, 'manual'));
   s.get('/api/ai-lessons', async () => listLessons(app));
-  s.post('/api/ai-lessons', async (req) => addLesson(app, parse(z.object({ text: z.string().max(300) }), req.body, 'lesson').text));
-  s.patch('/api/ai-lessons/:id', async (req) => updateLesson(app, (req.params as P).id, parse(z.object({ text: z.string().max(300).optional(), pinned: z.boolean().optional() }), req.body, 'lesson')));
+  s.post('/api/ai-lessons', async (req) => {
+    const text = parse(z.object({ text: z.string().max(300) }), req.body, 'lesson').text;
+    if (text.trim().length >= 3) await requireRealReason(app, text, 'lesson');
+    return addLesson(app, text);
+  });
+  s.patch('/api/ai-lessons/:id', async (req) => {
+    const b = parse(z.object({ text: z.string().max(300).optional(), pinned: z.boolean().optional() }), req.body, 'lesson');
+    if (b.text !== undefined && b.text.trim().length >= 3) await requireRealReason(app, b.text, 'lesson');
+    return updateLesson(app, (req.params as P).id, b);
+  });
   s.delete('/api/ai-lessons/:id', async (req) => { deleteLesson(app, (req.params as P).id); return { ok: true }; });
 
   s.get('/api/rework', async (req) => reworkList(app, { showFixed: (req.query as Q).showFixed === '1' }));
@@ -140,6 +157,12 @@ export function registerOperationsRoutes(s: FastifyInstance, deps: ServerDeps): 
   });
   s.post('/api/batch-items/:id/decision', async (req) => {
     const b = parse(z.object({ decision: z.enum(['approved', 'rejected', 'revision_requested', 'regenerate_requested']), marketplaces: z.array(z.string()).optional(), notes: z.string().max(4000).optional(), acceptWarnings: z.boolean().optional(), warningNote: z.string().max(2000).optional() }), req.body, 'decision');
+    // A reason typed into the Reject / Return for revision / Regenerate box must be real, usable words.
+    // Checked before anything is saved, so a refused reason leaves the item exactly as it was.
+    if (b.decision !== 'approved' && b.notes?.trim()) {
+      const item = app.db.get<{ version_id: string }>('SELECT version_id FROM approval_items WHERE id = ?', (req.params as P).id);
+      await requireRealReason(app, b.notes, b.decision, item ? productContext(app, item.version_id) : {});
+    }
     const result = decide(app, (req.params as P).id, b);
     // A note was written: once 10 have piled up, the AI reads them all in the background.
     if (b.notes?.trim() || b.warningNote?.trim()) void maybeDigest(app);
