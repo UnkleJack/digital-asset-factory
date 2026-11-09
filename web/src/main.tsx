@@ -9,6 +9,7 @@ import '@fontsource/cinzel/700.css';
 import '@fontsource/press-start-2p/400.css';
 import './styles.css';
 import { ToastProvider } from './ui.tsx';
+import { ImageCatcher } from './imageCatcher.tsx';
 import { useApi } from './api.ts';
 import { Dashboard } from './pages/Dashboard.tsx';
 import { CalendarPage } from './pages/Calendar.tsx';
@@ -105,6 +106,8 @@ function App() {
           <Route path="/arcade/*" element={<Arcade />} />
           <Route path="*" element={<BackOffice />} />
         </Routes>
+        {/* Drop a picture on any page, back office or arcade, to add it to the image library. */}
+        <ImageCatcher />
       </ToastProvider>
     </BrowserRouter>
   );

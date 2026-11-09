@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { api, ApiError, errorText, useApi } from '../api.ts';
-import { ActionButton, Async, Card, Empty, PageHead, Pill, useToast } from '../ui.tsx';
+import { api, useApi } from '../api.ts';
+import { IMAGES_IMPORTED, NO_PICTURE, fromFiles, importPictures, linksIn, picturesIn, type ImportResult, type Pending } from '../imageImport.ts';
+import { ActionButton, Async, Card, ClearViewControls, Empty, PageHead, Pill, useClearView, useToast } from '../ui.tsx';
 import { fmtDate } from '../format.ts';
 
 const TOOLS = ['Grok Imagine', 'ChatGPT images', 'Gemini (Nano Banana)', 'arena.ai', 'Flux', 'Venice AI', 'Midjourney', 'Canva'];
@@ -12,81 +13,6 @@ const FIELDS: { id: string; label: string; hint: string }[] = [
   { id: 'page_text', label: 'Page text', hint: 'Prompts, affirmations, journal questions…' },
   { id: 'other', label: 'Other', hint: 'Anything else that shows your style' },
 ];
-
-type Result = { name: string; status: 'imported' | 'duplicate' | 'rejected' | 'error'; detail: string };
-
-function readBase64(file: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result).slice(String(r.result).indexOf(',') + 1));
-    r.onerror = () => reject(r.error ?? new Error('Could not read the file'));
-    r.readAsDataURL(file);
-  });
-}
-
-/** One picture to import: a dropped or chosen file, or one fetched from a dragged web link. */
-type Incoming = { name: string; blob: Blob; madeAt?: number };
-
-const STORED = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
-
-/** Pictures the factory doesn't store as-is (AVIF, BMP, SVG, ICO...) are redrawn by the browser and saved as PNG. */
-async function toStorable(item: Incoming): Promise<Incoming> {
-  if (!item.blob.type || STORED.includes(item.blob.type)) return item;
-  const url = URL.createObjectURL(item.blob);
-  try {
-    const img = new Image();
-    img.src = url;
-    await img.decode();
-    const w = img.naturalWidth || 1200, h = img.naturalHeight || 1200;
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
-    const png = await new Promise<Blob | null>((ok) => canvas.toBlob(ok, 'image/png'));
-    if (!png) throw new Error('could not convert');
-    return { ...item, name: item.name.replace(/\.[A-Za-z0-9]{2,5}$/, '') + '.png', blob: png };
-  } catch {
-    throw new Error(`This browser can't open ${item.blob.type.replace('image/', '').toUpperCase() || 'this'} pictures, so it can't be imported.`);
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-}
-
-/**
- * The pictures in a drag or paste from a web page: each <img> in its HTML, else its link list or plain text.
- * Each picture is a list of links to try in order: the largest size the page offers first, then the one shown.
- */
-function linksIn(dt: DataTransfer): string[][] {
-  const out: string[][] = [];
-  const html = dt.getData('text/html');
-  if (html) for (const img of new DOMParser().parseFromString(html, 'text/html').querySelectorAll('img')) {
-    const src = img.getAttribute('src') ?? '';
-    const set = img.getAttribute('srcset');
-    // srcset lists sizes; the last entry is usually the largest.
-    const best = set ? set.split(',').map((x) => x.trim().split(/\s+/)[0]).filter(Boolean).pop() : undefined;
-    const tries = [...new Set([best, src].filter((x): x is string => !!x))];
-    if (tries.length) out.push(tries);
-  }
-  if (!out.length) for (const line of (dt.getData('text/uri-list') || dt.getData('text/plain') || '').split(/\r?\n/)) {
-    const t = line.trim();
-    if (/^(https?:|data:image\/)/i.test(t)) out.push([t]);
-  }
-  return out.slice(0, 50);
-}
-
-async function fetchLink(link: string): Promise<Incoming> {
-  if (link.startsWith('data:')) {
-    const blob = await (await fetch(link)).blob();
-    return { name: `pasted-image.${blob.type.split('/')[1]?.replace('jpeg', 'jpg').replace(/\+.*/, '') || 'png'}`, blob };
-  }
-  const res = await fetch('/api/references/fetch-image', { method: 'POST', headers: { 'x-daf-client': '1', 'content-type': 'application/json' }, body: JSON.stringify({ url: link }) });
-  if (!res.ok) {
-    const e = await res.json().catch(() => null);
-    throw new ApiError(e?.error?.message ?? `Could not fetch the picture (${res.status}).`, res.status, e?.error?.code ?? 'error', null);
-  }
-  const name = decodeURIComponent(res.headers.get('x-file-name') ?? '') || 'web-image';
-  return { name, blob: await res.blob() };
-}
 
 function ToolPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const known = TOOLS.includes(value) || value === '';
@@ -105,11 +31,17 @@ function ToolPicker({ value, onChange }: { value: string; onChange: (v: string) 
 export function Imports() {
   const images = useApi<any[]>('/references?kind=image');
   const texts = useApi<any[]>('/references?kind=text');
+  // Pictures imported from the box here or dropped anywhere in the app: refresh the library.
+  useEffect(() => {
+    const refresh = () => images.reload();
+    window.addEventListener(IMAGES_IMPORTED, refresh);
+    return () => window.removeEventListener(IMAGES_IMPORTED, refresh);
+  });
   return (
     <div className="page">
       <PageHead title="Imports" sub="Bring in things you made with other tools. Images become coloring-page products; text you like becomes style examples for the AI. Exact duplicates are skipped automatically." />
       <div className="grid g2">
-        <ImageUpload onDone={() => images.reload()} />
+        <ImageUpload />
         <TextUpload onDone={() => texts.reload()} />
       </div>
       <ImageLibrary state={images} />
@@ -118,25 +50,20 @@ export function Imports() {
   );
 }
 
-function ImageUpload({ onDone }: { onDone: () => void }) {
+function ImageUpload() {
   const [tool, setTool] = useState('');
   const [label, setLabel] = useState('');
   const [prompt, setPrompt] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
-  const [results, setResults] = useState<Result[]>([]);
+  const [results, setResults] = useState<ImportResult[]>([]);
   const [drag, setDrag] = useState(false);
   const input = useRef<HTMLInputElement>(null);
 
-  const fromFiles = (files: File[]): Incoming[] => files.map((f) => ({ name: f.name, blob: f, madeAt: f.lastModified }));
-
-  /** Files when the drag or paste carries them; otherwise the picture links a web page put in it. */
   const take = async (dt: DataTransfer | null) => {
     if (!dt) return;
-    const files = [...dt.files].filter((f) => f.type.startsWith('image/') || !f.type);
-    if (files.length) return upload(fromFiles(files));
-    const links = linksIn(dt);
-    if (!links.length) { setResults([{ name: 'Dropped item', status: 'rejected', detail: 'No picture found in what was dropped. Try dragging the picture itself, not its page.' }]); return; }
-    return upload(links.map((l) => ({ name: l[0].startsWith('data:') ? 'pasted image' : l[0].split('?')[0].split('/').pop() || l[0], links: l })));
+    const items = picturesIn(dt);
+    if (!items.length) { setResults([{ name: 'Dropped item', status: 'rejected', detail: NO_PICTURE }]); return; }
+    return upload(items);
   };
 
   // Paste (⌘V / Ctrl+V) anywhere on this page works like a drop, unless you are typing in a box.
@@ -154,33 +81,10 @@ function ImageUpload({ onDone }: { onDone: () => void }) {
     return () => window.removeEventListener('paste', onPaste);
   });
 
-  /** The first link that gives a picture (a page's "largest size" link sometimes doesn't exist). */
-  const fetchFirst = async (links: string[]): Promise<Incoming & { from: string }> => {
-    let err: unknown;
-    for (const l of links) {
-      try { return { ...(await fetchLink(l)), from: l }; } catch (e) { err = e; }
-    }
-    throw err;
-  };
-
-  const upload = async (items: (Incoming | { name: string; links: string[] })[]) => {
-    const out: Result[] = [];
-    for (const [i, it] of items.entries()) {
-      setBusy(`Importing ${i + 1} of ${items.length}…`);
-      try {
-        const got = 'links' in it ? await fetchFirst(it.links) : null;
-        const f = await toStorable(got ?? (it as Incoming));
-        const r = await api<any>('/references/images', { body: { fileName: f.name, dataBase64: await readBase64(f.blob), label: label || undefined, sourceTool: tool.trim() || undefined, prompt: prompt || undefined, notes: got && !got.from.startsWith('data:') ? `Imported from ${got.from.slice(0, 1900)}` : undefined, madeAt: f.madeAt ? new Date(f.madeAt).toISOString() : undefined } });
-        out.push(r.status === 'imported' ? { name: f.name, status: 'imported', detail: `saved as ${r.path}` }
-          : r.status === 'duplicate' ? { name: f.name, status: 'duplicate', detail: `same image as ${r.existingPath ?? r.existingLabel}, skipped` }
-          : { name: f.name, status: 'rejected', detail: r.reason });
-      } catch (e) {
-        out.push({ name: it.name, status: 'error', detail: errorText(e) });
-      }
-      setResults([...out]);
-    }
+  // What's typed in the fields above is saved with every picture dropped in this box.
+  const upload = async (items: Pending[]) => {
+    await importPictures(items, { label: label || undefined, sourceTool: tool.trim() || undefined, prompt: prompt || undefined }, (step, done) => { setBusy(step); setResults(done); });
     setBusy(null);
-    onDone();
   };
 
   return (
@@ -252,9 +156,14 @@ function ImageLibrary({ state }: { state: any }) {
   const toast = useToast();
   const nav = useNavigate();
   const toggle = (id: string) => setSel(sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id]);
+  // "Clear view" hides pictures imported before the clear. Nothing is deleted, new imports still show,
+  // and ticked pictures stay so a selection in progress never disappears.
+  const view = useClearView<any>('imports-images', state.data, (r) => r.created_at, (r) => sel.includes(r.id));
   return (
-    <Card title="Image library" className="imports-lib" actions={sel.length > 0 && (
+    <Card title="Image library" className="imports-lib" actions={(
       <>
+        <ClearViewControls view={view} noun="pictures" />
+        {sel.length > 0 && <>
         <input placeholder="Product title (optional)" value={title} onChange={(e) => setTitle(e.target.value)} style={{ width: 220 }} />
         <ActionButton className="primary" onClick={async () => {
           const r = await api<any>('/references/products', { body: { referenceIds: sel, title: title || undefined } });
@@ -264,13 +173,15 @@ function ImageLibrary({ state }: { state: any }) {
           state.reload();
           nav(`/products/${r.productId}`);
         }}>Make coloring product from {sel.length} selected</ActionButton>
+        </>}
       </>
     )}>
-      <Async state={state}>{(d: any[]) => d.length === 0 ? <Empty title="No images yet">Add some above.</Empty> : (
+      <Async state={state}>{(all: any[]) => all.length === 0 ? <Empty title="No images yet">Add some above.</Empty>
+        : view.visible.length === 0 ? <Empty title="View cleared">Nothing was deleted. New pictures show up here as you import them, and "Show {view.hiddenCount} cleared pictures" above brings the rest back.</Empty> : (
         <>
           <p className="small muted">Tick files to pick them, in the order you want the pages. Press Preview to see one. {sel.length ? `${sel.length} picked.` : ''}</p>
           <div className="ref-list" role="list">
-            {d.map((r) => {
+            {view.visible.map((r: any) => {
               const n = sel.indexOf(r.id);
               const name = r.rel_path?.split('/').pop() ?? r.original_name;
               const open = preview === r.id;
