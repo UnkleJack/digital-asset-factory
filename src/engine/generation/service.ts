@@ -1,6 +1,7 @@
 import type { z } from 'zod';
 import type { AppContext } from '../../app/context.ts';
 import type { ProductTypeDefinition, TypeContext, ArtworkItem, ImageGenerator } from '../producttypes/types.ts';
+import { briefClause } from '../producttypes/types.ts';
 import { CONTENT_LIBRARY_REVISION } from '../producttypes/library.ts';
 import { learningBrief } from './learning.ts';
 import { styleExamplesBrief } from '../references/examples.ts';
@@ -113,7 +114,7 @@ export async function generateContent(app: AppContext, def: ProductTypeDefinitio
   const mode = await textMode(app);
   if (mode.mode === 'deterministic') return deterministic(mode.reason);
   const p = def.contentPrompt(ctx);
-  const { data, provenance } = await structuredCall(app, { purpose: `content:${def.id}`, schema: def.contentSchema, system: p.system, prompt: p.user, maxTokens: p.maxTokens, trace });
+  const { data, provenance } = await structuredCall(app, { purpose: `content:${def.id}`, schema: def.contentSchema, system: p.system, prompt: p.user + briefClause(ctx.brief), maxTokens: p.maxTokens, trace });
   return { content: data, provenance };
 }
 

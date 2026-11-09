@@ -5,12 +5,13 @@ import { productType } from '../producttypes/registry.ts';
 import { versionContext } from '../specification/service.ts';
 import { getListing, listingsForVersion, updateVersion, type ListingRow } from '../../db/repos.ts';
 import { textMode, structuredCall, type CallTrace, type Provenance } from '../generation/service.ts';
-import { AI_SYSTEM_BASE } from '../producttypes/types.ts';
+import { AI_SYSTEM_BASE, briefClause } from '../producttypes/types.ts';
 import { hashObject } from '../../core/hash.ts';
 import { newId } from '../../core/ids.ts';
 import { validation, conflict } from '../../core/errors.ts';
 import { audit, type AuditActor } from '../../logging/logger.ts';
 import type { AssetRecord } from '../../storage/assetStore.ts';
+import { TEXT_PROVIDER_IDS, IMAGE_PROVIDER_IDS } from '../generation/providers.ts';
 
 export const MARKETPLACES = ['etsy', 'gumroad', 'generic'] as const;
 export type Marketplace = (typeof MARKETPLACES)[number];
@@ -88,6 +89,52 @@ function chooseFiles(assets: AssetRecord[], rules: ListingRules): AssetRecord[] 
   return zip ? [zip] : primary.slice(0, rules.filesMax);
 }
 
+/*
+ * AI disclosure. Etsy's Creativity Standards (etsy.com/legal/creativity) say: "Sellers must disclose
+ * within their listing description if an item is created with the use of AI." The policy does not say
+ * whether AI-written text on a code-drawn page counts, so the owner picks the level in Settings →
+ * Marketplaces → aiDisclosure. Only Etsy listings get the paragraph.
+ */
+export const AI_DISCLOSURE_HEADING = 'AI DISCLOSURE';
+
+export interface AiUsage { text: boolean; images: boolean }
+export type AiDisclosureLevel = 'art_only' | 'art_and_text';
+
+const AI_GENERATORS = new Set<string>([...TEXT_PROVIDER_IDS, ...IMAGE_PROVIDER_IDS]);
+
+/** True when a provenance record (or the one it was edited or copied from) came from an AI provider. */
+export function provenanceUsedAi(p: unknown, depth = 0): boolean {
+  if (!p || typeof p !== 'object' || depth > 10) return false;
+  const r = p as Record<string, unknown>;
+  if (typeof r.generator === 'string' && AI_GENERATORS.has(r.generator)) return true;
+  // Pictures brought in through Imports carry the prompt they were made with when an AI tool made them.
+  if (r.generator === 'imported' && typeof r.prompt === 'string' && r.prompt.trim()) return true;
+  return provenanceUsedAi(r.previous, depth + 1);
+}
+
+/** What AI made in this item: the text printed on its pages, and/or its artwork (listing mockups and the listing copy are not the item). */
+export function aiUsageOf(contentProvenance: unknown, assets: AssetRecord[]): AiUsage {
+  return {
+    text: provenanceUsedAi(contentProvenance),
+    images: assets.some((a) => a.role !== 'listing_image' && provenanceUsedAi(a.provenance)),
+  };
+}
+
+/** The disclosure paragraph for an Etsy listing, or null when the chosen level says none is needed. */
+export function aiDisclosure(u: AiUsage, level: AiDisclosureLevel = 'art_only'): string | null {
+  const parts: string[] = [];
+  if (u.images) parts.push('create the artwork');
+  if (u.text && level === 'art_and_text') parts.push('write the text on the pages');
+  if (!parts.length) return null;
+  const list = parts.length === 1 ? parts[0] : `${parts[0]} and ${parts[1]}`;
+  return `${AI_DISCLOSURE_HEADING}\nThis item was made with the help of AI tools. AI was used to ${list}.`;
+}
+
+export function withAiDisclosure(description: string, disclosure: string | null): string {
+  if (!disclosure || description.includes(disclosure)) return description;
+  return `${description.trimEnd()}\n\n${disclosure}`;
+}
+
 const ListingCopy = z.object({
   title: z.string().min(5).max(255),
   description: z.string().min(50).max(8000),
@@ -129,7 +176,7 @@ export async function prepareListings(app: AppContext, versionId: string, market
       const r = await structuredCall(app, {
         purpose: `listing:${m}`,
         schema: ListingCopy,
-        system: `${AI_SYSTEM_BASE}\n- Describe the product honestly. Never claim it is a bestseller, popular, award-winning, or guaranteed to produce results.\n- State clearly that it is a digital download and no physical item ships.`,
+        system: `${AI_SYSTEM_BASE}\n- Describe the product honestly. Never claim it is a bestseller, popular, award-winning, or guaranteed to produce results.\n- State clearly that it is a digital download and no physical item ships.\n- Do not mention AI or how the item was made.`,
         prompt: `Write a ${m === 'generic' ? 'web shop' : m} listing for a digital product.
 Product title: ${product.title}
 Type: ${def.name}. Paper: ${ctx.paper.size} ${ctx.paper.orientation}.
@@ -138,7 +185,7 @@ Features: ${hints.features.join('; ')}
 Included files: ${hints.included.join('; ')}
 How to use: ${hints.usage}
 Candidate search keywords: ${hints.keywords.join(', ')}
-Constraints: title at most ${rules.titleMax} characters and front-loaded with the most important search phrase; description ${rules.descriptionMin}-${Math.min(rules.descriptionMax, 3000)} characters with short sections (What's included, Features, How it works, Please note); exactly ${Math.min(rules.tagsMax, 13)} tags, each at most ${rules.tagMaxLen} characters, lowercase, no repeated words from the title where avoidable.${version.revision_notes ? `\nReviewer notes to apply: ${version.revision_notes}` : ''}`,
+Constraints: title at most ${rules.titleMax} characters and front-loaded with the most important search phrase; description ${rules.descriptionMin}-${Math.min(rules.descriptionMax, 3000)} characters with short sections (What's included, Features, How it works, Please note); exactly ${Math.min(rules.tagsMax, 13)} tags, each at most ${rules.tagMaxLen} characters, lowercase, no repeated words from the title where avoidable.${version.revision_notes ? `\nReviewer notes to apply: ${version.revision_notes}` : ''}${briefClause(ctx.brief)}`,
         maxTokens: 6000,
         trace: { ...trace, versionId },
       });
@@ -157,8 +204,9 @@ Constraints: title at most ${rules.titleMax} characters and front-loaded with th
     const nt = normalizeTags(copy.tags, rules);
     notes.push(...nt.notes);
     const files = chooseFiles(assets, rules);
-    const draft: ListingDraft = { title, description: copy.description.trim(), tags: nt.tags, price_cents: price, image_asset_ids: images.slice(0, rules.imagesMax).map((i) => i.id), file_asset_ids: files.map((f) => f.id) };
-    const attributes = { listingType: 'digital download', whoMade: 'I did', whatIsIt: 'A finished product', category: def.category, paper: `${ctx.paper.size} ${ctx.paper.orientation}` };
+    const disclosure = m === 'etsy' ? aiDisclosure(aiUsageOf(version.content_provenance, assets), s.marketplaces.aiDisclosure) : null;
+    const draft: ListingDraft = { title, description: withAiDisclosure(copy.description.trim(), disclosure), tags: nt.tags, price_cents: price, image_asset_ids: images.slice(0, rules.imagesMax).map((i) => i.id), file_asset_ids: files.map((f) => f.id) };
+    const attributes = { listingType: 'digital download', whoMade: 'I did', whatIsIt: 'A finished product', category: def.category, paper: `${ctx.paper.size} ${ctx.paper.orientation}`, ...(disclosure && { aiDisclosure: disclosure }) };
     const issues = validateListing(rules, draft, files, images.slice(0, rules.imagesMax));
     const hash = listingHashOf({ ...draft, currency: s.general.currency, attributes });
     const now = new Date().toISOString();
@@ -223,6 +271,12 @@ export function updateListing(app: AppContext, listingId: string, patchInput: un
   const files = l.file_asset_ids.map((id) => app.assets.get(id));
   const images = l.image_asset_ids.map((id) => app.assets.get(id));
   const issues = validateListing(rules, draft, files, images);
+  const disclosure = typeof l.attributes.aiDisclosure === 'string' ? l.attributes.aiDisclosure : null;
+  if (disclosure && !draft.description.includes(disclosure)) {
+    const msg = 'AI disclosure missing: this item was made with AI, so the description must keep the AI DISCLOSURE paragraph.';
+    if (l.marketplace === 'etsy') issues.push({ field: 'description', message: `${msg} Etsy requires it.` });
+    else notes.push(msg);
+  }
   const hash = listingHashOf({ ...draft, currency: l.currency, attributes: l.attributes });
   if (hash === l.listing_hash) return l;
   const published = l.status === 'published_manual' || l.status === 'published_verified';
