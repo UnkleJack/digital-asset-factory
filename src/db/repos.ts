@@ -29,6 +29,8 @@ export interface SpecRow {
   theme_id: string | null;
   paper: Paper;
   seed: number;
+  /** Optional free-text wording instructions for the AI, written by the owner. */
+  brief: string;
   created_at: string;
 }
 

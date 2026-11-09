@@ -15,6 +15,8 @@ export interface TypeContext<P> {
   shopName: string;
   seed: number;
   revisionNotes: string;
+  /** The owner's own wording instructions for this product (empty when none). */
+  brief?: string;
   /** Reads an image from the reference library as PNG (set by the app; absent in isolated tests). */
   loadReferenceImage?: (id: string) => Promise<{ png: Buffer; widthPx: number; heightPx: number; provenance: Record<string, unknown> }>;
 }
@@ -119,6 +121,14 @@ Rules:
 - No placeholder text (no "lorem ipsum", "TBD", "[insert]", "XXX").
 - Keep every item short enough to fit on a printed line. Use plain ASCII punctuation.
 - Content must be safe and suitable for the stated audience.`;
+
+export const BRIEF_MAX = 600;
+
+/** The owner's brief as a prompt paragraph; empty when there is none. Added to every AI text request for the product. */
+export function briefClause(brief: string | undefined): string {
+  const b = (brief ?? '').trim();
+  return b ? `\nThe owner's brief for this product (follow it for wording, tone and content, unless it conflicts with the rules above):\n${b}` : '';
+}
 
 export function revisionClause(ctx: TypeContext<unknown>): string {
   return ctx.revisionNotes ? `\nThe reviewer asked for these changes from the previous version; apply them:\n${ctx.revisionNotes}` : '';

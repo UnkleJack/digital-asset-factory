@@ -314,6 +314,10 @@ export const SettingsSchema = z.object({
       }),
     }).prefault({}),
     defaultPriceCents: z.record(z.string(), z.number().int().min(0)).default(DEFAULT_PRICES),
+    // When an Etsy listing gets an "AI DISCLOSURE" paragraph (Etsy's Creativity Standards require one for items
+    // "created with the use of AI"). art_only: only when AI-made pictures are part of the product.
+    // art_and_text: also when AI wrote the text printed on the pages. Other marketplaces never get one.
+    aiDisclosure: z.enum(['art_only', 'art_and_text']).default('art_only'),
   }).prefault({}),
   licensing: z.object({
     licenseText: z.string().min(20).default(LICENSE_PERSONAL),

@@ -21,6 +21,8 @@ import { newId } from '../../core/ids.ts';
 import { makeThumbnail } from '../../storage/thumbnail.ts';
 import { validation, notFound, conflict } from '../../core/errors.ts';
 import { audit } from '../../logging/logger.ts';
+import { PRESETS } from '../../engine/templates/presets.ts';
+import { BRIEF_MAX } from '../../engine/producttypes/types.ts';
 import { int, parse, LIST_MAX, type Q, type P } from './util.ts';
 
 const CreateBody = z.object({
@@ -35,6 +37,7 @@ const CreateBody = z.object({
   marketplaces: z.array(z.string()).optional(),
   batchId: z.string().optional(),
   fonts: FontChoiceSchema.optional(),
+  brief: z.string().max(BRIEF_MAX).optional(),
 });
 
 const previewCache = new Map<string, Buffer>();
@@ -190,6 +193,7 @@ export function registerProductRoutes(s: FastifyInstance, { app }: ServerDeps): 
     return reply.send(body);
   });
 
+  s.get('/api/presets', async () => PRESETS);
   s.get('/api/product-types', async () => productTypes().map(describeType));
 
   s.get('/api/fonts', async () => ({

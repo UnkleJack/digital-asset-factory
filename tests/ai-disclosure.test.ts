@@ -23,15 +23,17 @@ test('provenance: AI providers count, deterministic and procedural do not, edits
   assert.equal(provenanceUsedAi(null), false);
 });
 
-test('disclosure text names exactly what AI was used for', () => {
-  assert.equal(aiDisclosure({ text: false, images: false, listing: false }), null);
-  assert.equal(aiDisclosure({ text: true, images: false, listing: false }), `${AI_DISCLOSURE_HEADING}\nThis item was made with the help of AI tools. AI was used to write the text on the pages.`);
-  assert.match(aiDisclosure({ text: true, images: true, listing: true })!, /write the text on the pages, create the artwork and write this description\.$/);
+test('disclosure level decides what triggers it; listing mockups and listing copy never do', () => {
+  assert.equal(aiDisclosure({ text: false, images: false }), null);
+  assert.equal(aiDisclosure({ text: true, images: false }), null, 'default level ignores AI-written page text');
+  assert.equal(aiDisclosure({ text: true, images: false }, 'art_and_text'), `${AI_DISCLOSURE_HEADING}\nThis item was made with the help of AI tools. AI was used to write the text on the pages.`);
+  assert.equal(aiDisclosure({ text: false, images: true }), `${AI_DISCLOSURE_HEADING}\nThis item was made with the help of AI tools. AI was used to create the artwork.`);
+  assert.match(aiDisclosure({ text: true, images: true }, 'art_and_text')!, /create the artwork and write the text on the pages\.$/);
   const art = { role: 'source', provenance: { generator: 'openai' } } as unknown as AssetRecord;
   const thumb = { role: 'listing_image', provenance: { generator: 'openai' } } as unknown as AssetRecord;
-  assert.deepEqual(aiUsageOf(null, [thumb], null), { text: false, images: false, listing: false }, 'listing mockups are not artwork');
-  assert.deepEqual(aiUsageOf(null, [art], null), { text: false, images: true, listing: false });
-  const d = aiDisclosure({ text: true, images: false, listing: false });
+  assert.deepEqual(aiUsageOf(null, [thumb]), { text: false, images: false }, 'listing mockups are not artwork');
+  assert.deepEqual(aiUsageOf(null, [art]), { text: false, images: true });
+  const d = aiDisclosure({ text: false, images: true });
   assert.equal(withAiDisclosure('Body', d), `Body\n\n${d}`);
   assert.equal(withAiDisclosure(`Body\n\n${d}`, d), `Body\n\n${d}`, 'never added twice');
   assert.equal(withAiDisclosure('Body', null), 'Body');
@@ -52,31 +54,29 @@ after(async () => {
   await app.close();
 });
 
-test('listings: no disclosure without AI; AI-written pages get one; Etsy refuses an edit that drops it', async () => {
+test('listings: Etsy only, and only at the chosen level; Etsy refuses an edit that drops it', async () => {
   const { version } = createProduct(app, { productType: 'habit-tracker', params: { months: 1 } });
   startPipeline(app, version.id, { marketplaces: ['etsy', 'gumroad'] });
   await idle(app);
   assert.equal(getVersion(app.db, version.id).status, 'ready');
   for (const l of listingsForVersion(app.db, version.id)) assert.ok(!l.description.includes(AI_DISCLOSURE_HEADING), 'deterministic product has no AI line');
 
-  // Same product, but as if an AI provider had written the page text.
+  // As if an AI provider had written the page text.
   updateVersion(app.db, version.id, { content_provenance: { generator: 'anthropic', model: 'test' } });
-  const listings = await prepareListings(app, version.id, ['etsy', 'gumroad']);
-  const expected = aiDisclosure({ text: true, images: false, listing: false })!;
-  for (const l of listings) {
-    assert.ok(l.description.endsWith(expected), `${l.marketplace} description ends with the disclosure`);
-    assert.equal(l.attributes.aiDisclosure, expected);
-  }
+  let listings = await prepareListings(app, version.id, ['etsy', 'gumroad']);
+  for (const l of listings) assert.ok(!l.description.includes(AI_DISCLOSURE_HEADING), `${l.marketplace}: default level ignores AI-written text`);
 
+  app.settings.update('marketplaces', { aiDisclosure: 'art_and_text' });
+  listings = await prepareListings(app, version.id, ['etsy', 'gumroad']);
+  const expected = aiDisclosure({ text: true, images: false }, 'art_and_text')!;
   const etsy = listings.find((l) => l.marketplace === 'etsy')!;
+  const gumroad = listings.find((l) => l.marketplace === 'gumroad')!;
+  assert.ok(etsy.description.endsWith(expected));
+  assert.equal(etsy.attributes.aiDisclosure, expected);
+  assert.ok(!gumroad.description.includes(AI_DISCLOSURE_HEADING), 'Gumroad has no such rule');
+
   const stripped = updateListing(app, etsy.id, { description: etsy.description.replace(expected, '').trim() });
   assert.equal(stripped.status, 'invalid');
   assert.ok(stripped.validation.issues.some((i: { message: string }) => /AI disclosure missing/.test(i.message)));
-  const restored = updateListing(app, etsy.id, { description: etsy.description });
-  assert.equal(restored.status, 'ready');
-
-  const gumroad = listings.find((l) => l.marketplace === 'gumroad')!;
-  const g = updateListing(app, gumroad.id, { description: gumroad.description.replace(expected, '').trim() });
-  assert.equal(g.status, 'ready', 'other marketplaces only warn');
-  assert.ok(g.validation.notes.some((n: string) => /AI disclosure missing/.test(n)));
+  assert.equal(updateListing(app, etsy.id, { description: etsy.description }).status, 'ready');
 });
