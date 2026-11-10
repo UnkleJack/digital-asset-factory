@@ -8,7 +8,7 @@ import { bootstrap, type App } from '../src/app/bootstrap.ts';
 import { MemorySecretStore } from '../src/config/secrets.ts';
 import { buildServer } from '../src/server/app.ts';
 import { checkReason, obviousGibberish } from '../src/engine/approval/reasonCheck.ts';
-import { submitWithReason, processReasonQueue, listReasonQueue, dismissQueuedNote } from '../src/engine/approval/reasonQueue.ts';
+import { submitWithReason, processReasonQueue, listReasonQueue, acknowledgeFailedNote, resendQueuedNote, dropQueuedNote } from '../src/engine/approval/reasonQueue.ts';
 import { tempDir } from './helpers.ts';
 
 let app: App;
@@ -88,17 +88,44 @@ test('queue: a note waits while the AI is down, nothing happens, then it is used
   assert.equal(listReasonQueue(app).length, 0, 'used notes leave the list');
 });
 
-test('queue: a waiting note the AI later refuses is kept, shown with the reason, and can be dismissed', async () => {
+test('queue: a refused note cannot be dismissed; rewriting it and sending it again carries out the action', async () => {
   await submitWithReason(app, { action: 'lesson_add', text: 'make it better' });
-  standInAi(() => ({ intelligible: true, usable: false, tip: 'Say which part, e.g. "keep page titles under 4 words".' }));
+  standInAi((p) => p.includes('make it better')
+    ? { intelligible: true, usable: false, tip: 'Say which part, e.g. "keep page titles under 4 words".' }
+    : PASS);
   makeDue();
   assert.equal((await processReasonQueue(app)).refused, 1);
   assert.equal(app.db.value('SELECT count(*) FROM note_lessons'), 0);
   const [q] = listReasonQueue(app);
   assert.equal(q!.status, 'refused');
   assert.match(q!.message!, /page titles/);
-  dismissQueuedNote(app, q!.id);
+  assert.throws(() => acknowledgeFailedNote(app, q!.id), /Rewrite a refused note, or drop it/);
+
+  // Still vague: refused again, stays in the list with the new wording.
+  await assert.rejects(resendQueuedNote(app, q!.id, 'make it better please'), /page titles/);
+  assert.equal(listReasonQueue(app)[0]!.text, 'make it better please');
+  // Specific: passes, the lesson is added, the note leaves the list.
+  assert.deepEqual(await resendQueuedNote(app, q!.id, 'Keep page titles under 4 words'), { status: 'applied' });
+  assert.equal(app.db.value('SELECT text FROM note_lessons'), 'Keep page titles under 4 words');
   assert.equal(listReasonQueue(app).length, 0);
+});
+
+test('queue: dropping a refused note needs a reason the AI accepts, and the AI must be reachable', async () => {
+  await submitWithReason(app, { action: 'lesson_add', text: 'make it better' });
+  standInAi(() => ({ intelligible: true, usable: false, tip: 'Say which part.' }));
+  makeDue();
+  await processReasonQueue(app);
+  const id = listReasonQueue(app)[0]!.id;
+  await assert.rejects(dropQueuedNote(app, id, 'asdfgh'), /real words/);
+  await assert.rejects(dropQueuedNote(app, id, 'because'), /Say which part/);
+  (app as unknown as { providers: { text: unknown } }).providers = { ...app.providers, text: { ...app.providers.text, isConfigured: async () => false } };
+  await assert.rejects(dropQueuedNote(app, id, 'I wrote a better lesson for this myself'), /can't be reached/);
+  assert.equal(listReasonQueue(app).length, 1, 'still there');
+  standInAi(() => PASS);
+  await dropQueuedNote(app, id, 'I wrote a better lesson for this myself');
+  assert.equal(listReasonQueue(app).length, 0);
+  assert.equal(app.db.value('SELECT drop_reason FROM reason_queue WHERE id = ?', id), 'I wrote a better lesson for this myself');
+  assert.equal(app.db.value('SELECT count(*) FROM note_lessons'), 0, 'the action did not happen');
 });
 
 test('routes: refused notes are 422 and change nothing; with the AI down they come back queued', async () => {
