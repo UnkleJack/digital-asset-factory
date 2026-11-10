@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { api, useApi, usePagedApi, errorText } from '../api.ts';
 import { CompactList, CompactRow, PreviewButton, PreviewPane, usePreview } from '../compact.tsx';
@@ -22,7 +22,7 @@ export function Library() {
   const [creating, setCreating] = useState(sp.get('new') === '1');
   const [packing, setPacking] = useState(sp.get('pack') === '1');
   const nav = useNavigate();
-  const update = (k: string, v: string) => { const n = new URLSearchParams(sp); if (v) n.set(k, v); else n.delete(k); n.delete('new'); setSp(n); };
+  const update = (k: string, v: string) => { const n = new URLSearchParams(sp); if (v) n.set(k, v); else n.delete(k); n.delete('new'); n.delete('preset'); setSp(n); };
   return (
     <div className="page">
       <PageHead title="Product library" sub="Every product, its current version and where it is in production." actions={<><button onClick={() => setPacking(true)}>Build a pack</button><button className="primary" onClick={() => setCreating(true)}>New product</button></>} />
@@ -57,7 +57,7 @@ export function Library() {
       )}</Async>
       </>)}
       {packing && <PackBuilder onClose={() => setPacking(false)} onDone={(id) => { setPacking(false); nav(`/products/${id}`); }} />}
-      {creating && <NewProductModal onClose={() => { setCreating(false); update('new', ''); }} />}
+      {creating && <NewProductModal startPreset={sp.get('preset') ?? ''} onClose={() => { setCreating(false); update('new', ''); }} />}
     </div>
   );
 }
@@ -128,7 +128,7 @@ export function fontPreview(id: string, fallback = 'sans-serif') {
 
 const ARTWORK_NOTE: Record<string, string> = { none: 'Layout only, no artwork', procedural: 'Pattern artwork made by the app, no AI needed', 'ai-image': 'AI-drawn pictures, needs an image key', imported: 'Your imported images (make these from Imports)' };
 
-function NewProductModal({ onClose }: { onClose: () => void }) {
+function NewProductModal({ onClose, startPreset = '' }: { onClose: () => void; startPreset?: string }) {
   const types = useApi<any[]>('/product-types');
   const designs = useApi<any[]>('/design-systems');
   const audiences = useApi<any[]>('/audiences');
@@ -194,6 +194,15 @@ function NewProductModal({ onClose }: { onClose: () => void }) {
     setPairing('');
     setF((cur) => ({ ...cur, title: '', designSystemId: idOf(designs.data, pr.designSystem), audienceId: idOf(audiences.data, pr.audience), themeId: idOf(themes.data, pr.theme), size: pr.paper?.size ?? 'letter', orientation: pr.paper?.orientation ?? 'portrait', grayscale: pr.paper?.grayscale ?? false, brief: pr.brief ?? '' }));
   };
+
+  // A mission's TRY IT link (/library?new=1&preset=id) opens the form with that preset already applied, once everything it names has loaded.
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current || !startPreset || !presets.data || !types.data || !designs.data || !audiences.data || !themes.data) return;
+    started.current = true;
+    const pr = presets.data.find((x) => x.id === startPreset);
+    if (pr) applyPreset(pr);
+  }, [startPreset, presets.data, types.data, designs.data, audiences.data, themes.data]);
 
   const submit = async () => {
     setBusy(true);

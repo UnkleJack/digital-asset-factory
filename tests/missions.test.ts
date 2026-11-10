@@ -28,8 +28,8 @@ after(async () => {
   await app.close();
 });
 
-async function call(method: string, url: string) {
-  const r = await server.inject({ method: method as 'GET', url, headers: { host: HOST, 'x-daf-client': '1' } });
+async function call(method: string, url: string, payload?: unknown) {
+  const r = await server.inject({ method: method as 'GET', url, headers: { host: HOST, 'x-daf-client': '1', ...(payload !== undefined && { 'content-type': 'application/json' }) }, ...(payload !== undefined && { payload: JSON.stringify(payload) }) });
   return { status: r.statusCode, body: r.json() as any };
 }
 
@@ -94,6 +94,47 @@ test('missions: mark done and undo', async () => {
   assert.equal((await call('GET', '/api/arcade/missions')).body.missions[0].locked, false);
   assert.equal((await call('PUT', '/api/arcade/missions/student-types/done')).status, 200);
   for (const id of ['student-types', 'library', 'templates']) await call('DELETE', `/api/arcade/missions/${id}/done`);
+});
+
+test('missions: the Brief mission is cleared by a report, which is also a note for the AI', async () => {
+  const brief = (await call('GET', '/api/arcade/missions')).body.missions.find((m: any) => m.id === 'brief');
+  assert.ok(brief, 'the Brief mission is on the list');
+  assert.equal(brief.report.needsBrief, true);
+  assert.deepEqual(brief.parts, []);
+  // Right after Product library (owner, 2026-11-10).
+  const ids = MISSIONS.map((m) => m.id);
+  assert.equal(ids.indexOf('brief'), ids.indexOf('library') + 1);
+  // A report mission can't be cleared with MARK DONE.
+  assert.equal((await call('PUT', '/api/arcade/missions/brief/done')).status, 422);
+
+  const withBrief = (await call('POST', '/api/products', { productType: 'word-search', params: { puzzles: 2 }, marketplaces: ['etsy'], brief: 'Use only farm animal words.' })).body;
+  const without = (await call('POST', '/api/products', { productType: 'word-search', params: { puzzles: 2 }, marketplaces: ['etsy'] })).body;
+  // Only products with a Brief are offered.
+  const offered = (await call('GET', '/api/arcade/missions/brief/report-products')).body.map((p: any) => p.id);
+  assert.ok(offered.includes(withBrief.productId));
+  assert.ok(!offered.includes(without.productId));
+
+  const report = 'The words were all farm animals, like I asked.';
+  assert.equal((await call('POST', '/api/arcade/missions/brief/report', { productId: without.productId, report })).status, 422, 'no Brief on it');
+  assert.equal((await call('POST', '/api/arcade/missions/brief/report', { productId: withBrief.productId, report: 'ok' })).status, 422, 'too short');
+  assert.equal((await call('POST', '/api/arcade/missions/brief/report', { productId: 'prd_nope', report })).status, 404);
+  const r = await call('POST', '/api/arcade/missions/brief/report', { productId: withBrief.productId, report });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.done, true);
+  const after1 = (await call('GET', '/api/arcade/missions')).body.missions.find((m: any) => m.id === 'brief');
+  assert.equal(after1.done, true);
+  // The report is a note for the AI on that product's version.
+  const note = app.db.get<{ notes: string }>('SELECT notes FROM review_notes WHERE id = ?', r.body.noteId);
+  assert.equal(note?.notes, `Mission report (Presets and the Brief box): ${report}`);
+  assert.equal(app.db.value('SELECT version_id FROM review_notes WHERE id = ?', r.body.noteId), withBrief.versionId);
+
+  // UNDO puts the mission back; the note for the AI stays.
+  assert.equal((await call('DELETE', '/api/arcade/missions/brief/done')).status, 200);
+  assert.equal((await call('GET', '/api/arcade/missions')).body.missions.find((m: any) => m.id === 'brief').done, false);
+  assert.equal(app.db.value('SELECT count(*) FROM arcade_mission_reports WHERE mission_id = ?', 'brief'), 0);
+  assert.ok(app.db.value('SELECT 1 FROM review_notes WHERE id = ?', r.body.noteId));
+  // A plain mission has no report.
+  assert.equal((await call('POST', '/api/arcade/missions/dashboard/report', { productId: withBrief.productId, report })).status, 422);
 });
 
 test('parseGuide: numbered chapters end at the next heading; Part 2 keeps its sections', () => {
