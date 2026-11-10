@@ -723,3 +723,9 @@ a.arc-btn:hover { text-decoration: none; }
 }
 .saved-ideas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .done-line { margin: 0; font-family: var(--pixel); font-size: 9px; letter-spacing: 0.06em; color: var(--lime); }
+
+/* World Builder sizing (effort budget and history, 2026-11-10) */
+.arc-form > label.check { flex-direction: row; align-items: center; gap: 8px; font-size: 13px; }
+.arc-form > label.check input { width: auto; flex: none; margin: 0; }
+.effort-total { margin: 0; font-size: 13px; letter-spacing: 1px; }
+.effort-total .over { color: var(--red); }
