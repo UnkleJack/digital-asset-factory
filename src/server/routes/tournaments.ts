@@ -157,7 +157,24 @@ export function registerTournamentRoutes(server: FastifyInstance, deps: { app: A
         grok: app.providers.imageGrok,
       };
 
-      const ids = modelIds && modelIds.length >= 1 ? modelIds : ['pollinations', 'gemini', 'together', 'huggingface'];
+      const defaultIds = ['pollinations', 'gemini', 'together', 'huggingface'];
+      const paidProviderIds = new Set(['openai', 'replicate', 'fal', 'grok']);
+      const allowPaidFromClient = app.settings?.generation?.allowPaidFallback === true;
+
+      let ids = defaultIds;
+      if (modelIds && modelIds.length >= 1) {
+        const requestedIds = modelIds.filter((mid) => typeof mid === 'string' && mid in providerMap);
+        const requestedPaid = requestedIds.filter((mid) => paidProviderIds.has(mid));
+        if (requestedPaid.length > 0 && !allowPaidFromClient) {
+          throw new AppError(
+            'validation_failed',
+            'Paid providers are not allowed for this endpoint',
+            { httpStatus: 400 }
+          );
+        }
+        ids = requestedIds;
+      }
+
       for (const mid of ids.slice(0, 4)) {
         const provider = providerMap[mid];
         if (provider && await provider.isConfigured()) {

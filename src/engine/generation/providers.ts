@@ -1152,7 +1152,17 @@ export class PollinationsImageProvider implements ImageProvider {
     const dims = POLLINATIONS_MODERN_SIZES[req.size];
     const model = req.referenceImage ? cfg.editModel : cfg.model;
     const body: Record<string, unknown> = { model, prompt: req.prompt, width: dims.width, height: dims.height, n: 1 };
-    if (req.referenceImage) body.image = [`data:${req.referenceImage.mime};base64,${req.referenceImage.data.toString('base64')}`];
+    if (req.referenceImage) {
+      const allowReferenceImageUpload = (cfg as Settings['generation']['pollinations'] & { allowReferenceImageUpload?: boolean }).allowReferenceImageUpload === true;
+      if (!allowReferenceImageUpload) {
+        throw new ProviderError(
+          'pollinations',
+          'configuration',
+          'Reference image upload to Pollinations is disabled. Enable `generation.pollinations.allowReferenceImageUpload` to permit sending image bytes to this external service.',
+        );
+      }
+      body.image = [`data:${req.referenceImage.mime};base64,${req.referenceImage.data.toString('base64')}`];
+    }
     if (req.seed !== undefined) body.seed = req.seed;
     let res: Response;
     try {
