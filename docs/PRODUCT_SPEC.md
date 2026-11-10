@@ -48,6 +48,9 @@ adding a plugin; the pipeline does not change.
 | Coloring / activity | `maze-activity` | PDF (puzzles + answer key) + SVG | Procedural seeded mazes |
 | Coloring / activity | `word-search` | PDF (puzzles + answer key) | AI themed word lists; deterministic grid |
 | Coloring / activity | `illustrated-coloring` | PDF + PNG | **AI image provider** line art (requires configured provider) |
+| School & Study | `assignment-tracker` | PDF | AI subjects and tips; deterministic log layout (combined or a page per subject) |
+| School & Study | `timetable` | PDF (one week, or Week A and B) | AI subject key; period times computed from the school day |
+| School & Study | `reading-log` | PDF | AI challenge genres and review questions; numbered book list, minutes and review pages |
 | Geometric patterns | `geometric-pattern-art` | PDF + SVG | Procedural seeded patterns in 8 families (`family`: tessellate, girih, opart, truchet, guilloche, fractal, lace, herringbone); `mode` coloring (black line art) or print (wall art in the design's colors). No AI required |
 | Bundle | `bundle` | ZIP of member deliverables + combined PDF | Composed from approved/QA-passed members |
 

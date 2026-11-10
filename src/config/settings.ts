@@ -32,7 +32,7 @@ export const DEFAULT_PRICES: Record<string, number> = {
   'todo-checklist': 299, 'cleaning-schedule': 349, 'home-inventory': 399, 'budget-planner': 599,
   'invoice-template': 499, 'guided-journal': 599, 'goal-planner': 449, 'mandala-coloring': 399,
   'maze-activity': 349, 'word-search': 349, 'illustrated-coloring': 449, bundle: 1299,
-  'geometric-pattern-art': 399,
+  'geometric-pattern-art': 399, 'assignment-tracker': 349, timetable: 299, 'reading-log': 349,
 };
 
 const DEFAULT_BLOCKED_TERMS = [

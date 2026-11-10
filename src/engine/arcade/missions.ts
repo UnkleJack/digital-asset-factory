@@ -30,15 +30,14 @@ export interface MissionDef {
 
 // Order follows the guide, after any locked missions the owner put first. Ids are fixed so a renamed chapter keeps its done mark (update `chapter` only).
 export const MISSIONS: readonly MissionDef[] = [
-  // Owner, 2026-11-09: student product types are both a build job and mission #1, shown now as locked.
+  // Owner, 2026-11-09: student product types are both a build job and mission #1. Built 2026-11-10 (assignment
+  // tracker, timetable, reading log), so it is no longer locked as unbuilt; its instructions are guide chapter 19.
   {
     id: 'student-types',
     chapter: 'Student product types',
     route: '/library',
     // Owner, 2026-11-09: earned, not given. Clear the screens where new types get made first.
     requires: ['library', 'templates'],
-    locked:
-      "LOCKED: NOT BUILT YET.\n\nStudent product types don't exist in the Factory yet, so there's nothing to learn here so far. Building them is item **B1** on the build list in `TASKS.md`.\n\nThe ones named so far are assignment trackers, timetables and reading logs. The full list isn't decided yet.\n\nIt's earned, not given: once those types exist, it unlocks after you clear the **Product library** and **Templates** missions, the screens where new types get made.",
   },
   { id: 'arcade-link', chapter: 'HAPPY DAFFY arcade (menu link)', route: '/arcade' },
   { id: 'dashboard', chapter: 'Dashboard', route: '/' },

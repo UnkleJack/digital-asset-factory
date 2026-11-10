@@ -31,6 +31,7 @@ New to the app? Read [Getting started](../GETTING_STARTED.md) first. It covers i
   16. [Publishing status](#16-publishing-status)
   17. [Analytics](#17-analytics)
   18. [Settings & integrations](#18-settings--integrations)
+  19. [Student product types](#19-student-product-types)
 - **Part 2: [HAPPY DAFFY, the arcade](#part-2-happy-daffy)**
 - [Things this guide found that need your call](#things-this-guide-found-that-need-your-call)
 
@@ -308,6 +309,7 @@ This tab explains the maths. Each factor is a 0–10 value. The score is the wei
    | Journals & Worksheets | Guided journal |
    | Coloring Pages | Mandala coloring pages, Illustrated coloring pages |
    | Kids Activities | Maze activity book, Word search puzzles |
+   | School & Study | Assignment tracker, Class timetable, Reading log. See [Student product types](#19-student-product-types) |
    | Geometric Patterns | Geometric pattern art: pick a **Family** (tessellate, girih, op art, Truchet, guilloche, fractal, lace or herringbone) and a **Mode**: coloring for black line art to color in, or print for wall art in the design system's colors |
 
    Imported coloring pages are made from the [Imports](#7-imports) screen instead, and packs from **Build a pack**.
@@ -733,6 +735,31 @@ Ticked boxes are on/off settings. A box marked "one per line" takes a list. Boxe
 
 ---
 
+## 19. Student product types
+
+**What it's for:** three kinds of product for students, made in the [Product library](#6-product-library) like any other. They're in the **School & Study** category under **New product**. The AI writes their words when a key is set; without one, they use the built-in content library, so they always work offline. Layouts, times and page counts are always worked out by the app.
+
+**Presets.** Under **New product**, the **Students** presets fill in the whole form in one click: Student assignment tracker (page per subject), Class timetable (Mon-Fri, 6 periods), Two-week (A/B) class timetable, Student reading log and Kids reading log. Change anything before you press Create.
+
+**Assignment tracker.** A **My subjects** page (subject, teacher, room, notes, plus tips), then the log pages: subject, assignment, the date it was set, the due date, a done box and a grade.
+- **Layout:** *Combined* is one running list for every subject. *Per subject* gives each subject its own page.
+- **Pages** (combined only) and **Rows per page.** If the rows you ask for would be too small to write in on your paper, fewer are printed, and QA warns you.
+- **Show grade** adds the grade column. **Subjects** (optional) sets the list yourself; QA warns if the printed list differs from yours.
+
+**Class timetable.** A week grid with a row for each period, a lunch row, and a subjects key with teacher and room, plus a notes box.
+- **Days** (5, 6 or 7) and **Week start** (Sunday or Monday).
+- **Periods**, **Start time** (24-hour, like 08:30), **Period minutes**, **Break minutes** (the gap between periods), **Lunch after** (which period lunch follows; 0 for none) and **Lunch minutes.** The app works out every period's times from these. QA checks the times are in order, don't overlap and end before midnight.
+- **Weeks:** *Single* for one page, *AB* for a Week A and a Week B page. **Show times** prints each period's times.
+- If the day has too many rows for the key to fit underneath, the key and notes get a page of their own. If even that is too tight, QA fails it and says to use bigger paper, fewer periods or no times.
+
+**Reading log.** A numbered book list with title, author, genre, done and stars; a reading challenge (one book of each kind); reading-minutes pages (one per month, with the month written in); and book review pages.
+- **Books** sets how many numbered rows the list has. **Goal** (optional) prints a reading goal; QA warns if the goal is bigger than the list.
+- **Challenge**, **Minutes months** and **Review pages** turn those pages on or set how many. Kids audiences get kids' kinds of book and simpler review questions.
+
+**The mission.** The HAPPY DAFFY mission for this chapter is earned: clear the **Product library** and **Templates** missions first.
+
+---
+
 # Part 2: HAPPY DAFFY
 
 *(Read this part in your best arcade-announcer voice.)*
@@ -817,11 +844,11 @@ Each world card shows its rank, a progress bar towards the next milestone, **TAS
 
 ## MISSIONS
 
-Want to learn the whole Foundry? Here's your quest log. There's one mission for every chapter of this guide, from the arcade menu link down to Settings, plus one for the arcade itself, plus locked ones for things still being built. The bar up top shows how many you've cleared.
+Want to learn the whole Foundry? Here's your quest log. There's one mission for every chapter of this guide, from the arcade menu link down to Student product types, plus one for the arcade itself. The bar up top shows how many you've cleared.
 - **INSTRUCTIONS** pops up that chapter of this guide as plain text, right there in the cabinet, so you can read up on a screen without loading it. Arrow keys scroll it. **CLOSE**, Esc or B shuts it.
 - **GO** opens the screen the mission is about.
 - **MARK DONE** clears a mission and puts a **✓ DONE** beside it. **UNDO** takes it back.
-- **■ LOCKED** missions are for things that aren't built yet, like student product types. Their INSTRUCTIONS say what's coming and where it sits on the build list (`TASKS.md`). Some have to be earned too: **NEEDS** lists the missions to clear first. Student product types, for one, needs Product library and Templates cleared once the types are built. They can't be cleared until they unlock.
+- **■ LOCKED** missions are either for things that aren't built yet, whose INSTRUCTIONS say what's coming and where it sits on the build list (`TASKS.md`), or ones that have to be earned: **NEEDS** lists the missions to clear first. Student product types, for one, needs Product library and Templates cleared. A locked mission can't be cleared until it unlocks.
 - Missions don't earn XP yet. That waits until the XP rules are decided.
 - **BACK TO HUB** (or B) heads home.
 - Same list, same progress on the back-office side: **Missions** in the sidebar.

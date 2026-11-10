@@ -204,6 +204,7 @@ export const BUILTIN_CATEGORIES: { name: string; description: string }[] = [
   { name: 'Kids Activities', description: 'Mazes, word searches and educational printables' },
   { name: 'Coloring Pages', description: 'Coloring pages and line art' },
   { name: 'Geometric Patterns', description: 'Geometric pattern art: coloring line art and wall-art prints' },
+  { name: 'School & Study', description: 'Assignment trackers, class timetables and reading logs for students' },
   { name: 'Bundles', description: 'Collections of related products' },
 ];
 

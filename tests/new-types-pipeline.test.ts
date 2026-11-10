@@ -56,3 +56,13 @@ test('geometric pattern art: a coloring book and a wall-art set go all the way t
   const bold = app.db.value<string>("SELECT id FROM design_systems WHERE name = 'Bold Modern'")!;
   await produce('geometric-pattern-art', { pages: 2, family: 'girih', mode: 'print', cover: false }, { designSystemId: bold });
 });
+
+test('student types: an assignment tracker, a timetable and a reading log each go through the pipeline and pass QA', async () => {
+  const assign = await produce('assignment-tracker', { layout: 'per-subject', subjects: ['Algebra', 'Biology', 'World History', 'Literature'] });
+  assert.equal(assign.etsy.price_cents, 349);
+  const tt = await produce('timetable', { weeks: 'ab', periods: 5, lunchAfter: 2 });
+  assert.equal(tt.etsy.price_cents, 299);
+  const read = await produce('reading-log', { books: 24, goal: 20, minutesMonths: 1, reviewPages: 2 });
+  assert.equal(read.etsy.price_cents, 349);
+  for (const r of [assign, tt, read]) assert.equal((r.v.content_provenance as { generator?: string }).generator, 'deterministic', 'made offline with the built-in content library');
+});
