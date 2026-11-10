@@ -4,11 +4,12 @@ import { api, errorText, useApi } from '../api.ts';
 import { CompactList } from '../compact.tsx';
 import { ActionButton, Async, Card, Empty, PageHead, Pill, Tabs, useToast } from '../ui.tsx';
 import { AI_PROVIDER_LABELS, bytes, fmtDate, label, providerLabel } from '../format.ts';
+import { ARCADE_GAME_NAME } from '../../../src/core/brand.ts';
 
 const TABS = [
   { id: 'general', label: 'General' }, { id: 'ai', label: 'AI providers' }, { id: 'integrations', label: 'Integrations' }, { id: 'generation', label: 'Generation' }, { id: 'rendering', label: 'Rendering' },
   { id: 'qa', label: 'QA' }, { id: 'scoring', label: 'Scoring' }, { id: 'marketplaces', label: 'Marketplaces' }, { id: 'scheduler', label: 'Scheduler' }, { id: 'packing', label: 'Packing' },
-  { id: 'licensing', label: 'License text' }, { id: 'compliance', label: 'Compliance' }, { id: 'analytics', label: 'Analytics' }, { id: 'backups', label: 'Backups' },
+  { id: 'licensing', label: 'License text' }, { id: 'compliance', label: 'Compliance' }, { id: 'analytics', label: 'Analytics' }, { id: 'arcade', label: 'Arcade' }, { id: 'backups', label: 'Backups' },
   { id: 'logs', label: 'Logs & audit' }, { id: 'system', label: 'System' },
 ];
 
@@ -36,10 +37,11 @@ export function Settings() {
       <Tabs tabs={TABS} value={tab} onChange={(t) => setSp({ tab: t })} />
       {tab === 'ai' && <AiProviders onChanged={st.reload} />}
       {tab === 'integrations' && <Integrations onChanged={st.reload} />}
+      {tab === 'arcade' && <ArcadeSettings />}
       {tab === 'backups' && <Backups />}
       {tab === 'logs' && <Logs />}
       {tab === 'system' && <><System /><div style={{ marginTop: 14 }}><RemoteAccess /></div></>}
-      {!['ai', 'integrations', 'backups', 'logs', 'system'].includes(tab) && <Async state={st}>{(d) => <SectionEditor key={tab} section={tab} value={d.settings[tab]} onSaved={st.reload} />}</Async>}
+      {!['ai', 'integrations', 'arcade', 'backups', 'logs', 'system'].includes(tab) && <Async state={st}>{(d) => <SectionEditor key={tab} section={tab} value={d.settings[tab]} onSaved={st.reload} />}</Async>}
     </div>
   );
 }
@@ -257,6 +259,43 @@ function Integrations({ onChanged }: { onChanged: () => void }) {
         </Card>
       </div>
     </div>
+  );
+}
+
+/**
+ * Only the test credit number lives here. The arcade's other settings are the ticker (picked with EDIT
+ * on the hub) and the spec values, which stay out of a free-form editor on purpose.
+ */
+function ArcadeSettings() {
+  const settings = useApi<any>('/settings');
+  const credits = useApi<any>('/arcade/credits');
+  const toast = useToast();
+  const [n, setN] = useState<string>('');
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => { if (settings.data) setN(String(settings.data.settings.arcade.testCredits)); }, [settings.data]);
+  const save = async (value: number) => {
+    setErr(null);
+    try { await api('/settings/arcade', { method: 'PATCH', body: { testCredits: value } }); toast(`Test credits set to ${value}`); settings.reload(); credits.reload(); }
+    catch (e) { setErr(errorText(e)); }
+  };
+  const parsed = Number(n);
+  const valid = n.trim() !== '' && Number.isInteger(parsed) && parsed >= 0 && parsed <= 99;
+  const c = credits.data;
+  return (
+    <Card title={`${ARCADE_GAME_NAME} test credits`}>
+      <div className="stack">
+        <p className="small muted" style={{ margin: 0 }}>The arcade's credit meter shows this test number (marked TEST) until it can read how many AI calls your providers have left today. At 0, PRESS START is locked, so set it to 0 to try the zero-credit lock and back above 0 to play again. Allowed: 0 to 99.</p>
+        {c && <p className="small" style={{ margin: 0 }}>The meter now shows <b>{c.value}</b> {c.live ? <>from live provider headroom ({providerLabel(c.bottleneck)} is the lowest), so this test number is not in use right now.</> : <>(test number).</>}</p>}
+        <div className="row" style={{ alignItems: 'flex-end' }}>
+          <label className="f">Test credits<input type="number" min={0} max={99} step={1} value={n} onChange={(e) => setN(e.target.value)} style={{ width: 90 }} /></label>
+          <ActionButton className="primary small" disabled={!valid} onClick={() => save(parsed)}>Save</ActionButton>
+          <ActionButton className="small" onClick={() => save(0)}>Set to 0 (lock)</ActionButton>
+          <ActionButton className="small" onClick={() => save(3)}>Reset to 3</ActionButton>
+        </div>
+        {!valid && n !== '' && <div className="err">Use a whole number from 0 to 99.</div>}
+        {err && <div className="err">{err}</div>}
+      </div>
+    </Card>
   );
 }
 

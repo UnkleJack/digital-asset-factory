@@ -20,6 +20,16 @@ import { submitWithReason, listReasonQueue, dismissQueuedNote } from '../../engi
 /** Version states that mean the factory finished making it, whatever happened at review. */
 const MADE_STATUSES = "'ready','qa_failed','superseded','rejected','approved'";
 
+/**
+ * Which provider would answer the next call, and with which model. A routed provider tries the
+ * selected one first and then its backups, skipping any without a key, so the first configured
+ * one in its chain is the one that answers. Falls back to the selected provider's own id.
+ */
+async function answeringProvider(p: { id: string; model(): string; isConfigured(): Promise<boolean>; chain?: () => { id: string; model(): string; isConfigured(): Promise<boolean> }[] }, selected: string): Promise<{ provider: string; model: string | null }> {
+  for (const c of p.chain ? p.chain() : [p]) if (await c.isConfigured()) return { provider: c.id, model: c.model() };
+  return { provider: selected, model: p.model() };
+}
+
 export function registerOperationsRoutes(s: FastifyInstance, deps: ServerDeps): void {
   const { app } = deps;
 
@@ -50,8 +60,10 @@ export function registerOperationsRoutes(s: FastifyInstance, deps: ServerDeps): 
       },
       batches: app.db.all("SELECT id, name, status, created_at, (SELECT count(*) FROM approval_items i WHERE i.batch_id = b.id) AS items FROM approval_batches b WHERE status = 'ready_for_review' ORDER BY created_at DESC LIMIT 5"),
       providers: {
-        text: { provider: g.textProvider, model: g.anthropic.model, mode: tm.mode, reason: 'reason' in tm ? tm.reason : null },
-        image: { provider: g.imageProvider, configured: g.imageProvider === 'none' ? false : await app.providers.image.isConfigured(), model: app.providers.image.model() },
+        text: { ...(await answeringProvider(app.providers.text, g.textProvider)), selected: g.textProvider, mode: tm.mode, reason: 'reason' in tm ? tm.reason : null },
+        image: g.imageProvider === 'none'
+          ? { provider: 'none', model: null, selected: 'none', configured: false }
+          : { ...(await answeringProvider(app.providers.image, g.imageProvider)), selected: g.imageProvider, configured: await app.providers.image.isConfigured() },
         chrome: app.renderer.available(),
       },
       marketplaces: adapters().map((a) => ({ id: a.id, name: a.displayName, verification: a.verification, directPublishing: a.capabilities.publish && a.verification === 'verified' })),
