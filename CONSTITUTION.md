@@ -130,6 +130,7 @@ Adopted 2026-11-03.
 | Settings schema | `src/config/settings.ts` |
 | Hub mode and public access (the access-token sign-in, who counts as local) | `src/server/remote.ts`, used by `src/server/app.ts`; owner guide `docs/PUBLIC_ACCESS.md` |
 | Database migrations | `src/db/migrations/` (001 to 016; 008 is World Builder drafts, from pull request #13, 009 is rework marks, 010 is notes for the AI, from pull request #19, 013 is missions, 014 is tags on imports, 015 is the arcade play loop, from pull request #32, and 016 is B.M.O. saved ideas) |
+| Imports and their tags | `src/engine/references/service.ts` (`tagReferences`, `listTags`, `UNTAGGED`), `src/server/routes/references.ts`, `web/src/pages/Imports.tsx` |
 | Tests | `tests/` (`npm test`) |
 | Mac Dock app (`npm run make-mac-app`) | `src/ops/macApp.ts` (bundle and launcher), `src/ops/macIcon.ts` (GAGE icon), `scripts/make-mac-app.ts`; built into `dist-mac/` (not in git) |
 | Security policy (how to report a problem privately) | `SECURITY.md` |
@@ -181,6 +182,8 @@ As of 2026-11-06: `main` after pull requests #12 (backup AI models), #13 (the Hu
   - The wrong-token brake counts each visitor by `CF-Connecting-IP`, never the tunnel's 127.0.0.1. Those headers are only believed when the tunnel is on the Mac, so a home-network computer can't make them up to dodge the brake. A new access token still can only be made on the Mac, never through the tunnel.
   - A new tick box, **Only through the web address**, sets `remote.bindAddress` to `127.0.0.1` so the home-network door stays shut while the tunnel works.
   - The guide recommends Cloudflare Access (an emailed one-time code, the owner's email only) as a second lock. It rules out cloudflared's `httpHostHeader` trick.
+- **Tags on imports** (owner request, 2026-11-09): incoming pictures and text sort into groups of like things with tags. One item can carry up to 12 tags, so a font picture can be both **fonts** and **art** (owner's choice: tags, not one folder each). Tags are typed or clicked on Imports before dropping, and go on every item dropped. Dropping a picture already in the library adds the tags to the existing copy. The library has a groups row (All, To sort, one per tag), Tick all shown, and a box to add or remove tags on everything ticked. Pictures dropped elsewhere in the app arrive untagged under To sort. Sorting is by hand for now. The owner picked AI sorting, but today's AI reads text only and can't see the pictures, so AI suggestions wait for a picture-reading model (see the parked item below). Migration 014.
+- Parked, not to be forgotten: AI tag suggestions on imports, once an AI model can look at pictures (owner's choice, 2026-11-09).
 - Parked, not to be forgotten: a tool for drawing a box on a page preview in reject/revise notes. It waits for an AI model that can look at pictures, because today's app AI reads text only.
 - **Cleanup of old test data** (owner request, 2026-11-05).
   - `npm run clean-verification` lists folders inside `verification-output/` (the throwaway copies used for browser checks) that have not changed for 7 days. `-- --apply` removes them. This is the same pattern as `tidy-folders`, chosen by the owner.
@@ -216,7 +219,7 @@ As of 2026-11-06: `main` after pull requests #12 (backup AI models), #13 (the Hu
   - Two presets: Geometric coloring book and Geometric wall art prints.
   - Tested in `tests/patterns.test.ts` and, through the whole pipeline to a QA-passed PDF, in `tests/new-types-pipeline.test.ts`.
 - **Test-browser isolation** (2026-10-28 plan, C1; built 2026-11-10). Every Chrome the app or a test run starts gets its own empty profile folder in the temp folder, named `daf-chrome-<process id>-…`, and the folder is removed when that Chrome closes or the process exits. So `npm test` can run while the app is open without the two sharing a profile. They still share the processor and disk, so tests are slower while the app renders. Puppeteer already gave each launch a temporary profile before this change; the app now makes and removes the folder itself, so the separation no longer depends on the library's default. Tested in `tests/renderer-isolation.test.ts`.
-- Tests: 228 tests, 227 pass, 0 skipped, 1 fail (branch `claude/student-product-types`, which carries all four 2026-11-10 factory upgrades on top of `main`, run on the Mac, 2026-11-10). The one failure is `tests/migrationNumbers.test.ts`, which also fails on `main`: migration 014 has run on the Mac but isn't on `main` yet, so the numbers have a gap. `npm run typecheck` reports one error, also already on `main`, in `tests/fetch-image.test.ts`.
+- Tests: 237 tests, 237 pass, 0 skipped, 0 fail (branch `claude/import-tags`: `main` plus tags on imports, so migrations run 001 to 016 with no gap; run on the Mac, 2026-11-10).
 
 **Built but not proven live**
 - Of the AI providers, only NVIDIA text has worked with a real key (2026-11-05). On 2026-11-04 and 2026-11-05 the log showed the others failing:
@@ -273,6 +276,7 @@ As of 2026-11-06: `main` after pull requests #12 (backup AI models), #13 (the Hu
 | 2026-11-04 | Articles 8 and 9 updated for backup models per AI text provider and the owner's NVIDIA-first text setup. |
 | 2026-11-04 | Articles 7, 8 and 9 updated for sample previews on Research & opportunities. |
 | 2026-11-04 | Articles 7, 8 and 9 updated for the Mac Dock app (`npm run make-mac-app`). |
+| 2026-11-09 | Articles 7 and 8 updated for tags on imports (migration 014). |
 | 2026-11-05 | Articles 7, 8 and 9 updated for the Hub, the stats ticker, World Builder drafts, smarter AI help and the first live NVIDIA success. Undecided items F to I added. The UX spec is amended for the Hub, with the owner's approval. |
 | 2026-11-06 | Articles 7, 8 and 9 updated for public access at `daf.promptpimps.com` (Cloudflare Tunnel, `remote.publicHosts`, `docs/PUBLIC_ACCESS.md`). Pull request #13 recorded as merged. |
 | 2026-11-10 | Article 4.2 lists `geometric-pattern-art` and Article 4.3 records that it was added as a module, as the owner asked when ordering the factory upgrades. Articles 7, 8 and 9 updated for the mandala engine, geometric pattern art and test-browser isolation. |

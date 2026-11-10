@@ -6,13 +6,23 @@ import { notFound } from '../../core/errors.ts';
 import {
   listReferences, getReference, importReferenceImage, importReferenceText, updateReference, deleteReference,
   createProductFromReferences, productsUsingReference, MAX_IMAGE_BYTES, type ImportOutcome,
+  tagsFor, listTags, tagReferences,
 } from '../../engine/references/service.ts';
 import { createBatch, addToBatch } from '../../engine/approval/batches.ts';
 import { startPipeline } from '../../jobs/pipeline.ts';
 import { parse, type P, type Q } from './util.ts';
 import { fetchImage } from '../../engine/references/fetchImage.ts';
 
+const Tags = z.array(z.string().max(40)).max(20).optional();
+
+const TagBody = z.object({
+  ids: z.array(z.string()).min(1).max(1000),
+  add: z.array(z.string().max(40)).max(20).optional(),
+  remove: z.array(z.string().max(40)).max(20).optional(),
+});
+
 const ImageBody = z.object({
+  tags: Tags,
   fileName: z.string().min(1).max(255),
   dataBase64: z.string().min(1).max(Math.ceil((MAX_IMAGE_BYTES * 4) / 3) + 8),
   label: z.string().max(60).optional(),
@@ -27,6 +37,7 @@ const TextBody = z.object({
   text: z.string().min(1).max(50_000),
   /** Each non-empty line becomes its own example (handy for pasting a list of titles). */
   eachLine: z.boolean().default(false),
+  tags: Tags,
   label: z.string().max(60).optional(),
   sourceTool: z.string().max(80).optional(),
   notes: z.string().max(2000).optional(),
@@ -49,16 +60,29 @@ const ProductBody = z.object({
 
 function summary(o: ImportOutcome) {
   if (o.status === 'imported') return { status: o.status, id: o.item.id, label: o.item.label, path: o.item.rel_path };
-  if (o.status === 'duplicate') return { status: o.status, fileName: o.fileName, existingId: o.existing.id, existingLabel: o.existing.label, existingPath: o.existing.rel_path };
+  if (o.status === 'duplicate') return { status: o.status, fileName: o.fileName, existingId: o.existing.id, existingLabel: o.existing.label, existingPath: o.existing.rel_path, tagsAdded: o.tagsAdded ?? 0 };
   return o;
 }
 
+const kindOf = (v: unknown) => (v === 'image' || v === 'text' ? v : undefined);
+
 export function registerReferenceRoutes(s: FastifyInstance, { app }: ServerDeps): void {
+  // ?tag=fonts shows one group; ?tag=_untagged shows what is still to be sorted.
   s.get('/api/references', async (req) => {
-    const kind = (req.query as Q).kind;
-    const rows = listReferences(app, kind === 'image' || kind === 'text' ? kind : undefined);
-    return rows.map((r) => ({ ...r, usedBy: r.kind === 'image' ? productsUsingReference(app, r.id) : [] }));
+    const q = req.query as Q;
+    const rows = listReferences(app, kindOf(q.kind), typeof q.tag === 'string' && q.tag ? q.tag : undefined);
+    const tags = tagsFor(app, rows.map((r) => r.id));
+    return rows.map((r) => ({ ...r, tags: tags.get(r.id) ?? [], usedBy: r.kind === 'image' ? productsUsingReference(app, r.id) : [] }));
   });
+
+  s.get('/api/references/tags', async (req) => {
+    const kind = kindOf((req.query as Q).kind);
+    const all = listReferences(app, kind).length;
+    const untagged = listReferences(app, kind, '_untagged').length;
+    return { tags: listTags(app, kind), total: all, untagged };
+  });
+
+  s.post('/api/references/tags', async (req) => tagReferences(app, parse(TagBody, req.body, 'tags')));
 
   s.get('/api/references/:id/file', async (req, reply) => {
     const r = getReference(app, (req.params as P).id);
@@ -89,7 +113,7 @@ export function registerReferenceRoutes(s: FastifyInstance, { app }: ServerDeps)
   s.post('/api/references/texts', async (req) => {
     const b = parse(TextBody, req.body, 'text');
     const pieces = b.eachLine ? b.text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length >= 3) : [b.text];
-    return { results: pieces.slice(0, 200).map((text) => summary(importReferenceText(app, { field: b.field, text, label: b.label, sourceTool: b.sourceTool, notes: b.notes }))) };
+    return { results: pieces.slice(0, 200).map((text) => summary(importReferenceText(app, { field: b.field, text, label: b.label, sourceTool: b.sourceTool, notes: b.notes, tags: b.tags }))) };
   });
 
   s.patch('/api/references/:id', async (req) => updateReference(app, (req.params as P).id, parse(PatchBody, req.body, 'change')));

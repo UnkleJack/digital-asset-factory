@@ -10,8 +10,11 @@ export type Incoming = { name: string; blob: Blob; madeAt?: number };
 type Linked = { name: string; links: string[] };
 export type Pending = Incoming | Linked;
 
-/** What the owner typed about the pictures on the Imports page. The app-wide catcher leaves these empty. */
-export type ImportMeta = { label?: string; sourceTool?: string; prompt?: string };
+/**
+ * What the owner typed about the pictures on the Imports page. The app-wide catcher leaves these empty,
+ * so pictures dropped elsewhere land untagged, in the library's "To sort" pile.
+ */
+export type ImportMeta = { label?: string; sourceTool?: string; prompt?: string; tags?: string[] };
 
 /** Window event sent after pictures were imported, so an open Imports page can refresh its library. */
 export const IMAGES_IMPORTED = 'daf:images-imported';
@@ -142,9 +145,9 @@ export async function importPictures(items: Pending[], meta: ImportMeta, onProgr
     try {
       const got = 'links' in it ? await fetchFirst(it.links) : null;
       const f = await toStorable(got ?? (it as Incoming));
-      const r = await api<any>('/references/images', { body: { fileName: f.name, dataBase64: await readBase64(f.blob), label: meta.label, sourceTool: meta.sourceTool, prompt: meta.prompt, notes: got && !got.from.startsWith('data:') ? `Imported from ${got.from.slice(0, 1900)}` : undefined, madeAt: f.madeAt ? new Date(f.madeAt).toISOString() : undefined } });
+      const r = await api<any>('/references/images', { body: { fileName: f.name, dataBase64: await readBase64(f.blob), label: meta.label, sourceTool: meta.sourceTool, prompt: meta.prompt, tags: meta.tags?.length ? meta.tags : undefined, notes: got && !got.from.startsWith('data:') ? `Imported from ${got.from.slice(0, 1900)}` : undefined, madeAt: f.madeAt ? new Date(f.madeAt).toISOString() : undefined } });
       out.push(r.status === 'imported' ? { name: f.name, status: 'imported', detail: `saved as ${r.path}` }
-        : r.status === 'duplicate' ? { name: f.name, status: 'duplicate', detail: `same image as ${r.existingPath ?? r.existingLabel}, skipped` }
+        : r.status === 'duplicate' ? { name: f.name, status: 'duplicate', detail: `same image as ${r.existingPath ?? r.existingLabel}, skipped${r.tagsAdded ? `; your tags were added to it` : ''}` }
         : { name: f.name, status: 'rejected', detail: r.reason });
     } catch (e) {
       out.push({ name: it.name, status: 'error', detail: errorText(e) });

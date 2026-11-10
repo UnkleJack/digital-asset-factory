@@ -385,25 +385,29 @@ Click any product title anywhere in the app to open its page.
 **Add images card**
 1. **Made with.** Pick the tool (Grok Imagine, ChatGPT images, Gemini, Midjourney, Canva and so on). Choose **Something else…** to type a name, or **Not sure**.
 2. **What are they?** A word such as "mandala". It's used to name the files.
-3. **Prompt you used** is optional. It's kept with the image so you can reuse it.
-4. Drag images onto the drop box, or click it to choose files (PNG, JPEG, WebP or GIF). While they import it counts "Importing 2 of 9…". Afterwards each file shows as imported, duplicate (with which file it matches) or not imported (with why).
+3. **Sort into (tags).** Type a tag such as "fonts" and press Enter, or click one under **Used before**. Every picture you drop gets these tags. A picture can have several tags, so a font sheet can be both **fonts** and **art** and shows up under either. Click × on a tag to take it off. Pictures dropped with no tags, or dropped anywhere else in the app, wait under **To sort**.
+4. **Prompt you used** is optional. It's kept with the image so you can reuse it.
+5. Drag images onto the drop box, or click it to choose files (PNG, JPEG, WebP or GIF). While they import it counts "Importing 2 of 9…". Afterwards each file shows as imported, duplicate (with which file it matches) or not imported (with why). If you drop a picture that's already in the library, it isn't copied again, but the tags you typed are added to the one that's there. That's a quick way to sort pictures you imported before tags existed.
 
 **Add text examples card**
 1. **Kind of text.** Titles, Descriptions, Tags, Page text or Other.
 2. **Made with**, as above.
 3. Paste the text. Leave **Each line is a separate example** ticked to split it into one example per line.
-4. Press **Add**. A message says how many were added and how many duplicates were skipped.
+4. **Sort into (tags)** is optional and works the same as for images. Tags are shared, so **fonts** is the same group for pictures and text.
+5. Press **Add**. A message says how many were added and how many duplicates were skipped.
 
 When the AI writes, it sees up to 8 recent examples of the kind that fits the job (titles, descriptions and tags when it writes listings, page text when it writes pages). It's told to match their style without copying them.
 
 **Image library card**
-- Click images to pick them, in the order you want the pages. Each picked image gets a number.
-- Under each image: its file name, the tool, its size and date, and which products use it.
-- **Edit** changes the tool and prompt. Press **Save** or **Cancel** when you're done.
+- **Groups row** at the top: **All**, **To sort** (pictures with no tags yet) and one button per tag with how many pictures it holds, e.g. **fonts (12)**. Click one to show only that group; click it again for All.
+- Click images to pick them, in the order you want the pages. Each picked image gets a number. **Tick all N shown** picks everything in the group you're looking at; **Untick all** clears the picks.
+- With pictures ticked, a **Tags for the N ticked** box appears. Type or click tags, then press **Add tags** or **Remove tags** to change them all at once. Each picture holds up to 12 tags; any already full are skipped, and the message says how many.
+- Under each image: its file name, the tool, its size and date, its tags, and which products use it.
+- **Edit** changes the tool, prompt and tags. Press **Save** or **Cancel** when you're done.
 - **Delete** removes the file (it asks first). It's greyed out while a product uses the image.
 - Once you've picked at least one image, a **Product title** box and a **Make coloring product from N selected** button appear in the card's corner. Pressing it starts the product and opens its page. It shows up in Batch approval when it's ready.
 
-**Text examples card.** Every example, with its kind and tool. Untick **Use as example** to keep an example but stop the AI seeing it. **Delete** removes it (it asks first).
+**Text examples card.** Every example, with its kind, tool and tags, and the same groups row as the image library. **Edit** beside the tags changes them. Untick **Use as example** to keep an example but stop the AI seeing it. **Delete** removes it (it asks first).
 
 ---
 
