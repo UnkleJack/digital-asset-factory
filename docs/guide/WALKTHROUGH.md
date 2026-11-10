@@ -137,7 +137,7 @@ Every back-office screen also has a round **? Instructions** button in the botto
 - **Ready for review** lists the batches waiting for you. Click a batch name to review it, or click **All batches** to open the full list.
 - **Production** shows queued jobs, what's running now and the estimated AI cost over the last 30 days. Recent failures are listed underneath with their error. **Jobs** opens Production jobs.
 - **Schedule** shows the next planned run and the latest runs. **Calendar** opens the Production calendar. If there are no plans it says so, with a **Create one** link. Runs only happen while the app is open.
-- **Integrations** shows whether text AI, image AI and Chrome are ready, and for each marketplace whether it can post directly or uses an export package that you upload yourself.
+- **Integrations** shows whether text AI, image AI and Chrome are ready. The text and image rows name the provider that will answer next and its model, such as "NVIDIA NIM · (model)". If your first choice has no key and a backup will answer instead, the row says so, for example "Google Gemini · (model) (backup for NVIDIA NIM)". The card also shows, and for each marketplace whether it can post directly or uses an export package that you upload yourself.
 
 ---
 
@@ -714,6 +714,13 @@ Ticked boxes are on/off settings. A box marked "one per line" takes a list. Boxe
   Direct posting hasn't been confirmed against a live Gumroad account yet, so try it on one product first. Cover images can't be set through Gumroad's API.
 - **Email (research digest) card.** The sending Gmail address and the From name. **Save**, then **Send a test email**. The digest goes to the address set on the Research digest page.
 
+### Arcade
+
+- **HAPPY DAFFY test credits card.** While the arcade can't count how many AI calls your providers have left today, its credit meter shows this test number, marked **TEST**. The card says what the meter shows right now and whether the test number is in use.
+- Type a whole number from 0 to 99 and press **Save**.
+- **Set to 0 (lock)** locks PRESS START, which is how you try the zero-credit lock. **Reset to 3** puts it back to the number a fresh copy starts with.
+- The arcade's other settings aren't here: the stats ticker is picked with **EDIT TICKER** on the Hub.
+
 ### Backups
 
 - **Back up now** makes a consistent copy of the database plus every generated file. API keys aren't included, because they stay in the Keychain.
@@ -776,7 +783,7 @@ HAPPY DAFFY is the arcade front of Asset Foundry. Same factory, same products, s
 
 ## THE TOP OF THE CABINET
 
-- **CREDITS.** Your credits meter. Right now it shows a **TEST** number, because live provider credits come in a later build. When it shows `--` and **UNAVAILABLE**, the cabinet lost its link to the factory.
+- **CREDITS.** Your credits meter. When none of your providers has a daily limit set, it shows a **TEST** number, which you change in **Settings & integrations → Arcade**. When it shows `--` and **UNAVAILABLE**, the cabinet lost its link to the factory.
 - **P1.** Whoever's playing. **NO PLAYER** means nobody's picked yet.
 - **◀ HUB** zips you back to the hub from anywhere.
 - **MOTION: FULL / LOW** turns the CRT flicker, the scrolling and the wobble down or back up. The cabinet remembers your choice on this computer.
@@ -940,9 +947,12 @@ The breadcrumb says **WORLD BUILDER / (WORLD)**. Each milestone shows its number
 
 ## Things this guide found that need your call
 
-While writing this guide I found a few gaps and mismatches. I didn't change any of them, because each one is your call.
+While writing this guide I found four gaps and mismatches. Three were fixed on 2026-11-10, at your request:
 
-1. **The arcade's test credits can't be changed from the app.** The meter reads the `arcade.testCredits` setting (3 in a fresh copy), but no Settings tab shows it. To test the zero-credit lock, someone has to change the setting outside the app.
-2. **The Dashboard's Integrations card always says "Anthropic" and "OpenAI."** The labels are fixed in the code. If your text provider is NVIDIA, it still reads "Anthropic · (model)", and the image row always reads "OpenAI · (model)", whichever provider is set.
-3. **The Constitution's screen count is out of date.** Article 3 says the back office has 17 screens. Its list is 15 sidebar pages plus the 2 sub-pages, and it leaves out Rework and Notes for the AI. The sidebar now has 17 pages, plus 2 sub-pages, which makes 19 screens. Article 3 is yours to amend.
-4. **The two Etsy keys in Settings → Integrations are marked "not used yet."** Etsy is export-package only for now.
+1. ~~The arcade's test credits can't be changed from the app.~~ Fixed: **Settings & integrations → Arcade**.
+2. ~~The Dashboard's Integrations card always says "Anthropic" and "OpenAI."~~ Fixed: it names the provider that will answer and its own model. The sidebar's "AI: (model)" line had the same fault and is fixed too.
+3. ~~The Constitution's screen count is out of date.~~ Fixed: Article 3 now lists the 17 sidebar pages, with Product detail, Batch review and Missions beside them.
+
+Still open:
+
+4. **The two Etsy keys in Settings → Integrations are marked "not used yet."** Etsy is export-package only for now. Wiring them up waits on your go-ahead.
