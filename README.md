@@ -200,3 +200,14 @@ data/           your database, files, logs and backups (git-ignored)
 | `npm test` is very slow | The app or another test run is rendering at the same time. They no longer share a Chrome profile, but they share the processor and disk; let the other one finish, or quit the app, and run again. |
 | Database integrity error at start-up | Restore the latest backup with `npm run restore`. |
 | Logs | Settings → Logs & audit, or `data/logs/*.jsonl` (secrets are redacted). |
+
+## License
+
+**Asset Foundry is proprietary software. It is not open source.** All rights are
+reserved by UnkleJack unless expressly granted in writing. Viewing or forking
+this public repository is subject to GitHub's Terms of Service; no separate
+permission is granted to use, copy, modify, redistribute, or commercially
+exploit the project.
+
+See [LICENSE](LICENSE) for the full proprietary notice. Third-party libraries,
+fonts, assets, and dependencies remain under their own respective licenses.
