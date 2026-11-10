@@ -18,7 +18,7 @@ import { registerTournamentRoutes } from './routes/tournaments.ts';
 import { registerPackingRoutes } from './routes/packing.ts';
 import { registerReferenceRoutes } from './routes/references.ts';
 import { registerArcadeRoutes } from './routes/arcade.ts';
-import { RemoteGate, registerRemoteRoutes, isLoopback } from './remote.ts';
+import { RemoteGate, registerRemoteRoutes, requestHostName } from './remote.ts';
 import { SUITE_NAME } from '../core/brand.ts';
 
 export interface ServerDeps {
@@ -55,7 +55,8 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   server.addHook('onRequest', async (req: FastifyRequest, reply: FastifyReply) => {
     const host = String(req.headers.host ?? '');
     // From another computer (hub mode) the Host is this machine's network name; the access token protects it instead.
-    const remote = !isLoopback(req);
+    // Through a tunnel on this computer (public access) the request comes from 127.0.0.1 but is still remote.
+    const remote = !gate.isLocal(req);
     if (remote) {
       if (!gate.check(req, reply)) return reply;
     } else if (!allowedHosts.has(host) && !(deps.devOrigins?.length && /^(127\.0\.0\.1|localhost):\d+$/.test(host))) {
@@ -63,7 +64,8 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     }
     if (req.url.startsWith('/api/') && MUTATING.has(req.method)) {
       const origin = req.headers.origin;
-      const sameOrigin = (o: string) => allowedOrigins.has(o) || (remote && o === `http://${host}`);
+      // A public address (remote.publicHosts) is reached over https through the tunnel; nothing else gets https.
+      const sameOrigin = (o: string) => allowedOrigins.has(o) || (remote && (o === `http://${host}` || (o === `https://${host}` && gate.publicHosts.includes(requestHostName(req)))));
       if (req.url.split('?')[0] === '/api/login') {
         if (origin && !sameOrigin(origin)) return reply.code(403).send({ error: { code: 'bad_origin', message: 'Cross-origin requests are not allowed.' } });
         return;
