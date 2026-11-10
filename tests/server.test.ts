@@ -193,7 +193,8 @@ test('public access: a tunnel on this computer (cloudflared) cannot skip the sig
   assert.equal((await viaTunnel('GET', '/login')).statusCode, 200);
 
   // A forwarding header from loopback is gated even when the Host looks local (cloudflared's httpHostHeader trick).
-  for (const fwd of [{ 'cf-connecting-ip': '203.0.113.9' }, { 'x-forwarded-for': '203.0.113.9' }]) {
+  const forwarded: Record<string, string>[] = [{ 'cf-connecting-ip': '203.0.113.9' }, { 'x-forwarded-for': '203.0.113.9' }];
+  for (const fwd of forwarded) {
     assert.equal((await call('GET', '/api/products', undefined, { ...H, ...fwd })).statusCode, 401, `gated with ${Object.keys(fwd)[0]}`);
   }
   // A plain request on this computer still needs no token.

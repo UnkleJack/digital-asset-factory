@@ -143,10 +143,59 @@ export function listReasonQueue(app: AppContext): QueuedNote[] {
     .map((r) => ({ id: r.id, kind: r.kind, text: r.text, target: r.target, title: r.title, status: r.status, attempts: r.attempts, message: r.message, createdAt: r.created_at, nextTryAt: r.next_try_at, finishedAt: r.finished_at }));
 }
 
-/** Hide a refused or failed note from the list (it stays in the table), or cancel a waiting one. */
-export function dismissQueuedNote(app: AppContext, id: string): void {
+/** A note that couldn't be used because what it was for changed meanwhile (not the note's fault): acknowledge it. */
+export function acknowledgeFailedNote(app: AppContext, id: string): void {
   const r = app.db.get<{ status: string }>('SELECT status FROM reason_queue WHERE id = ?', id);
   if (!r) throw notFound('Waiting note', id);
-  if (r.status === 'applied') throw validation('That note was already used.');
+  if (r.status !== 'failed') throw validation('Only a note that could not be used can be cleared this way. Rewrite a refused note, or drop it with a reason.');
   app.db.run("UPDATE reason_queue SET status = 'dismissed', finished_at = coalesce(finished_at, ?) WHERE id = ?", new Date().toISOString(), id);
+}
+
+function openRow(app: AppContext, id: string, allowed: string[]): Row {
+  const r = app.db.get<Row>('SELECT * FROM reason_queue WHERE id = ?', id);
+  if (!r) throw notFound('Waiting note', id);
+  if (!allowed.includes(r.status)) throw conflict(r.status === 'applied' ? 'That note was already used.' : 'That note is no longer open.');
+  return r;
+}
+
+/**
+ * Rewrite a refused note and send it again (owner, 2026-11-10: a refused note can't just be dismissed).
+ * The new wording is checked by the AI now; passing carries out the original action, a refusal keeps it in
+ * the list with the new wording and the AI's new reason, and an unreachable AI puts it back in line.
+ */
+export async function resendQueuedNote(app: AppContext, id: string, text: string): Promise<{ status: 'applied' | 'refused' | 'waiting'; message?: string }> {
+  const r = openRow(app, id, ['refused']);
+  const old = json<ReasonAction>(r.action, null as unknown as ReasonAction);
+  const t = text.trim().slice(0, 4000);
+  const a: ReasonAction = old.action === 'decision' || old.action === 'note' ? { ...old, notes: t } : { ...old, text: t };
+  const v = await checkReason(app, t, kindOf(a), contextOf(app, a));
+  const now = new Date().toISOString();
+  if (v.status === 'refused') {
+    app.db.run('UPDATE reason_queue SET text = ?, action = ?, message = ?, attempts = attempts + 1 WHERE id = ?', t, JSON.stringify(a), v.message, id);
+    throw validation(v.message, [{ field: 'notes', message: v.message }]);
+  }
+  if (v.status === 'unavailable') {
+    app.db.run("UPDATE reason_queue SET status = 'waiting', text = ?, action = ?, message = NULL, last_error = ?, attempts = attempts + 1, finished_at = NULL, next_try_at = ? WHERE id = ?", t, JSON.stringify(a), v.why, new Date(Date.now() + RETRY_SECONDS * 1000).toISOString(), id);
+    return { status: 'waiting', message: QUEUED_MESSAGE };
+  }
+  try {
+    apply(app, a);
+  } catch (err) {
+    app.db.run("UPDATE reason_queue SET status = 'failed', text = ?, action = ?, message = ?, attempts = attempts + 1, finished_at = ? WHERE id = ?", t, JSON.stringify(a), errorMessage(err).slice(0, 500), now, id);
+    throw err;
+  }
+  app.db.run("UPDATE reason_queue SET status = 'applied', text = ?, action = ?, message = NULL, attempts = attempts + 1, finished_at = ? WHERE id = ?", t, JSON.stringify(a), now, id);
+  return { status: 'applied' };
+}
+
+/**
+ * Give up on a refused or waiting note's action, with a reason that also has to pass the AI.
+ * When the AI can't be reached, nothing is dropped: try again once it's back.
+ */
+export async function dropQueuedNote(app: AppContext, id: string, reason: string): Promise<void> {
+  const r = openRow(app, id, ['refused', 'waiting']);
+  const v = await checkReason(app, reason, 'drop', r.title ? { title: r.title } : {});
+  if (v.status === 'refused') throw validation(v.message, [{ field: 'reason', message: v.message }]);
+  if (v.status === 'unavailable') throw conflict("The AI can't be reached right now, so the reason for dropping this can't be checked yet. Nothing has changed. Try again once it's back.");
+  app.db.run("UPDATE reason_queue SET status = 'dismissed', drop_reason = ?, finished_at = ? WHERE id = ?", reason.trim().slice(0, 2000), new Date().toISOString(), id);
 }
