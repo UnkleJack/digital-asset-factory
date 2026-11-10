@@ -128,11 +128,12 @@ Adopted 2026-11-03.
 | Arcade screens | `web/src/arcade/` (`Arcade.tsx` cabinet and Hub, `Play.tsx` Task Workspace, QA Review, Bin, Packs, Leaderboards, Codex and B.M.O., `Worlds.tsx`, `Ai.tsx`, `Ticker.tsx`, `input.ts`, `arcade.css`) |
 | Back-office screens | `web/src/pages/` |
 | Settings schema | `src/config/settings.ts` |
+| Hub mode and public access (the access-token sign-in, who counts as local) | `src/server/remote.ts`, used by `src/server/app.ts`; owner guide `docs/PUBLIC_ACCESS.md` |
 | Database migrations | `src/db/migrations/` (001 to 010; 008 is World Builder drafts, from pull request #13, 009 is rework marks, and 010 is notes for the AI, from pull request #19) |
 | Tests | `tests/` (`npm test`) |
 | Mac Dock app (`npm run make-mac-app`) | `src/ops/macApp.ts` (bundle and launcher), `src/ops/macIcon.ts` (GAGE icon), `scripts/make-mac-app.ts`; built into `dist-mac/` (not in git) |
 | Security policy (how to report a problem privately) | `SECURITY.md` |
-| Setup and daily use | `README.md`, `docs/GETTING_STARTED.md`, `docs/WINDOWS.md` |
+| Setup and daily use | `README.md`, `docs/GETTING_STARTED.md`, `docs/WINDOWS.md`, `docs/PUBLIC_ACCESS.md` (opening the app at `daf.promptpimps.com`) |
 | Architecture and data model | `docs/ARCHITECTURE.md`, `docs/DATA_MODEL.md` |
 | Arcade UX spec | `docs/ASSET_FOUNDRY_UX_SPEC.md` |
 | Factory task log with evidence | `TASKS.md` |
@@ -140,7 +141,7 @@ Adopted 2026-11-03.
 
 ## Article 8: Current state
 
-As of 2026-11-06: `main` after pull requests #12 (backup AI models), #15 (sample previews), #16 (the Mac Dock app), #18 (compact lists and Rework) and #19 (warning gate and notes for the AI), plus the Hub, the stats ticker, World Builder drafts, smarter AI help and the test-data cleanup on branch `claude/arcade-start-flow` (pull request #13, not merged yet).
+As of 2026-11-06: `main` after pull requests #12 (backup AI models), #13 (the Hub, the stats ticker, World Builder drafts, smarter AI help and the test-data cleanup), #15 (sample previews), #16 (the Mac Dock app), #18 (compact lists and Rework) and #19 (warning gate and notes for the AI), plus public access on branch `claude/public-access` (not merged yet).
 
 **Working**
 - All 21 product types produce offline with the built-in content library: QA, packaging, listings, batch approval and export packages.
@@ -174,6 +175,12 @@ As of 2026-11-06: `main` after pull requests #12 (backup AI models), #15 (sample
 - Notes for the AI (2026-11-06): every review note is kept in one list on a new **Notes for the AI** screen. That covers reject, send back, regenerate, approve and accepted-warning notes, plus notes added with "Add note" on Rework. After every 10 new notes, or when "Read my notes now" is pressed, the AI reads them all and writes a list of repeat problems. That list goes into every AI prompt ahead of the 12 most recent notes. You can edit, pin, delete or add lessons; the AI only replaces its own unpinned ones. Reading needs an AI key. Migration 010.
 - **Walkthrough guide** (owner request, 2026-11-06): `docs/guide/WALKTHROUGH.md` covers every back-office screen in sidebar order and the HAPPY DAFFY arcade (written in the game's voice), button by button, with a "Your day" routine up front and screenshots in `docs/guide/images/` taken from a test copy with sample data. When a screen changes, update its chapter in the same pull request.
 - **HAPPY DAFFY missions** (owner request, 2026-11-09): a MISSIONS tab in the arcade, and a **Missions** page in the back-office sidebar (owner: "both sides"), list one mission per walkthrough chapter (19 back-office chapters plus Part 2, the arcade). INSTRUCTIONS opens that chapter as a text popup read straight from `docs/guide/WALKTHROUGH.md`, so the instructions are written once and the screen doesn't have to load. This reverses the 2026-11-06 "written guide only, no in-app help panel" call, with the owner's go-ahead. GO opens the screen; MARK DONE and UNDO keep a done mark per mission (migration 012). Every back-office screen also has a **? Instructions** button that opens its own guide chapter in the same pop-up (owner, 2026-11-09). Missions earn no XP, because the XP rules aren't decided. Mission #1, student product types, was LOCKED until those types were built; since 2026-11-10 they exist, its INSTRUCTIONS are guide chapter 19, and it still has to be earned by clearing the Product library and Templates missions (owner's choice).
+- **Public access** (owner request, 2026-11-06; not merged yet). The app can be opened at `https://daf.promptpimps.com` through a Cloudflare Tunnel (`cloudflared` on the Mac, forwarding to `127.0.0.1:4317`). The owner's steps are in `docs/PUBLIC_ACCESS.md`.
+  - The tunnel connects from the Mac itself, so the app no longer trusts the connection's address alone. A request counts as local only when it comes from this computer, carries no `CF-Connecting-IP` or `X-Forwarded-For` header, and isn't addressed to a public address. Everything else needs the access token, and only works while hub mode is on with a token made.
+  - Public addresses are listed in Settings → System (**Public web address**, saved as `remote.publicHosts`, empty by default). `https://` writes are accepted only from a listed address. The sign-in cookie is marked Secure when the visit came over https.
+  - The wrong-token brake counts each visitor by `CF-Connecting-IP`, never the tunnel's 127.0.0.1. Those headers are only believed when the tunnel is on the Mac, so a home-network computer can't make them up to dodge the brake. A new access token still can only be made on the Mac, never through the tunnel.
+  - A new tick box, **Only through the web address**, sets `remote.bindAddress` to `127.0.0.1` so the home-network door stays shut while the tunnel works.
+  - The guide recommends Cloudflare Access (an emailed one-time code, the owner's email only) as a second lock. It rules out cloudflared's `httpHostHeader` trick.
 - Parked, not to be forgotten: a tool for drawing a box on a page preview in reject/revise notes. It waits for an AI model that can look at pictures, because today's app AI reads text only.
 - **Cleanup of old test data** (owner request, 2026-11-05).
   - `npm run clean-verification` lists folders inside `verification-output/` (the throwaway copies used for browser checks) that have not changed for 7 days. `-- --apply` removes them. This is the same pattern as `tidy-folders`, chosen by the owner.
@@ -218,7 +225,7 @@ As of 2026-11-06: `main` after pull requests #12 (backup AI models), #15 (sample
   - OpenRouter: its key was rejected (missing).
   - Groq: its Llama model was not found.
 - Untested live: the rest of the providers, and the new TIDY MY NOTES and suggestion modes, which have only run against a stand-in AI.
-- Gumroad direct posting, the research digest email, Windows and hub mode have also never had a live run.
+- Gumroad direct posting, the research digest email, Windows, hub mode and public access at `daf.promptpimps.com` have also never had a live run. Public access needs the owner's DNS move and Cloudflare set-up first.
 
 **Data**
 - The Mac's `data/daf.sqlite` was replaced by an empty database on 2026-10-29, so product records were lost. The product folders survived.
@@ -233,7 +240,8 @@ As of 2026-11-06: `main` after pull requests #12 (backup AI models), #15 (sample
 
 **Next, in order**
 1. **On the Mac:** `git pull`, `npm ci`, `npm run backup`, then `npm run restore-products` (dry run), then `-- --apply`. Then try `/arcade`. To get the Dock app, run `npm run make-mac-app`, drag `dist-mac/Asset Foundry.app` into Applications and keep it in the Dock.
-2. **Try the new AI help with the real NVIDIA key.** LET THE AI BUILD A WORLD already worked live on 2026-11-05. Still to try live:
+2. **Public access, if wanted** (owner request, 2026-11-06). After the pull request is reviewed and merged, follow `docs/PUBLIC_ACCESS.md`: move `promptpimps.com` DNS to Cloudflare (copying every IONOS record first), add the Cloudflare Access lock, enter `daf.promptpimps.com` in Settings → System, then start `cloudflared`. Try it from a phone on mobile data. The Mac must be awake with the app running.
+3. **Try the new AI help with the real NVIDIA key.** LET THE AI BUILD A WORLD already worked live on 2026-11-05. Still to try live:
    - TIDY MY NOTES, BUILD ON WHAT I HAVE and SHOW ME UNEXPLORED GROUND.
    - Starting a world, leaving the page and finding the draft waiting.
    - Re-running the `prepare_listings` jobs that failed on 2026-11-04.
@@ -266,5 +274,6 @@ As of 2026-11-06: `main` after pull requests #12 (backup AI models), #15 (sample
 | 2026-11-04 | Articles 7, 8 and 9 updated for sample previews on Research & opportunities. |
 | 2026-11-04 | Articles 7, 8 and 9 updated for the Mac Dock app (`npm run make-mac-app`). |
 | 2026-11-05 | Articles 7, 8 and 9 updated for the Hub, the stats ticker, World Builder drafts, smarter AI help and the first live NVIDIA success. Undecided items F to I added. The UX spec is amended for the Hub, with the owner's approval. |
+| 2026-11-06 | Articles 7, 8 and 9 updated for public access at `daf.promptpimps.com` (Cloudflare Tunnel, `remote.publicHosts`, `docs/PUBLIC_ACCESS.md`). Pull request #13 recorded as merged. |
 | 2026-11-10 | Article 4.2 lists `geometric-pattern-art` and Article 4.3 records that it was added as a module, as the owner asked when ordering the factory upgrades. Articles 7, 8 and 9 updated for the mandala engine, geometric pattern art and test-browser isolation. |
 | 2026-11-10 | Article 4.2 lists the School & Study types (assignment-tracker, timetable, reading-log), as the owner asked when ordering them. Articles 7, 8 and 9 updated for the student types and the unlocked mission. |
