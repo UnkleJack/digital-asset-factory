@@ -282,6 +282,15 @@ span.chip:not(.on) { border: 1px solid var(--border); }
 .drop-anywhere { position: fixed; inset: 12px; z-index: 90; pointer-events: none; display: flex; align-items: center; justify-content: center; border: 3px dashed var(--primary); border-radius: var(--radius); background: color-mix(in srgb, var(--bg) 70%, transparent); }
 .drop-anywhere > div { background: var(--primary); color: var(--primary-ink); padding: 14px 22px; border-radius: var(--radius); font-size: 18px; font-weight: 600; box-shadow: var(--shadow); }
 .drop-busy { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 100; background: var(--surface-2); color: var(--text); border: 1px solid var(--primary); padding: 10px 18px; border-radius: 8px; box-shadow: var(--shadow); }
+.tag-input { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 5px 8px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; }
+.tag-input:focus-within { border-color: var(--primary); }
+.tag-input input { flex: 1; min-width: 140px; border: none; background: none; padding: 4px 2px; box-shadow: none; }
+.chip.tag { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; font-size: 12.5px; }
+span.chip.tag button { border: none; background: none; padding: 0 2px; color: inherit; font-size: 14px; line-height: 1; }
+.chips.small { gap: 6px; align-items: center; font-size: 12.5px; }
+.tag-filter { margin-bottom: 4px; }
+.bulk-tag { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px; padding: 10px; margin-bottom: 10px; border: 1px solid var(--primary); border-radius: 8px; background: var(--primary-soft); }
+.bulk-tag > .stack { flex: 1; min-width: 220px; }
 .ref-list { max-height: 480px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); }
 .ref-row { border-bottom: 1px solid var(--border); padding: 8px 10px; }
 .ref-row:last-child { border-bottom: none; }

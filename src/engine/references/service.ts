@@ -43,7 +43,7 @@ export interface ReferenceRow {
 
 export type ImportOutcome =
   | { status: 'imported'; item: ReferenceRow }
-  | { status: 'duplicate'; existing: ReferenceRow; fileName: string }
+  | { status: 'duplicate'; existing: ReferenceRow; fileName: string; tagsAdded?: number }
   | { status: 'rejected'; fileName: string; reason: string };
 
 export const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
@@ -78,15 +78,90 @@ export function getReference(app: AppContext, id: string): ReferenceRow {
   return r;
 }
 
-export function listReferences(app: AppContext, kind?: 'image' | 'text'): ReferenceRow[] {
+export function listReferences(app: AppContext, kind?: 'image' | 'text', tag?: string): ReferenceRow[] {
+  const where: string[] = [];
+  const args: unknown[] = [];
+  if (kind) { where.push('kind = ?'); args.push(kind); }
+  if (tag === UNTAGGED) where.push('NOT EXISTS (SELECT 1 FROM reference_tags t WHERE t.reference_id = reference_items.id)');
+  else if (tag) { where.push('EXISTS (SELECT 1 FROM reference_tags t WHERE t.reference_id = reference_items.id AND t.tag = ?)'); args.push(tag); }
+  return app.db.all<ReferenceRow>(
+    `SELECT * FROM reference_items ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY made_at DESC, created_at DESC`,
+    ...args,
+  );
+}
+
+// ---- Tags: groups of like things. One item can sit in many groups (a font picture can be "fonts" and "art"). ----
+
+/** Filter value meaning "items with no tags yet": the pile still to sort. Not a valid tag itself (tags never start with "_"). */
+export const UNTAGGED = '_untagged';
+export const MAX_TAGS_PER_ITEM = 12;
+
+/** "Script Fonts!" → "script-fonts". Empty when nothing usable is left. */
+export function normalizeTag(raw: string): string {
+  // slugify() names an empty result "item" (right for file names, wrong for a tag), so blanks are caught first.
+  if (!/[a-z0-9]/i.test(raw.normalize('NFKD'))) return '';
+  return slugify(raw, 30);
+}
+
+function cleanTags(raw: string[] | undefined): string[] {
+  return [...new Set((raw ?? []).map(normalizeTag).filter(Boolean))];
+}
+
+/** The tags on each of the given items, keyed by item id. Items with no tags are absent. */
+export function tagsFor(app: AppContext, ids: string[]): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  if (!ids.length) return out;
+  // Chunked so a big library never goes past SQLite's limit on query parameters.
+  for (let i = 0; i < ids.length; i += 500) {
+    const chunk = ids.slice(i, i + 500);
+    const rows = app.db.all<{ reference_id: string; tag: string }>(
+      `SELECT reference_id, tag FROM reference_tags WHERE reference_id IN (${chunk.map(() => '?').join(',')}) ORDER BY tag`,
+      ...chunk,
+    );
+    for (const r of rows) out.set(r.reference_id, [...(out.get(r.reference_id) ?? []), r.tag]);
+  }
+  return out;
+}
+
+/** Every tag in use, with how many items carry it, most used first. */
+export function listTags(app: AppContext, kind?: 'image' | 'text'): { tag: string; count: number }[] {
   return kind
-    ? app.db.all<ReferenceRow>('SELECT * FROM reference_items WHERE kind = ? ORDER BY made_at DESC, created_at DESC', kind)
-    : app.db.all<ReferenceRow>('SELECT * FROM reference_items ORDER BY made_at DESC, created_at DESC');
+    ? app.db.all(`SELECT t.tag, COUNT(*) AS count FROM reference_tags t JOIN reference_items r ON r.id = t.reference_id WHERE r.kind = ? GROUP BY t.tag ORDER BY count DESC, t.tag`, kind)
+    : app.db.all(`SELECT tag, COUNT(*) AS count FROM reference_tags GROUP BY tag ORDER BY count DESC, tag`);
+}
+
+/**
+ * Adds and removes tags on many items at once (the library's "tag selected" box, and imports).
+ * Items already at the limit keep their tags and are reported, so nothing is dropped silently.
+ */
+export function tagReferences(app: AppContext, input: { ids: string[]; add?: string[]; remove?: string[] }, actor: AuditActor = 'user'): { changed: number; full: string[] } {
+  const ids = [...new Set(input.ids)];
+  const add = cleanTags(input.add);
+  const remove = cleanTags(input.remove);
+  if (!add.length && !remove.length) throw validation('Give at least one tag to add or remove');
+  for (const id of ids) getReference(app, id);
+  let changed = 0;
+  const full: string[] = [];
+  app.db.tx(() => {
+    for (const id of ids) {
+      for (const t of remove) changed += app.db.run('DELETE FROM reference_tags WHERE reference_id = ? AND tag = ?', id, t).changes;
+      const have = new Set(tagsFor(app, [id]).get(id) ?? []);
+      for (const t of add) {
+        if (have.has(t)) continue;
+        if (have.size >= MAX_TAGS_PER_ITEM) { full.push(id); break; }
+        app.db.run('INSERT INTO reference_tags (reference_id, tag) VALUES (?, ?)', id, t);
+        have.add(t);
+        changed++;
+      }
+    }
+  });
+  if (changed) audit(app.db, actor, 'reference.tagged', 'reference', ids.length === 1 ? ids[0] : null, { count: ids.length, add, remove });
+  return { changed, full };
 }
 
 export function importReferenceImage(
   app: AppContext,
-  input: { fileName: string; data: Buffer; label?: string; sourceTool?: string; prompt?: string; notes?: string; madeAt?: string },
+  input: { fileName: string; data: Buffer; label?: string; sourceTool?: string; prompt?: string; notes?: string; madeAt?: string; tags?: string[] },
   actor: AuditActor = 'user',
 ): ImportOutcome {
   const fileName = input.fileName.slice(0, 200);
@@ -96,7 +171,7 @@ export function importReferenceImage(
   if (!img) return { status: 'rejected', fileName, reason: 'Not a PNG, JPEG, WebP or GIF image.' };
   const hash = sha256(input.data);
   const existing = app.db.get<ReferenceRow>('SELECT * FROM reference_items WHERE sha256 = ?', hash);
-  if (existing) return { status: 'duplicate', existing, fileName };
+  if (existing) return duplicateWithTags(app, existing, fileName, input.tags, actor);
 
   const madeAt = validDate(input.madeAt);
   const label = referenceLabel(fileName, input.label);
@@ -124,20 +199,37 @@ export function importReferenceImage(
   };
   app.assets.writeRaw(rel, input.data);
   try {
-    app.db.insert('reference_items', item as unknown as Record<string, unknown>);
+    app.db.tx(() => {
+      app.db.insert('reference_items', item as unknown as Record<string, unknown>);
+      insertTags(app, item.id, input.tags);
+    });
   } catch (err) {
     rmSync(abs, { force: true });
     throw err;
   }
-  audit(app.db, actor, 'reference.imported', 'reference', item.id, { kind: 'image', fileName, sourceTool: item.source_tool, rel });
+  audit(app.db, actor, 'reference.imported', 'reference', item.id, { kind: 'image', fileName, sourceTool: item.source_tool, rel, tags: cleanTags(input.tags) });
   return { status: 'imported', item };
+}
+
+function insertTags(app: AppContext, id: string, tags: string[] | undefined): void {
+  for (const t of cleanTags(tags).slice(0, MAX_TAGS_PER_ITEM)) app.db.run('INSERT OR IGNORE INTO reference_tags (reference_id, tag) VALUES (?, ?)', id, t);
+}
+
+/**
+ * Dropping something already in the library with tags typed in still sorts it: the tags go on the copy
+ * that's there. That is how the 180 pictures imported before tags existed can be sorted by dropping them again.
+ */
+function duplicateWithTags(app: AppContext, existing: ReferenceRow, fileName: string, tags: string[] | undefined, actor: AuditActor): ImportOutcome {
+  const add = cleanTags(tags);
+  const tagged = add.length ? tagReferences(app, { ids: [existing.id], add }, actor).changed : 0;
+  return { status: 'duplicate', existing, fileName, tagsAdded: tagged };
 }
 
 const FIELDS: ReferenceField[] = ['title', 'description', 'tags', 'page_text', 'other'];
 
 export function importReferenceText(
   app: AppContext,
-  input: { field: ReferenceField; text: string; label?: string; sourceTool?: string; notes?: string; madeAt?: string },
+  input: { field: ReferenceField; text: string; label?: string; sourceTool?: string; notes?: string; madeAt?: string; tags?: string[] },
   actor: AuditActor = 'user',
 ): ImportOutcome {
   if (!FIELDS.includes(input.field)) throw validation(`Unknown kind of text: ${input.field}`);
@@ -147,7 +239,7 @@ export function importReferenceText(
   const normalized = text.replace(/\s+/g, ' ').toLowerCase();
   const hash = sha256(`text:${input.field}:${normalized}`);
   const existing = app.db.get<ReferenceRow>('SELECT * FROM reference_items WHERE sha256 = ?', hash);
-  if (existing) return { status: 'duplicate', existing, fileName: '' };
+  if (existing) return duplicateWithTags(app, existing, '', input.tags, actor);
   const madeAt = validDate(input.madeAt);
   const item: ReferenceRow = {
     id: newId('ref'),
@@ -169,8 +261,11 @@ export function importReferenceText(
     made_at: madeAt,
     created_at: new Date().toISOString(),
   };
-  app.db.insert('reference_items', item as unknown as Record<string, unknown>);
-  audit(app.db, actor, 'reference.imported', 'reference', item.id, { kind: 'text', field: input.field });
+  app.db.tx(() => {
+    app.db.insert('reference_items', item as unknown as Record<string, unknown>);
+    insertTags(app, item.id, input.tags);
+  });
+  audit(app.db, actor, 'reference.imported', 'reference', item.id, { kind: 'text', field: input.field, tags: cleanTags(input.tags) });
   return { status: 'imported', item };
 }
 
