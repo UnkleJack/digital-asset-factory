@@ -171,14 +171,16 @@ export function registerTournamentRoutes(server: FastifyInstance, deps: { app: A
 
       // Generate `count` images per model (sequential to avoid rate limits)
       const results: any[] = [];
+      const referenceImageProviderAllowlist = new Set(['pollinations']);
       for (const m of models) {
         for (let i = 0; i < count; i++) {
           const itemSeed = seed !== undefined ? seed + i : undefined;
+          const referenceImageForProvider = refImage && referenceImageProviderAllowlist.has(m.id) ? refImage : undefined;
           try {
             const res = await m.provider.generateImage({
               prompt: basePrompt,
               size,
-              referenceImage: refImage,
+              referenceImage: referenceImageForProvider,
               seed: itemSeed,
             });
             results.push({
