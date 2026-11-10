@@ -800,7 +800,7 @@ Each world card shows its rank, a progress bar towards the next milestone, **TAS
 
 ### THE TABS AT THE BOTTOM
 
-**WORLDS** is where you are. **MISSIONS** opens your mission list (see below). **PACKS**, **LEADERBOARDS** and **CODEX** say **SOON**. Press one and the cabinet tells you it unlocks in a later build.
+**WORLDS** is where you are. **MISSIONS** opens your mission list (see below). **PACKS** shows your packs and the pack pool, **LEADERBOARDS** your FINISHED, REJECTED WELL, per-type and LAST 3 SHIPPED boards, and **CODEX** your player's XP and what they've learned. Next to WORLD BUILDER, **ASK B.M.O.** opens your advisor and **BIN** holds what you deleted to the bin.
 
 ## MISSIONS
 
@@ -820,7 +820,8 @@ Want to learn the whole Foundry? Here's your quest log. There's one mission for 
 You're in. The breadcrumb up top says **HUB / (WORLD)**. You get the world's name, what it's for, the progress bar, **NEXT MILESTONE** and **TASKS LEFT**.
 
 Below that are your fighter's open tasks, each tagged with its difficulty (LOW, MEDIUM or HIGH), task type, milestone and status.
-- **OPEN TASK** isn't ready yet. The cabinet tells you **THE TASK WORKSPACE OPENS IN MILESTONE 3. MARK PROGRESS IN THE WORLD BUILDER FOR NOW.**
+- **OPEN TASK** opens the **Task Workspace**. For a product task, fill in a title, a design and a note for the AI if you like, and press **MAKE IT**: the factory makes the whole thing (pages, QA checks, listings). It shows up under **ASSETS FOR THIS TASK** and says what stage it's at. When it says READY FOR QA REVIEW, press **SUBMIT FOR QA / REVIEW**. A custom task has nothing to make, so you just mark it IN PROGRESS, BLOCKED or DONE.
+- **QA Review** shows the pages, the factory's QA checklist and the task. **APPROVE** (with an optional WHAT I LIKED note) finishes the task. **REJECT** needs at least two sentences saying which part is wrong and what's wrong with it; the AI checks it's specific. Every 5 good rejections earn a credit. **DELETE** asks where to: the **BIN** (you can restore it later) or **DELETE FOREVER** after you type DELETE. Deleting never counts as a rejection.
 - **BACK TO HUB** (or B) takes you home.
 
 ## THE WORLD BUILDER

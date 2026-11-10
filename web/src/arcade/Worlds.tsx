@@ -46,16 +46,16 @@ export function ProgressBar({ value, label }: { value: number; label: string }) 
 }
 
 const NAV_DESTINATIONS = ['WORLDS', 'MISSIONS', 'PACKS', 'LEADERBOARDS', 'CODEX'] as const;
-type NavDestination = (typeof NAV_DESTINATIONS)[number];
-const BUILT: readonly NavDestination[] = ['WORLDS', 'MISSIONS'];
+export type NavDestination = (typeof NAV_DESTINATIONS)[number];
+const BUILT: readonly NavDestination[] = NAV_DESTINATIONS;
 
-export function ArcadeTabs({ current = 'WORLDS', onGo, onSoon }: { current?: NavDestination; onGo: (d: 'WORLDS' | 'MISSIONS') => void; onSoon: (name: string) => void }) {
+export function ArcadeTabs({ current = 'WORLDS', onGo, onSoon }: { current?: NavDestination; onGo: (d: NavDestination) => void; onSoon: (name: string) => void }) {
   return (
     <nav className="arcade-tabs" aria-label="Arcade">
       {NAV_DESTINATIONS.map((d) => {
         const built = BUILT.includes(d);
         return (
-          <button key={d} type="button" className={`arcade-tab${d === current ? ' active' : built ? '' : ' unavailable'}`} data-nav aria-current={d === current ? 'page' : undefined} aria-disabled={!built} onClick={() => (built ? onGo(d as 'WORLDS' | 'MISSIONS') : onSoon(d))}>
+          <button key={d} type="button" className={`arcade-tab${d === current ? ' active' : built ? '' : ' unavailable'}`} data-nav aria-current={d === current ? 'page' : undefined} aria-disabled={!built} onClick={() => (built ? onGo(d) : onSoon(d))}>
             {d}{built ? null : <small>SOON</small>}
           </button>
         );
@@ -112,10 +112,9 @@ interface Detail {
   tasks: Task[];
 }
 
-export function WorldDetail({ worldId, character, onBack }: { worldId: string; character: ArcadeCharacter | null; onBack: () => void }) {
+export function WorldDetail({ worldId, character, onBack, onOpenTask }: { worldId: string; character: ArcadeCharacter | null; onBack: () => void; onOpenTask: (taskId: string) => void }) {
   const types = useProductTypes();
   const { data, error, loading, reload } = useApi<Detail>(character ? `/arcade/worlds/${encodeURIComponent(worldId)}?character=${encodeURIComponent(character.id)}` : null);
-  const [notice, setNotice] = useState<string | null>(null);
   useFocusMainWhenReady(!!data || !!error);
   if (loading && !data) return <div className="scr center"><p className="big-pixel blink-slow">LOADING WORLD...</p></div>;
   if (error || !data) {
@@ -154,11 +153,10 @@ export function WorldDetail({ worldId, character, onBack }: { worldId: string; c
                 <span>{STATUS_LABEL[t.status]}</span>
               </span>
             </div>
-            <button type="button" className="arc-btn small" data-nav {...(i === 0 ? { 'data-autofocus': true } : {})} onClick={() => setNotice('THE TASK WORKSPACE OPENS IN MILESTONE 3. MARK PROGRESS IN THE WORLD BUILDER FOR NOW.')}>OPEN TASK</button>
+            <button type="button" className="arc-btn small" data-nav {...(i === 0 ? { 'data-autofocus': true } : {})} onClick={() => onOpenTask(t.id)}>OPEN TASK</button>
           </li>
         ))}
       </ol>
-      {notice ? <p className="lock-line center-text">{notice}</p> : null}
       <div className="row-actions">
         <button type="button" className="arc-btn" data-nav onClick={onBack}>BACK TO HUB</button>
       </div>

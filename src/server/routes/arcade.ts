@@ -12,6 +12,13 @@ import { startDraft, getDraft, listDrafts, discardDraft, DRAFT_KINDS } from '../
 import { tickerCatalog, tickerValues, chosenTickerStats } from '../../engine/arcade/ticker.ts';
 import { setPortrait, clearPortrait, portraitFor, MAX_PORTRAIT_BYTES } from '../../engine/arcade/portraits.ts';
 import { loadGuide, listMissions, missionInstructions, setMissionDone } from '../../engine/arcade/missions.ts';
+import { taskWorkspace, makeTaskAsset, progressTask } from '../../engine/arcade/workspace.ts';
+import { reviewScreen, reviewQueue, approve, reject, remake, deleteItem, binList, restoreFromBin, deleteFromBin, settleWaitingRejections } from '../../engine/arcade/review.ts';
+import { packsView, packContents, buildPack, finalizePack } from '../../engine/arcade/packs.ts';
+import { leaderboards } from '../../engine/arcade/leaderboards.ts';
+import { codexFor, recordXp } from '../../engine/arcade/codex.ts';
+import { creditState, ledger } from '../../engine/arcade/credits.ts';
+import { chat as bmoChat, act as bmoAct, BmoAction, ChatBody } from '../../engine/arcade/bmo.ts';
 import { notFound } from '../../core/errors.ts';
 import { parse, type P, type Q } from './util.ts';
 
@@ -68,11 +75,28 @@ const TaskPatch = z.object({
   status: z.enum(TASK_STATUSES).optional(),
 });
 
+const ReviewBody = z.object({
+  characterId: z.string().min(2).max(40).nullable().optional(),
+  openedAt: z.string().max(40),
+  likedNote: z.string().max(2000).optional(),
+  reason: z.string().max(4000).optional(),
+  acceptWarnings: z.boolean().optional(),
+  warningNote: z.string().max(2000).optional(),
+  oneThingWrong: z.string().max(500).optional(),
+  heldMs: z.number().min(0).max(120_000).optional(),
+});
+const DeleteBody = z.object({
+  destination: z.enum(['bin', 'permanent']),
+  confirm: z.string().max(20).optional(),
+  openedAt: z.string().max(40),
+  characterId: z.string().min(2).max(40).nullable().optional(),
+});
+
 const characterOf = (req: { query: unknown }) => parse(z.object({ character: z.string().min(2) }), req.query as Q, 'character').character;
 
 export function registerArcadeRoutes(s: FastifyInstance, { app }: ServerDeps): void {
   s.get('/api/arcade', async () => {
-    const state = arcadeState(app);
+    const state = await arcadeState(app);
     return { ...state, startAllowed: canStart(state) };
   });
 
@@ -97,7 +121,7 @@ export function registerArcadeRoutes(s: FastifyInstance, { app }: ServerDeps): v
   s.put('/api/arcade/characters/:id/portrait', async (req) => {
     const b = parse(PortraitBody, req.body, 'portrait');
     setPortrait(app, (req.params as P).id, Buffer.from(b.dataBase64, 'base64'));
-    return arcadeState(app).characters.find((c) => c.id === (req.params as P).id);
+    return (await arcadeState(app)).characters.find((c) => c.id === (req.params as P).id);
   });
   s.delete('/api/arcade/characters/:id/portrait', async (req) => {
     clearPortrait(app, (req.params as P).id);
@@ -110,13 +134,68 @@ export function registerArcadeRoutes(s: FastifyInstance, { app }: ServerDeps): v
   s.get('/api/arcade/missions', async () => listMissions(app));
   s.get('/api/arcade/missions/:id/instructions', async (req) => missionInstructions((req.params as P).id));
   s.put('/api/arcade/missions/:id/done', async (req) => {
-    setMissionDone(app, (req.params as P).id, true);
+    const id = (req.params as P).id;
+    setMissionDone(app, id, true);
+    // Played as a character, a cleared mission is a tab learned (spec B11): Codex XP for that character.
+    const character = parse(z.object({ character: z.string().min(2).max(40).optional() }), req.query as Q, 'character').character;
+    if (character) {
+      const m = listMissions(app).missions.find((x) => x.id === id);
+      if (m) recordXp(app, character, 'tab', id, m.title);
+    }
     return { ok: true };
   });
   s.delete('/api/arcade/missions/:id/done', async (req) => {
     setMissionDone(app, (req.params as P).id, false);
     return { ok: true };
   });
+
+  // Milestone 3: the Task Workspace behind OPEN TASK.
+  s.get('/api/arcade/tasks/:id', async (req) => taskWorkspace(app, (req.params as P).id, characterOf(req)));
+  s.post('/api/arcade/tasks/:id/make', async (req) => {
+    const b = parse(z.object({ title: z.string().max(120).optional(), designSystemId: z.string().max(60).optional(), brief: z.string().max(4000).optional() }), req.body ?? {}, 'asset');
+    return makeTaskAsset(app, (req.params as P).id, characterOf(req), b);
+  });
+  s.post('/api/arcade/tasks/:id/progress', async (req) => {
+    const b = parse(z.object({ status: z.enum(TASK_STATUSES).optional(), remainingEffort: z.number().min(0).max(10_000).optional() }), req.body, 'progress');
+    return progressTask(app, (req.params as P).id, characterOf(req), b);
+  });
+
+  // Milestone 4: QA Review, the review queue and the Bin.
+  s.get('/api/arcade/review-queue', async (req) => reviewQueue(app, characterOf(req)));
+  s.get('/api/arcade/review/:productId', async (req) => reviewScreen(app, (req.params as P).productId));
+  s.post('/api/arcade/review/:productId/approve', async (req) => approve(app, (req.params as P).productId, parse(ReviewBody, req.body, 'review')));
+  s.post('/api/arcade/review/:productId/reject', async (req) => reject(app, (req.params as P).productId, parse(ReviewBody, req.body, 'review')));
+  s.post('/api/arcade/review/:productId/remake', async (req) => remake(app, (req.params as P).productId));
+  s.post('/api/arcade/review/:productId/delete', async (req) => deleteItem(app, (req.params as P).productId, parse(DeleteBody, req.body, 'delete')));
+  s.get('/api/arcade/bin', async () => ({ items: binList(app) }));
+  s.post('/api/arcade/bin/:productId/restore', async (req) => restoreFromBin(app, (req.params as P).productId));
+  s.post('/api/arcade/bin/:productId/delete', async (req) => deleteFromBin(app, (req.params as P).productId, parse(z.object({ confirm: z.string().max(20).optional() }), req.body ?? {}, 'delete').confirm));
+
+  // Milestone 5: Packs and the pack pool.
+  s.get('/api/arcade/packs', async () => packsView(app));
+  s.get('/api/arcade/packs/:productId/contents', async (req) => ({ items: packContents(app, (req.params as P).productId) }));
+  s.post('/api/arcade/packs/carts/:cartId/build', async (req) => buildPack(app, (req.params as P).cartId));
+  s.post('/api/arcade/packs/:productId/finalize', async (req) => {
+    const b = parse(z.object({ characterId: z.string().min(2).max(40).nullable().optional() }), req.body ?? {}, 'pack');
+    return finalizePack(app, (req.params as P).productId, b.characterId);
+  });
+
+  // Milestone 6: credits, live where a provider reports a limit, plus the earned-credit ledger.
+  s.get('/api/arcade/credits', async () => {
+    settleWaitingRejections(app);
+    return { ...(await creditState(app)), ledger: ledger(app) };
+  });
+
+  // Milestones 7 and 8: Codex and Leaderboards.
+  s.get('/api/arcade/codex', async (req) => codexFor(app, characterOf(req), listMissions(app).missions.map((m) => ({ id: m.id, title: m.title, locked: m.locked }))));
+  s.get('/api/arcade/leaderboards', async () => {
+    settleWaitingRejections(app);
+    return leaderboards(app);
+  });
+
+  // B.M.O.: chat that can propose actions; each runs only when the owner says yes to it.
+  s.post('/api/arcade/bmo/chat', async (req) => bmoChat(app, parse(ChatBody, req.body, 'chat').messages));
+  s.post('/api/arcade/bmo/act', async (req) => bmoAct(app, parse(z.object({ action: BmoAction }), req.body, 'action').action));
 
   // Player side: only worlds where the character has open tasks.
   s.get('/api/arcade/worlds', async (req) => ({ worlds: worldsFor(app, characterOf(req)) }));
