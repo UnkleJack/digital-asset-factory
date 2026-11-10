@@ -185,6 +185,7 @@ As of 2026-11-06: `main` after pull requests #12 (backup AI models), #15 (sample
   - **Laziness failsafe.** Weighted signals (approval streak, fast review, empty note, copied reason) and four cumulative stages (shuffled queue, swapped buttons, name one thing wrong, 5-second approve hold). Every weight and threshold starts blank, so it is off until the owner sets them. It never changes an asset and never scolds.
   - **B.M.O.** Chat that answers from real rows only and can propose up to three actions (make a world, add a task, start a product). Nothing runs until the owner presses YES on that card. Needs a working AI provider; the chat is not saved.
   - Tested in `tests/arcade-play.test.ts` with the real pipeline and a stand-in AI for reason checks and B.M.O. **Not yet tried live** with the owner's NVIDIA key.
+- **Test-browser isolation** (2026-10-28 plan, C1; built 2026-11-10). Every Chrome the app or a test run starts gets its own empty profile folder in the temp folder, named `daf-chrome-<process id>-…`, and the folder is removed when that Chrome closes or the process exits. So `npm test` can run while the app is open without the two sharing a profile. They still share the processor and disk, so tests are slower while the app renders. Puppeteer already gave each launch a temporary profile before this change; the app now makes and removes the folder itself, so the separation no longer depends on the library's default. Tested in `tests/renderer-isolation.test.ts`.
 - Tests: 168 tests, 168 pass, 0 skipped, 0 fail (branch `claude/arcade-start-flow` with `main` merged in, run on the Mac, 2026-11-06).
 
 **Built but not proven live**
@@ -204,7 +205,7 @@ As of 2026-11-06: `main` after pull requests #12 (backup AI models), #15 (sample
 **Not built yet**
 - HAPPY DAFFY milestone 10: new modules (8-bit and 16-bit sprites, Unity pipeline).
 - A coding agent behind GAGE (item F).
-- From the 2026-10-28 plan: the mandala engine expansion (Workstream A), geometric pattern art (Workstream B), and the test-browser isolation fix (C1).
+- From the 2026-10-28 plan: the mandala engine expansion (Workstream A) and geometric pattern art (Workstream B).
 
 ## Article 9: What comes next, and what's undecided
 

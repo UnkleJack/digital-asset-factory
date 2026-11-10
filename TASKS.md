@@ -85,6 +85,14 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done and verified (evidence not
 | F35 | Cleanup of old test data: `npm run clean-verification` lists folders inside `verification-output/` that have not changed for 7 days, and `-- --apply` removes them (same pattern as `tidy-folders`). Never removes the folder itself, loose files, links, or anything outside it (never `data/`); skips any folder a running copy of the app is using (live `daf.lock`) and re-checks just before deleting. Runs once a week while the app is open (Settings → Scheduler → `cleanVerificationWeekly`; last run noted in `verification-output/.last-cleanup`) | [x] | `tests/cleanVerification.test.ts` (dry run changes nothing; only old unused folders go; in-use, recent, links, loose files, outside and `data/` stay; a folder that becomes busy mid-run stays; wrong folder name refused; weekly due logic); dry run on the worktree kept the in-use test copy |
 | F36 | HAPPY DAFFY milestones 3 to 9 and B.M.O.: Task Workspace (OPEN TASK makes a real asset through the pipeline, linked to its task; approval completes the task), QA Review (factory QA as the checklist, 2-sentence + AI-checked rejections, 5 qualifying = +1 earned credit, DELETE to Bin or permanent, review durations), Bin with restore, Packs and pack pool (finalize, 15-item qualification, bonus TBD), live credits from provider daily limits (TEST fallback, earned credits kept apart), Codex XP (amounts blank until set), Leaderboards, laziness failsafe (off until tuned), B.M.O. advisor that acts only on YES. Migration 015 | [~] | `tests/arcade-play.test.ts` (real pipeline, stand-in AI for reason checks and B.M.O.); **browser check and a live run with the real NVIDIA key not done** |
 
+## Factory upgrades (2026-10-28 plan)
+
+Workstreams A, B and C1 of `docs/plans/2026-10-28-audit-mandala-geometric-ship.md`.
+
+| ID | Task | Status | Evidence |
+|---|---|---|---|
+| C1 | Test-browser isolation: every Chrome launch gets its own profile folder (`daf-chrome-<pid>-…` in the temp folder), removed on close, on a lost browser and at process exit; a relaunch gets a fresh one | [x] | `tests/renderer-isolation.test.ts` (two renderers get different folders named after the process, closing one removes only its folder, relaunch gets a new one, nothing left after close); README `npm test` row and troubleshooting. Not yet timed with the app running on the Mac |
+
 ## Build list (owner, 2026-11-09)
 
 Things to build that aren't in the Factory yet. Each one that teaches a new screen or type also gets a HAPPY DAFFY mission, shown as locked until it ships (`src/engine/arcade/missions.ts`).
