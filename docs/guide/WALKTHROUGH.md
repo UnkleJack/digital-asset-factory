@@ -297,7 +297,20 @@ This tab explains the maths. Each factor is a 0–10 value. The score is the wei
 
 ![New product](images/05c-new-product.png)
 
-1. **What are you making?** Click a category chip.
+1. **What are you making?** Click a category chip. The categories and the kinds in each:
+
+   | Category | Kinds |
+   | --- | --- |
+   | Calendars & Planners | Monthly calendar, Weekly planner |
+   | Productivity | Daily planner, Habit tracker, To-do / checklist, Goal planner |
+   | Home Organization | Cleaning schedule, Home inventory |
+   | Finance & Business | Budget planner, Invoice template |
+   | Journals & Worksheets | Guided journal |
+   | Coloring Pages | Mandala coloring pages, Illustrated coloring pages |
+   | Kids Activities | Maze activity book, Word search puzzles |
+   | Geometric Patterns | Geometric pattern art: pick a **Family** (tessellate, girih, op art, Truchet, guilloche, fractal, lace or herringbone) and a **Mode**: coloring for black line art to color in, or print for wall art in the design system's colors |
+
+   Imported coloring pages are made from the [Imports](#7-imports) screen instead, and packs from **Build a pack**.
 2. **Which kind?** Click a product type. Each card says whether its pictures are drawn by the app (no AI needed), drawn by an image AI (needs an image key), or come from your imports, and whether the AI writes its text when a key is set. If you pick a type that needs an image key and none is saved, a yellow banner warns you that production will fail.
 3. **Look and feel.**
    - **Title** is optional. If you leave it blank, one is made from the settings.

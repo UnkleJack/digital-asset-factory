@@ -11,7 +11,7 @@ What it does today, honestly:
 
 | Area | Status |
 |---|---|
-| Production of 15 product types (PDF, plus CSV/XLSX where relevant) and bundles | Works offline with the built-in content library |
+| Production of 16 product types (PDF, plus CSV/XLSX or SVG where relevant) and bundles, including geometric pattern art as coloring pages or wall-art prints | Works offline with the built-in content library |
 | AI text — Groq, OpenRouter, Cerebras, Together, NVIDIA, Anthropic, with automatic fallback between them | Built and tested against local stand-in servers; **not yet verified with real keys** |
 | AI images (OpenAI) | Built and tested against mock servers; **not yet verified with real keys** |
 | QA, packaging, listing drafts, batch approval, export packages | Works |

@@ -48,6 +48,10 @@ export const PRESETS: ProductPreset[] = [
     params: { months: 12, weekStart: 0, holidays: 'us-federal', notesPanel: false }, brief: 'Month intentions in plain, calm language. No jargon.' },
   { id: 'business-goals', name: 'Small business goal planner', group: 'Work', productType: 'goal-planner', audience: 'Small business owners', designSystem: 'Bold Modern',
     params: { goals: 4 }, brief: 'Goals about clients, revenue, products and time. No financial, legal or tax advice.' },
+  { id: 'geometric-coloring', name: 'Geometric coloring book', group: 'Everyone', productType: 'geometric-pattern-art', audience: 'General adults', designSystem: 'Minimal Mono',
+    params: { pages: 12, family: 'tessellate', mode: 'coloring', density: 'medium' } },
+  { id: 'geometric-wall-art', name: 'Geometric wall art prints', group: 'Home and family', productType: 'geometric-pattern-art', audience: 'General adults', designSystem: 'Bold Modern',
+    params: { pages: 4, family: 'girih', mode: 'print', density: 'medium', cover: false } },
   { id: 'undated-daily', name: 'Undated daily planner page', group: 'Everyone', productType: 'daily-planner', audience: 'General adults', designSystem: 'Minimal Mono',
     params: { dated: false, days: 1, priorities: 3 } },
 ];

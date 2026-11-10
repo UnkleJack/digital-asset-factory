@@ -16,7 +16,7 @@ succulent succulents monstera trellis treehouse lighthouse teapot bouquet wildfl
 etsy gumroad invoice invoices invoicing receipt receipts subtotal subtotals freelancer freelancers solopreneur startup startups
 mandala mandalas maze mazes download downloads downloadable downloaded editable fillable customizable reusable worksheet worksheets
 ipad tablet tablets goodnotes notability homeschoolers classroom classrooms unisex giftable keepsake adhd box boxes proud checkpoint checkpoints childcare doormat doormats flashcard flashcards
-google nightstand nightstands workspace workspaces unzip unzipped`;
+google nightstand nightstands workspace workspaces unzip unzipped decor tessellation tessellations truchet guilloche spirograph sierpinski herringbone quatrefoil girih`;
 
 let dict: Set<string> | null = null;
 

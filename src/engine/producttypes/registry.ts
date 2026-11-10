@@ -7,10 +7,12 @@ import { budgetPlanner, invoiceTemplate } from './structured.ts';
 import { mandalaColoring, mazeActivity, wordSearch, illustratedColoring } from './activity.ts';
 import { bundleType } from './bundle.ts';
 import { importedColoring } from './imported.ts';
+import { geometricPatternArt } from './patterns.ts';
 
 const ALL: ProductTypeDefinition[] = [
   monthlyCalendar, weeklyPlanner, dailyPlanner, habitTracker, todoChecklist, cleaningSchedule, homeInventory,
   budgetPlanner, invoiceTemplate, guidedJournal, goalPlanner, mandalaColoring, mazeActivity, wordSearch, illustratedColoring, importedColoring, bundleType,
+  geometricPatternArt,
 ];
 
 const BY_ID = new Map(ALL.map((t) => [t.id, t]));

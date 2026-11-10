@@ -41,6 +41,7 @@ const VARIANTS: Record<string, Omit<CreateProductInput, 'productType'> & { desig
   'mandala-coloring': { design: 'Minimal Mono', theme: 'Celestial' },
   'maze-activity': { design: 'Kids Bright', audience: 'Kids 4-8', theme: 'Space Adventure' },
   'word-search': { design: 'Kids Bright', audience: 'Kids 4-8', theme: 'Ocean' },
+  'geometric-pattern-art': { design: 'Bold Modern', params: { pages: 4, family: 'girih', mode: 'print', cover: false } },
 };
 
 async function idle(timeoutMs = 300_000): Promise<void> {

@@ -66,11 +66,12 @@ Adopted 2026-11-03.
 1. **The factory must keep making everything it already makes.** New features must not break or drop a product type.
 2. These are the product types registered today (`src/engine/producttypes/`):
    - **Activity:** mandala-coloring, maze-activity, word-search, illustrated-coloring
+   - **Geometric patterns:** geometric-pattern-art (one type with a `family` and a `mode` setting, per D1 and D2)
    - **Dated:** monthly-calendar, weekly-planner, daily-planner
    - **Lists and trackers:** habit-tracker, todo-checklist, cleaning-schedule, home-inventory, guided-journal, goal-planner
    - **Structured:** budget-planner, invoice-template
    - **Other:** imported-coloring (images made in other tools), bundle (packs)
-3. **New kinds of asset are added as modules** through the product-type registry. That includes the planned geometric pattern art, the 8-bit and 16-bit sprites, and a Unity pipeline. Nothing gets hardwired to mandalas or to any one type.
+3. **New kinds of asset are added as modules** through the product-type registry. Geometric pattern art was added this way (2026-11-10); the planned 8-bit and 16-bit sprites and a Unity pipeline will be too. Nothing gets hardwired to mandalas or to any one type.
 4. **Locked decisions from 2026-10-28** (see `docs/plans/2026-10-28-audit-mandala-geometric-ship.md`):
    - **D1.** Geometric pattern art serves both coloring line art and decor or wall-art prints, through a `mode` parameter.
    - **D2.** It is one product type, `geometric-pattern-art`, with a `family` parameter.
@@ -115,6 +116,7 @@ Adopted 2026-11-03.
 | Names | `src/core/brand.ts` |
 | Server entry point | `src/main.ts` (Fastify on `127.0.0.1:4317`) |
 | Product types | `src/engine/producttypes/` (registry: `registry.ts`) |
+| Geometric pattern art | `src/engine/generation/patterns.ts` (8 pattern families), `src/engine/producttypes/patterns.ts` (the `geometric-pattern-art` type) |
 | Mandala and other procedural art | `src/engine/generation/procedural.ts`; the mandala engine is `src/engine/generation/mandala/` (`motifs.ts` motif library, `symmetry.ts` symmetry engine, `compose.ts` rings, centre and border) |
 | AI providers (10 text, 8 image) and pacing | `src/engine/generation/providers.ts`, `pacing.ts` |
 | QA, packaging, listings, approval, publishing | `src/engine/qa/`, `packaging/`, `listing/`, `approval/`, `publishing/` |
@@ -139,7 +141,7 @@ Adopted 2026-11-03.
 As of 2026-11-06: `main` after pull requests #12 (backup AI models), #15 (sample previews), #16 (the Mac Dock app), #18 (compact lists and Rework) and #19 (warning gate and notes for the AI), plus the Hub, the stats ticker, World Builder drafts, smarter AI help and the test-data cleanup on branch `claude/arcade-start-flow` (pull request #13, not merged yet).
 
 **Working**
-- All 17 product types produce offline with the built-in content library: QA, packaging, listings, batch approval and export packages.
+- All 18 product types produce offline with the built-in content library: QA, packaging, listings, batch approval and export packages.
 - Imports of outside images and text. Readable product folder names.
 - Pack carts and the bundle builder. Production plans, which run while the app is open.
 - Portable copy: `npm run portable`.
@@ -161,7 +163,7 @@ As of 2026-11-06: `main` after pull requests #12 (backup AI models), #15 (sample
   - BUILD ON WHAT I HAVE and SHOW ME UNEXPLORED GROUND sit beside SUGGEST WORLDS. They give the AI a summary built only from real rows: existing worlds, product types used and never used, idle characters, and recorded orders by source.
   - TIDY MY NOTES turns a brain dump into a fixed structure (goal, scope, milestones and tasks, must and must-not, done when), with anything unclear listed as questions for the owner. It is told not to add facts.
   - The owner sees the original beside the tidy version. The tidy text can be edited and handed to LET THE AI BUILD A WORLD.
-- HAPPY DAFFY milestone 2a (pull request #10): Worlds the owner builds by hand. The World Builder creates worlds, milestones and tasks. Each task belongs to one character, has a task type (any of the 17 product types except imports, or Custom), a difficulty and effort points the owner sets. The Worlds list shows only worlds where the chosen character has an open task (open, in progress or blocked), sorted by the fewest effort points left before the next milestone. A milestone completes by itself when all its tasks are complete and reopens if one is reopened. World Detail lists that character's open tasks.
+- HAPPY DAFFY milestone 2a (pull request #10): Worlds the owner builds by hand. The World Builder creates worlds, milestones and tasks. Each task belongs to one character, has a task type (any product type except imports, or Custom), a difficulty and effort points the owner sets. The Worlds list shows only worlds where the chosen character has an open task (open, in progress or blocked), sorted by the fewest effort points left before the next milestone. A milestone completes by itself when all its tasks are complete and reopens if one is reopened. World Detail lists that character's open tasks.
 - HAPPY DAFFY milestones 2b and 2c: AI suggestions and AI-written worlds in the World Builder. NEED AN IDEA? gives clickable world ideas and task ideas that fill the forms. LET THE AI BUILD A WORLD takes a goal, the number of milestones, tasks per milestone, a difficulty mix, optional product types and an optional character, then shows a review screen. Nothing is saved until the owner presses SAVE WORLD, and the owner can remove tasks and milestones first. The owner's rule (2026-11-03): this part is AI-first. With no working AI provider it says so, and it never uses the built-in content library. Totals, ordering, progress and validation stay rule-based. Only tested against a stand-in AI so far, because no real provider key has been tried.
 - Backup models at each AI text provider (2026-11-04). Every free-tier text provider has a list of backup models that it tries in order, on the same key, before the app moves on to the next provider. It moves to the next model when a model is retired or unknown, times out, has a server error or refuses. It does not when the key is rejected, the host can't be reached or the key is rate-limited, so backups don't spend more of a capped key. The owner's text setup: NVIDIA first, with Nemotron 3 Ultra (`nvidia/nemotron-3-ultra-550b-a55b`) and MiniMax (`minimaxai/minimax-m3.1-flash`) behind it. Groq is a late backup and never the first one. The old NVIDIA default, `meta/llama-3.1-70b-instruct`, was retired (HTTP 410). **First live success, 2026-11-05:** with the owner's real NVIDIA key, Nemotron 3 Ultra wrote a whole world in the World Builder in 76 seconds. MiniMax as the backup has not been seen answering live yet.
 - Sample previews on Research & opportunities (2026-11-04). Each idea can get a picture of what it describes: the first two pages (the cover and the first inside page) of its product type, drawn offline with the idea's title, audience and theme and the built-in sample content. It's free and needs no AI key. Owner's choices: it is made only when the owner presses Make preview (in the opened idea) or Make sample previews (for the whole list), the list shows a small picture on each row, and an AI-drawn picture is a later addition. Every picture is labelled SAMPLE, and the idea's own extras (its differentiation) are not drawn. Previews are kept under `research/previews/` in the asset folder and marked out of date when the idea's title, type, audience or theme changes. Illustrated coloring ideas get no free sample, because their pages need an AI image provider.
@@ -191,6 +193,13 @@ As of 2026-11-06: `main` after pull requests #12 (backup AI models), #15 (sample
   - Each repeated shape is stored once in the SVG and reused, so even an intricate design stays under about 40 KB (the largest of 600 test designs was 38 KB).
   - Lines are thickened when needed so none prints under 0.2 mm on the chosen paper. New QA checks: everything inside the drawing box, minimum line width, density (warning: over 20,000 path segments or rings under 2 mm), and clean black-on-white line art with no missing shapes. These limits are starting values, not yet checked against real prints.
   - Tested in `tests/mandala.test.ts`.
+- **Geometric pattern art** (2026-10-28 plan, Workstream B; built 2026-11-10). A new product type, `geometric-pattern-art`, in a new **Geometric Patterns** category, drawn by the app with no AI (`procedural-pattern@1`).
+  - One type with a **family** setting (D2): tessellate, girih (star and cross), op art, Truchet, guilloche, fractal, lace and herringbone, each with 2 to 4 variants. A pack deals out every variant of its family in turn.
+  - A **mode** setting (D1): **coloring** makes black line art with a page title, for coloring books; **print** makes wall art filled with the design system's colors, the picture alone on the page, with an optional **invert** (light lines on a dark ground). **Density** is light, medium or dense.
+  - QA follows the mode: every page is a complete SVG clipped to its box, lines at least 0.2 mm, density (warning: too many shapes, or coloring cells under 2.5 mm), black on white only for coloring, and lines at least 3:1 against the ground for print. Limits are starting values, not yet checked against real prints.
+  - Default price 399 cents, like mandalas; change it in Settings → Marketplaces. A type with no saved price now uses its built-in default instead of a flat 499.
+  - Two presets: Geometric coloring book and Geometric wall art prints.
+  - Tested in `tests/patterns.test.ts` and, through the whole pipeline to a QA-passed PDF, in `tests/new-types-pipeline.test.ts`.
 - **Test-browser isolation** (2026-10-28 plan, C1; built 2026-11-10). Every Chrome the app or a test run starts gets its own empty profile folder in the temp folder, named `daf-chrome-<process id>-…`, and the folder is removed when that Chrome closes or the process exits. So `npm test` can run while the app is open without the two sharing a profile. They still share the processor and disk, so tests are slower while the app renders. Puppeteer already gave each launch a temporary profile before this change; the app now makes and removes the folder itself, so the separation no longer depends on the library's default. Tested in `tests/renderer-isolation.test.ts`.
 - Tests: 168 tests, 168 pass, 0 skipped, 0 fail (branch `claude/arcade-start-flow` with `main` merged in, run on the Mac, 2026-11-06).
 
@@ -211,7 +220,6 @@ As of 2026-11-06: `main` after pull requests #12 (backup AI models), #15 (sample
 **Not built yet**
 - HAPPY DAFFY milestone 10: new modules (8-bit and 16-bit sprites, Unity pipeline).
 - A coding agent behind GAGE (item F).
-- From the 2026-10-28 plan: geometric pattern art (Workstream B).
 
 ## Article 9: What comes next, and what's undecided
 
@@ -223,7 +231,7 @@ As of 2026-11-06: `main` after pull requests #12 (backup AI models), #15 (sample
    - Re-running the `prepare_listings` jobs that failed on 2026-11-04.
 3. **A guide in each area** (owner request, 2026-11-05). A HOW THIS WORKS button on each arcade area opens a short guide for just that screen, describing only what exists (Art. 5.2). The owner reviews the wording. Order: Hub, World Detail, World Builder (including the AI parts).
 4. **Play HAPPY DAFFY milestones 3 to 9 with real data**, then set the values the spec leaves open (Settings → arcade: XP amounts, pack bonus, low-credit warning, failsafe weights and thresholds) and the daily limit for NVIDIA under pacing if the credit meter should go live.
-5. **Factory upgrades from the 2026-10-28 plan:** geometric pattern art. Then print a few mandala pages at each detail level on A5 and letter, and tune the mandala print limits if the lines or rings look wrong.
+5. **Try the factory upgrades on paper:** print a few geometric pattern pages in each mode, and a few mandala pages at each detail level on A5 and letter, and tune the mandala print limits if the lines or rings look wrong.
 6. **AI-drawn opportunity pictures** (the owner's "later" choice, 2026-11-04): a Draw with AI button beside the free sample preview, once an image provider key works. It costs credits per idea and must be labelled as an AI impression, not the product.
 
 **Undecided**
@@ -250,3 +258,4 @@ As of 2026-11-06: `main` after pull requests #12 (backup AI models), #15 (sample
 | 2026-11-04 | Articles 7, 8 and 9 updated for sample previews on Research & opportunities. |
 | 2026-11-04 | Articles 7, 8 and 9 updated for the Mac Dock app (`npm run make-mac-app`). |
 | 2026-11-05 | Articles 7, 8 and 9 updated for the Hub, the stats ticker, World Builder drafts, smarter AI help and the first live NVIDIA success. Undecided items F to I added. The UX spec is amended for the Hub, with the owner's approval. |
+| 2026-11-10 | Article 4.2 lists `geometric-pattern-art` and Article 4.3 records that it was added as a module, as the owner asked when ordering the factory upgrades. Articles 7, 8 and 9 updated for the mandala engine, geometric pattern art and test-browser isolation. |
