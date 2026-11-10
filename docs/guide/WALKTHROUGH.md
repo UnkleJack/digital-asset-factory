@@ -304,7 +304,7 @@ This tab explains the maths. Each factor is a 0–10 value. The score is the wei
    - **Design system** sets colours, fonts and layout. The **Make your own design system** link opens Templates.
    - **Fonts.** Leave it on the design system's default, pick a pairing (grouped into everyday, bold display, hollow outline and decorative), or choose **Pick fonts myself…** to set the heading, body and accent fonts one by one. A sample underneath shows the fonts in use.
    - **Audience**, **Theme**, **Paper size**, **Orientation** and **Ink-saver grayscale**.
-4. **Settings for (type).** These fields change with the type: pages, complexity, cover, week start and so on.
+4. **Settings for (type).** These fields change with the type: pages, cover, week start and so on. Mandala coloring pages, for example, have **Detail** (simple, medium, detailed or intricate: 3, 5, 7 or 10 rings), **Symmetry** (how many times the design repeats around its centre; Auto lets each page choose) and **Motif set** (classic, botanical, geometric or celestial shapes).
 5. **Also make variations (optional).** Pick something to **Vary by** (design system, font pairing, audience, theme, paper size, new random artwork, or one of the type's own settings), then tick the values you want, up to 12. Each variation becomes its own product, the same as the first in every way except that one thing.
 6. **Prepare listings for.** Tick Etsy, Gumroad and/or Generic.
 

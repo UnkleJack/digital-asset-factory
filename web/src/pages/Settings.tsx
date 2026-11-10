@@ -304,10 +304,33 @@ function RemoteAccess() {
           </div>
           {token && <div className="token-box"><div className="small">Copy this now; it is not shown again:</div><code className="mono">{token}</code></div>}
           <div className="kv small"><span>Open on the other computer</span><span>{d.addresses.length ? d.addresses.map((a: string) => <div key={a} className="mono">http://{a}:{d.port}</div>) : 'No network address found'}</span></div>
+          <PublicHosts saved={d.publicHosts ?? []} onSaved={st.reload} />
+          <label className="check"><input type="checkbox" checked={d.bindAddress === '127.0.0.1'} onChange={async (e) => { await api('/settings/remote', { method: 'PATCH', body: { bindAddress: e.target.checked ? '127.0.0.1' : '0.0.0.0' } }); toast('Saved. Quit and restart the app for this to take effect.'); st.reload(); }} />Only through the web address (not from other computers on this Wi-Fi)</label>
           <p className="small muted" style={{ margin: 0 }}>Addresses starting with 100. are Tailscale. Windows or macOS may ask whether to allow incoming connections the first time; allow it on private networks only. Keep the products, database and production on this one computer — don't copy the data folder into Dropbox or iCloud while the app runs.</p>
         </div>
       )}</Async>
     </Card>
+  );
+}
+
+/** Web addresses that reach this app through a tunnel (docs/PUBLIC_ACCESS.md). Every visit to one needs the access token. */
+function PublicHosts({ saved, onSaved }: { saved: string[]; onSaved: () => void }) {
+  const [text, setText] = useState(saved.join('\n'));
+  const [err, setErr] = useState<string | null>(null);
+  const toast = useToast();
+  useEffect(() => setText(saved.join('\n')), [saved.join('\n')]);
+  const save = async () => {
+    setErr(null);
+    try {
+      await api('/settings/remote', { method: 'PATCH', body: { publicHosts: text.split('\n').map((x) => x.trim()).filter(Boolean) } });
+      toast('Saved'); onSaved();
+    } catch (e) { setErr(errorText(e)); }
+  };
+  return (
+    <div className="stack">
+      <label className="f">Public web address <span className="field-help">one per line, for example daf.promptpimps.com. Only for a Cloudflare Tunnel set up as in the public access guide; visits to it always ask for the access token.</span><textarea rows={2} className="mono" value={text} onChange={(e) => setText(e.target.value)} /></label>
+      <div className="row"><button className="small" onClick={save}>Save web address</button>{err && <span className="err small">{err}</span>}</div>
+    </div>
   );
 }
 

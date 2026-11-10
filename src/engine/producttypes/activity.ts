@@ -2,9 +2,12 @@ import { z } from 'zod';
 import { html, raw, n, type SafeHtml } from '../rendering/html.ts';
 import { page, header, chunk, pngDataUri, svgDataUri, ornament } from '../rendering/components.ts';
 import { fontStack } from '../rendering/theme.ts';
-import { mandalaSvg, generateMaze, mazeSvg, mazeStats, generateWordSearch, wordSearchSvg } from '../generation/procedural.ts';
+import { mandalaDesign, generateMaze, mazeSvg, mazeStats, generateWordSearch, wordSearchSvg } from '../generation/procedural.ts';
 import { WORD_LISTS, wordListKey, COLORING_SUBJECTS, coloringKey } from './library.ts';
-import { AI_SYSTEM_BASE, audienceLine, themeLine, revisionClause, shuffle, type ArtworkItem, type ProductTypeDefinition, type QaFinding } from './types.ts';
+import { AI_SYSTEM_BASE, audienceLine, themeLine, revisionClause, shuffle, type ArtworkItem, type ProductTypeDefinition, type QaFinding, type TypeContext } from './types.ts';
+import { DETAILS, SYMMETRIES, type Detail } from '../generation/mandala/compose.ts';
+import { MOTIF_SETS, type MotifSet } from '../generation/mandala/motifs.ts';
+import { paperDimsMm, type Paper } from '../templates/library.ts';
 import { coverPage, stdFooter, baseHints, PRINT_USAGE } from './common.ts';
 import { ProviderError } from '../../core/errors.ts';
 
@@ -15,26 +18,59 @@ const NAME_B = ['Bloom', 'Wheel', 'Circle', 'Dream', 'Harmony', 'Ripple', 'Crown
 
 const MandalaParams = z.object({
   pages: z.number().int().min(1).max(30).default(10),
-  complexity: z.enum(['simple', 'medium', 'detailed']).default('medium'),
+  /** simple 3 rings, medium 5, detailed 7, intricate 10 (plus sub-rings, richer centres and borders). */
+  detail: z.enum(DETAILS as [Detail, ...Detail[]]).optional(),
+  /** How many times the design repeats around its centre; "auto" lets each page pick one that suits the detail level. */
+  symmetry: z.union([z.literal('auto'), ...SYMMETRIES.map((n) => z.literal(n))]).default('auto'),
+  motifSet: z.enum(Object.keys(MOTIF_SETS) as [MotifSet, ...MotifSet[]]).default('classic'),
   cover: z.boolean().default(true),
-});
+  /** The setting before procedural-mandala@2. Still read from older products, and becomes `detail`. */
+  complexity: z.enum(['simple', 'medium', 'detailed']).optional(),
+}).transform(({ pages, detail, complexity, symmetry, motifSet, cover }) => ({ pages, detail: detail ?? complexity ?? 'medium', symmetry, motifSet, cover }));
 type MandalaP = z.infer<typeof MandalaParams>;
 const MandalaContent = z.object({ coverSubtitle: z.string().min(3).max(90), pageTitles: z.array(z.string().min(2).max(40)).min(1).max(30) });
 type MandalaC = z.infer<typeof MandalaContent>;
+
+/**
+ * Print thresholds for mandala line art. Starting values chosen for home inkjet and laser printers, not yet
+ * tuned against real prints (plan risk R-2): lines thinner than about 0.2 mm break up, rings thinner than 2 mm
+ * are hard to color, and past about 20,000 path segments a page is more texture than shapes.
+ */
+export const MANDALA_PRINT = { minStrokeMm: 0.2, minBandMm: 2, maxSegments: 20000 } as const;
+
+/**
+ * About how wide a mandala prints, in mm: the square that fits inside the margins below the title row and above
+ * the footer. Errs small, so stroke and ring checks err on the safe side.
+ */
+export function mandalaPrintMm(ctx: { paper: Paper; tokens: { marginsMm: { top: number; right: number; bottom: number; left: number } } }): number {
+  const { w, h } = paperDimsMm(ctx.paper);
+  const m = ctx.tokens.marginsMm;
+  return Math.min(w - m.left - m.right, h - m.top - m.bottom - 24);
+}
+
+interface MandalaProv {
+  generator?: string;
+  maxExtent?: number;
+  minStrokeWidth?: number;
+  minBandDepth?: number;
+  segments?: number;
+}
+
+const DETAIL_WORD: Record<Detail, string> = { simple: 'Easy ', medium: '', detailed: 'Detailed ', intricate: 'Intricate ' };
 
 export const mandalaColoring: ProductTypeDefinition<MandalaP, MandalaC> = {
   id: 'mandala-coloring',
   name: 'Mandala coloring pages',
   family: 'activity',
   category: 'Coloring Pages',
-  description: 'Procedurally generated, seed-reproducible mandala line art.',
+  description: 'Procedurally generated, seed-reproducible mandala line art: 14 motifs, mirror symmetry, four detail levels.',
   paramsSchema: MandalaParams,
   contentSchema: MandalaContent,
   defaultParams: () => MandalaParams.parse({}),
-  defaultTitle: (ctx) => `${ctx.params.complexity === 'simple' ? 'Easy ' : ctx.params.complexity === 'detailed' ? 'Intricate ' : ''}Mandala Coloring Pages`,
+  defaultTitle: (ctx) => `${DETAIL_WORD[ctx.params.detail]}${ctx.params.motifSet === 'classic' ? '' : ctx.params.motifSet[0].toUpperCase() + ctx.params.motifSet.slice(1) + ' '}Mandala Coloring Pages`,
   aiContent: false,
   artwork: 'procedural',
-  variationAxes: ['complexity', 'seed', 'paper'],
+  variationAxes: ['detail', 'symmetry', 'motifSet', 'seed', 'paper'],
   deterministicContent: (ctx, rand) => {
     const a = shuffle(rand, NAME_A), b = shuffle(rand, NAME_B);
     return {
@@ -43,13 +79,22 @@ export const mandalaColoring: ProductTypeDefinition<MandalaP, MandalaC> = {
     };
   },
   async generateArtwork(ctx) {
-    return Array.from({ length: ctx.params.pages }, (_, i) => ({
-      name: `mandala-${String(i + 1).padStart(2, '0')}.svg`,
-      kind: 'svg' as const,
-      data: mandalaSvg(ctx.seed + i * 7919, ctx.params.complexity),
-      role: 'deliverable' as const,
-      provenance: { generator: 'procedural-mandala@1', seed: ctx.seed + i * 7919, complexity: ctx.params.complexity },
-    }));
+    // The thinnest line allowed, in the 1000-unit drawing box, so no line prints under the threshold on this paper.
+    const minStrokeWidth = (MANDALA_PRINT.minStrokeMm * 1000) / mandalaPrintMm(ctx);
+    return Array.from({ length: ctx.params.pages }, (_, i) => {
+      const seed = ctx.seed + i * 7919;
+      const { svg, stats } = mandalaDesign(seed, { detail: ctx.params.detail, symmetry: ctx.params.symmetry === 'auto' ? undefined : ctx.params.symmetry, motifSet: ctx.params.motifSet, minStrokeWidth });
+      return {
+        name: `mandala-${String(i + 1).padStart(2, '0')}.svg`,
+        kind: 'svg' as const,
+        data: svg,
+        role: 'deliverable' as const,
+        provenance: {
+          generator: 'procedural-mandala@2', seed, detail: stats.detail, symmetry: stats.symmetry, motifSet: stats.motifSet, center: stats.center, border: stats.border, lineStyle: stats.lineStyle,
+          motifs: [...new Set(stats.bands.map((b) => b.motif))], maxExtent: stats.maxExtent, minStrokeWidth: stats.minStrokeWidth, minBandDepth: stats.minBandDepth, segments: stats.segments,
+        },
+      };
+    });
   },
   render(ctx, content, art) {
     const pages: SafeHtml[] = [];
@@ -58,14 +103,41 @@ export const mandalaColoring: ProductTypeDefinition<MandalaP, MandalaC> = {
     return { pages };
   },
   expectedPageCount: (ctx) => ctx.params.pages + (ctx.params.cover ? 1 : 0),
-  consistencyChecks: (ctx, c, art) => [
-    { code: 'artwork_count', severity: 'hard', passed: art.length === ctx.params.pages, message: `${art.length} designs for ${ctx.params.pages} pages` },
-    { code: 'content_count', severity: 'hard', passed: c.pageTitles.length >= ctx.params.pages, message: `${c.pageTitles.length} titles` },
-  ],
+  consistencyChecks: (ctx, c, art) => mandalaChecks(ctx, art, c.pageTitles.length),
   qaText: (c) => [c.coverSubtitle, ...c.pageTitles],
-  listingHints: (ctx) => baseHints(ctx, ['mandala coloring pages', 'adult coloring pages', 'coloring book printable', 'mindfulness coloring'],
-    [`${ctx.params.pages} unique mandala designs`, `${ctx.params.complexity} detail level`, 'Crisp vector line art', 'SVG files included for digital coloring and cutting machines'], [`1 PDF (${ctx.params.pages + (ctx.params.cover ? 1 : 0)} pages)`, `${ctx.params.pages} SVG files`], PRINT_USAGE),
+  listingHints: (ctx) => baseHints(ctx, ['mandala coloring pages', 'adult coloring pages', 'coloring book printable', 'mindfulness coloring', ...(ctx.params.motifSet === 'classic' ? [] : [`${ctx.params.motifSet} mandala`])],
+    [`${ctx.params.pages} unique mandala designs`, `${ctx.params.detail} detail level`, ctx.params.symmetry === 'auto' ? 'Mirror-symmetric designs' : `${ctx.params.symmetry}-fold mirror symmetry`, 'Crisp vector line art', 'SVG files included for digital coloring and cutting machines'], [`1 PDF (${ctx.params.pages + (ctx.params.cover ? 1 : 0)} pages)`, `${ctx.params.pages} SVG files`], PRINT_USAGE),
 };
+
+/** Plugin-level QA for mandala pages (plan task A5). Designs from the first generator (@1) carry no measurements and are counted, not measured. */
+export function mandalaChecks(ctx: TypeContext<MandalaP>, art: ArtworkItem[], titles: number): QaFinding[] {
+  const mm = mandalaPrintMm(ctx);
+  const toMm = (units: number) => (units * mm) / 1000;
+  const measured = art.filter((a) => typeof (a.provenance as MandalaProv).maxExtent === 'number');
+  const older = art.length - measured.length;
+  const olderNote = older ? ` (${older} older design(s) from procedural-mandala@1 not measured)` : '';
+  const prov = (a: ArtworkItem) => a.provenance as MandalaProv;
+
+  const outside = measured.filter((a) => (prov(a).maxExtent ?? 0) > 500 || !/viewBox="0 0 1000 1000"/.test(String(a.data))).map((a) => a.name);
+  const thin = measured.filter((a) => toMm(prov(a).minStrokeWidth ?? 0) + 1e-9 < MANDALA_PRINT.minStrokeMm).map((a) => `${a.name} (${toMm(prov(a).minStrokeWidth ?? 0).toFixed(2)} mm)`);
+  const dense = measured.filter((a) => (prov(a).segments ?? 0) > MANDALA_PRINT.maxSegments || toMm(prov(a).minBandDepth ?? 0) < MANDALA_PRINT.minBandMm)
+    .map((a) => `${a.name} (${prov(a).segments} segments, thinnest ring ${toMm(prov(a).minBandDepth ?? 0).toFixed(1)} mm)`);
+  const colours = art.filter((a) => a.kind === 'svg').flatMap((a) => [...String(a.data).matchAll(/\b(?:fill|stroke)="([^"]+)"/g)].map((m) => m[1].toLowerCase()).filter((v) => !['#ffffff', '#000000', 'none'].includes(v)).map((v) => `${a.name}: ${v}`));
+  const broken = art.filter((a) => a.kind === 'svg').flatMap((a) => {
+    const svg = String(a.data);
+    const ids = new Set([...svg.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]));
+    return [...new Set([...svg.matchAll(/\bhref="#([^"]+)"/g)].map((m) => m[1]))].filter((id) => !ids.has(id)).map((id) => `${a.name}: #${id}`);
+  });
+  const lowest = measured.length ? Math.min(...measured.map((a) => toMm(prov(a).minStrokeWidth ?? 0))) : null;
+  return [
+    { code: 'artwork_count', severity: 'hard', passed: art.length === ctx.params.pages, message: `${art.length} designs for ${ctx.params.pages} pages` },
+    { code: 'content_count', severity: 'hard', passed: titles >= ctx.params.pages, message: `${titles} titles` },
+    { code: 'mandala_viewbox', severity: 'hard', passed: outside.length === 0, message: outside.length ? `Lines reach past the drawing box: ${outside.join(', ')}` : `Every line stays inside the 1000 x 1000 drawing box${olderNote}`, details: outside },
+    { code: 'mandala_min_stroke', severity: 'hard', passed: thin.length === 0, message: thin.length ? `Lines thinner than ${MANDALA_PRINT.minStrokeMm} mm when printed: ${thin.join(', ')}` : `Thinnest line about ${lowest === null ? '?' : lowest.toFixed(2)} mm when printed ${mm.toFixed(0)} mm wide (minimum ${MANDALA_PRINT.minStrokeMm} mm)${olderNote}`, details: { printWidthMm: Math.round(mm), thin } },
+    { code: 'mandala_density', severity: 'warning', passed: dense.length === 0, message: dense.length ? `Possibly too packed to color: ${dense.join(', ')} (limits ${MANDALA_PRINT.maxSegments} segments, rings at least ${MANDALA_PRINT.minBandMm} mm)` : `Every design is within ${MANDALA_PRINT.maxSegments} path segments with rings at least ${MANDALA_PRINT.minBandMm} mm deep when printed${olderNote}`, details: dense },
+    { code: 'mandala_line_art', severity: 'hard', passed: colours.length === 0 && broken.length === 0, message: colours.length || broken.length ? `Not clean line art: ${[...colours.slice(0, 5), ...broken.slice(0, 5).map((b) => `missing shape ${b}`)].join(', ')}` : 'Black lines on white only, and every repeated shape is defined', details: { colours, broken } },
+  ];
+}
 
 // ---------------------------------------------------------------- maze activity
 

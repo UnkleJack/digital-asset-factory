@@ -154,7 +154,7 @@ has no record of are listed and left alone.
 | `npm run app` | Start the app if needed and open it in an app window |
 | `npm run make-mac-app` | Mac only: make `dist-mac/Asset Foundry.app` for the Dock (opens the arcade) |
 | `npm run dev` + `npm run dev:web` | Development: server restarts on change; Vite UI on :5173 (set `DAF_DEV=1`) |
-| `npm test` | Run the automated tests (about 2 minutes; renders real PDFs with Chrome) |
+| `npm test` | Run the automated tests (renders real PDFs with Chrome). Safe while the app is open: every Chrome the app or a test starts gets its own throwaway profile folder (`daf-chrome-<process>-…` in the temp folder), removed when it closes. Both share the computer, so tests run slower while the app is busy rendering |
 | `npm run typecheck` | Type-check server and web code |
 | `npm run samples` | Produce one sample of every product type into `verification-output/samples` |
 | `npm run migrate` | Apply database migrations (also done automatically at start-up) |
@@ -197,5 +197,6 @@ data/           your database, files, logs and backups (git-ignored)
 | “Illustrated coloring pages” fail | That type needs an image provider key (Settings → AI providers). |
 | A listing says “needs reconciliation” | A publish attempt had an unknown result. Check the marketplace, then use **Reconcile** on Publishing status. |
 | Products missing from the app, but their folders are still in `data/assets/products` | Quit the app and run `npm run restore-products` to see what can come back, then `npm run restore-products -- --apply`. It backs up first. |
+| `npm test` is very slow | The app or another test run is rendering at the same time. They no longer share a Chrome profile, but they share the processor and disk; let the other one finish, or quit the app, and run again. |
 | Database integrity error at start-up | Restore the latest backup with `npm run restore`. |
 | Logs | Settings → Logs & audit, or `data/logs/*.jsonl` (secrets are redacted). |
