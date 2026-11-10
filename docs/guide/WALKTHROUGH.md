@@ -900,10 +900,12 @@ Got a brain full of half-ideas? Dump them in the box, as messy as you like, and 
 2. **Milestones** (1 to 8) and **Tasks in each** (1 to 10).
 3. **Difficulty:** Mostly easy, A spread or Mostly hard.
 4. **Give tasks to:** whoever suits each task, or one fighter only.
-5. **Product types:** open the list and tick some to limit the AI to those types. Tick none to allow any type, plus Custom tasks.
-6. Press **WRITE MY WORLD**. It can take a minute or two. You can leave, and the draft waits for you.
+5. **Effort budget (pts):** optional. Put in a total, say 40, and the AI aims for tasks whose effort points add up to about that. With a budget, Milestones and Tasks in each turn into the most it can use, so a small budget can come back with fewer tasks. Leave it empty and you get exactly the counts you asked for.
+6. **Base effort guesses on how I sized my finished tasks:** ticked by default. The AI is shown the effort numbers you gave tasks you've already finished (grouped by type and difficulty) and sizes new tasks on the same scale. It's your own numbers, not time spent, because the factory doesn't time tasks. With nothing finished yet it just guesses.
+7. **Product types:** open the list and tick some to limit the AI to those types. Tick none to allow any type, plus Custom tasks.
+8. Press **WRITE MY WORLD**. It can take a minute or two. You can leave, and the draft waits for you.
 
-When it's ready you get **REVIEW THE AI'S WORLD**. Rename it, **REMOVE** a milestone or **DEL** a task you don't want, then press **SAVE WORLD**. Nothing becomes a real world until you press SAVE WORLD. **CLOSE** puts it back in your drafts, but any trimming you did isn't kept. **DISCARD DRAFT** throws it away.
+When it's ready you get **REVIEW THE AI'S WORLD**. **TOTAL EFFORT** adds up every task's points and, if you set a budget, says how far over or under it is. It updates as you delete things. The line under it says whether the guesses followed your finished tasks. Rename it, **REMOVE** a milestone or **DEL** a task you don't want, then press **SAVE WORLD**. Nothing becomes a real world until you press SAVE WORLD. **CLOSE** puts it back in your drafts, but any trimming you did isn't kept. **DISCARD DRAFT** throws it away.
 
 ### YOUR AI DRAFTS
 

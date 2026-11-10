@@ -63,6 +63,8 @@ const GenerateBody = z.object({
   difficulty: z.enum(DIFFICULTY_MIXES),
   productTypes: z.array(z.string().min(2).max(60)).max(40).optional(),
   characterId: z.string().min(2).nullable().optional(),
+  effortBudget: z.number().int().min(GENERATE_LIMITS.effortBudget.min).max(GENERATE_LIMITS.effortBudget.max).nullable().optional(),
+  useHistory: z.boolean().optional(),
 });
 const TaskPatch = z.object({
   characterId: z.string().min(2).optional(),

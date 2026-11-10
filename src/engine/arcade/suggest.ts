@@ -10,7 +10,7 @@ import { CUSTOM_TASK_TYPE, DIFFICULTIES, listAllWorlds, worldForBuilder, type Pr
 // Decision (owner, 2026-11-03): this part is AI-first. With no working AI provider it says so; it never
 // falls back to the built-in content library. Totals, ordering, progress and validation stay rule-based.
 
-export const GENERATE_LIMITS = { milestones: { min: 1, max: 8 }, tasksPerMilestone: { min: 1, max: 10 } } as const;
+export const GENERATE_LIMITS = { milestones: { min: 1, max: 8 }, tasksPerMilestone: { min: 1, max: 10 }, effortBudget: { min: 1, max: 500 } } as const;
 export const DIFFICULTY_MIXES = ['easy', 'balanced', 'hard'] as const;
 export type DifficultyMix = (typeof DIFFICULTY_MIXES)[number];
 
@@ -23,6 +23,45 @@ export interface GenerateParams {
   productTypes?: string[];
   /** Give every task to this character. Missing means the AI picks per task. */
   characterId?: string | null;
+  /**
+   * Owner request, 2026-11-10 (setting A): a total number of effort points to aim for. The milestone
+   * and task counts become upper limits, so the AI can use fewer, bigger or smaller tasks to fit.
+   * Missing or null means no budget.
+   */
+  effortBudget?: number | null;
+  /**
+   * Owner request, 2026-11-10 (setting B): show the AI how the owner sized tasks they finished, so its
+   * effort guesses follow the owner's own scale. Missing means yes.
+   */
+  useHistory?: boolean;
+}
+
+/** How a generated world was sized, for the review screen. Not saved with the world. */
+export interface WorldSizing {
+  budget: number | null;
+  /** Finished tasks the AI was shown. 0 when history was off or nothing is finished yet. */
+  historyTasks: number;
+}
+export interface GeneratedWorld extends ProposedWorld { sizing: WorldSizing }
+
+export interface EffortHistoryRow { taskType: string; difficulty: string; tasks: number; average: number; low: number; high: number }
+
+/**
+ * The owner's own effort numbers on finished tasks, grouped by task type and difficulty. Built only from
+ * real rows: the factory does not record how long a task really took, so this is the owner's final
+ * estimate on each finished task, not time spent.
+ */
+export function effortHistory(app: AppContext): EffortHistoryRow[] {
+  return app.db.all<{ t: string; d: string; n: number; avg: number; lo: number; hi: number }>(
+    `SELECT task_type AS t, difficulty AS d, count(*) AS n, avg(estimated_effort) AS avg, min(estimated_effort) AS lo, max(estimated_effort) AS hi
+       FROM world_tasks WHERE status = 'COMPLETE' GROUP BY task_type, difficulty ORDER BY n DESC, task_type, difficulty LIMIT 40`,
+  ).map((r) => ({ taskType: r.t, difficulty: r.d, tasks: r.n, average: Math.round(r.avg * 10) / 10, low: r.lo, high: r.hi }));
+}
+
+function historyText(rows: EffortHistoryRow[]): string {
+  if (!rows.length) return '';
+  const lines = rows.map((r) => `- ${r.taskType}, ${r.difficulty}: ${r.tasks} finished, average ${r.average} points (range ${r.low} to ${r.high})`);
+  return `How the owner sized tasks they have already finished (their own effort numbers). Use the same scale for similar tasks; for kinds of task not listed, judge by the nearest ones:\n${lines.join('\n')}`;
 }
 
 export interface AiResult<T> {
@@ -86,12 +125,16 @@ const MIX_TEXT: Record<DifficultyMix, string> = {
 export async function checkGenerate(app: AppContext, p: GenerateParams): Promise<void> {
   if (!p.goal.trim()) throw validation('Tell the factory what the world is for.', [{ field: 'goal', message: 'Required' }]);
   if (p.characterId && !CHARACTERS.some((c) => c.id === p.characterId)) throw validation(`Unknown character "${p.characterId}"`, [{ field: 'characterId', message: 'Pick a character.' }]);
+  const b = p.effortBudget;
+  if (b != null && (!Number.isInteger(b) || b < GENERATE_LIMITS.effortBudget.min || b > GENERATE_LIMITS.effortBudget.max)) {
+    throw validation(`An effort budget is a whole number from ${GENERATE_LIMITS.effortBudget.min} to ${GENERATE_LIMITS.effortBudget.max}.`, [{ field: 'effortBudget', message: 'Whole number' }]);
+  }
   taskTypeChoices(p.productTypes);
   await requireAi(app);
 }
 
 /** 2c: a whole world from a goal and a few settings. Nothing is saved; the owner reviews it first. */
-export async function generateWorld(app: AppContext, p: GenerateParams): Promise<AiResult<ProposedWorld>> {
+export async function generateWorld(app: AppContext, p: GenerateParams): Promise<AiResult<GeneratedWorld>> {
   await checkGenerate(app, p);
   const goal = p.goal.trim();
   const { ids, listing } = taskTypeChoices(p.productTypes);
@@ -102,9 +145,14 @@ export async function generateWorld(app: AppContext, p: GenerateParams): Promise
     milestones: z.array(z.object({ name: z.string().min(2).max(80), tasks: z.array(task) })),
   });
   const existing = listAllWorlds(app).map((w) => w.name);
+  const budget = p.effortBudget ?? null;
+  const history = p.useHistory === false ? [] : effortHistory(app);
   const prompt = [
     `Plan a world for this goal: ${goal}`,
-    `Make exactly ${p.milestones} milestones, in the order they should be done, with ${p.tasksPerMilestone} tasks in each.`,
+    budget
+      ? `The owner has a budget of about ${budget} effort points for the whole world. Make the effort numbers of all tasks add up to close to ${budget}. Use at most ${p.milestones} milestones, in the order they should be done, with at most ${p.tasksPerMilestone} tasks in each; use fewer if the budget is small.`
+      : `Make exactly ${p.milestones} milestones, in the order they should be done, with ${p.tasksPerMilestone} tasks in each.`,
+    historyText(history),
     `Difficulty: ${MIX_TEXT[p.difficulty]}.`,
     p.characterId ? `Give every task to the character "${p.characterId}".` : 'Give each task to the character it suits best.',
     `Allowed task types (use the id):\n${listing}`,
@@ -116,7 +164,8 @@ export async function generateWorld(app: AppContext, p: GenerateParams): Promise
     .map((m) => ({ name: m.name.trim(), tasks: m.tasks.slice(0, p.tasksPerMilestone).map((t) => cleanTask(t, p.characterId)) }))
     .filter((m) => m.tasks.length > 0);
   if (!milestones.length) throw new AppError('ai_empty', 'The AI did not return any tasks. Try again, or change the goal.', { httpStatus: 502 });
-  return { result: { name: data.name.trim(), description: data.description.trim(), milestones }, provenance };
+  const sizing: WorldSizing = { budget, historyTasks: history.reduce((n, r) => n + r.tasks, 0) };
+  return { result: { name: data.name.trim(), description: data.description.trim(), milestones, sizing }, provenance };
 }
 
 export interface WorldIdea { name: string; description: string; milestones: string[] }
