@@ -92,7 +92,8 @@ test('products are restored from their folders after the database is lost', asyn
   assert.deepEqual(plan.items.map((i) => [i.productId, i.mode]).sort(), [[mandala.product.id, 'rebuild'], [journal.product.id, 'view_only'], [unfinishedId, 'unfinished']].sort());
   const unfinishedPlan = plan.items.find((i) => i.productId === unfinishedId)!;
   assert.equal(unfinishedPlan.title, 'Detailed Mandalas 3');
-  assert.deepEqual(unfinishedPlan.params, { pages: 3, complexity: 'detailed', cover: true });
+  // Read from the folder name as the old "complexity" setting, which the mandala type now stores as "detail".
+  assert.deepEqual(unfinishedPlan.params, { pages: 3, detail: 'detailed', symmetry: 'auto', motifSet: 'classic', cover: true });
   assert.deepEqual(unfinishedPlan.paper, { size: 'letter', orientation: 'landscape', grayscale: false });
   assert.ok(plan.items.every((i) => i.fonts), 'fonts are read back out of every PDF');
 

@@ -1,72 +1,35 @@
 import { seededRandom } from '../../core/hash.ts';
+import { composeMandala, specFor, type ComposedMandala, type Detail, type Symmetry } from './mandala/compose.ts';
+import type { MotifSet } from './mandala/motifs.ts';
 
-const f = (x: number) => (Math.round(x * 100) / 100).toString();
 
 // ---------------------------------------------------------------- mandala
 
 export type Complexity = 'simple' | 'medium' | 'detailed';
 
+/**
+ * The original three-level entry point, kept so older callers keep working. Since procedural-mandala@2 it uses
+ * the wedge-and-motif composer in ./mandala/ (the same seed always gives the same design, but not the design the
+ * first generator drew for that seed).
+ */
 export function mandalaSvg(seed: number, complexity: Complexity): string {
+  return mandalaDesign(seed, { detail: complexity }).svg;
+}
+
+export interface MandalaOptions {
+  detail: Detail;
+  /** A fixed symmetry, or undefined to let the seed pick one that suits the detail level. */
+  symmetry?: Symmetry;
+  motifSet?: MotifSet;
+  /** Thinnest allowed line, in the 1000-unit drawing box. */
+  minStrokeWidth?: number;
+}
+
+/** One mandala design, with the measurements QA reads back from its provenance. */
+export function mandalaDesign(seed: number, opts: MandalaOptions): ComposedMandala {
   const rand = seededRandom(seed);
-  const pick = <T,>(a: T[]) => a[Math.floor(rand() * a.length)];
-  const rings = complexity === 'simple' ? 4 : complexity === 'medium' ? 6 : 9;
-  const sw = complexity === 'simple' ? 5 : complexity === 'medium' ? 3.4 : 2.4;
-  const C = 500;
-  const R = 470;
-  const r0 = 45 + rand() * 20;
-  const radii = [r0];
-  for (let i = 1; i <= rings; i++) radii.push(r0 + ((R - r0) * i) / rings);
-  const parts: string[] = [];
-  const pt = (r: number, a: number) => [C + r * Math.cos(a), C + r * Math.sin(a)];
-  for (let i = rings; i >= 1; i--) {
-    const ri = radii[i - 1];
-    const ro = radii[i];
-    const k = pick(i > rings / 2 ? [16, 18, 20, 24] : [8, 10, 12, 16]);
-    const pattern = pick(['petal', 'scallop', 'circles', 'spikes', 'leaf', 'dots', 'lattice']);
-    const shapes: string[] = [];
-    for (let j = 0; j < k; j++) {
-      const a = (j / k) * Math.PI * 2;
-      const da = (Math.PI * 2) / k;
-      if (pattern === 'petal' || pattern === 'leaf') {
-        const [x0, y0] = pt(ri, a);
-        const [x1, y1] = pt(ro, a);
-        const w = pattern === 'petal' ? da * 0.55 : da * 0.4;
-        const [c1x, c1y] = pt((ri + ro) / 2, a - w);
-        const [c2x, c2y] = pt((ri + ro) / 2, a + w);
-        shapes.push(`<path d="M${f(x0)} ${f(y0)} Q${f(c1x)} ${f(c1y)} ${f(x1)} ${f(y1)} Q${f(c2x)} ${f(c2y)} ${f(x0)} ${f(y0)}Z"/>`);
-        if (pattern === 'leaf') {
-          const [mx, my] = pt((ri + ro) / 2, a);
-          shapes.push(`<path d="M${f(x0)} ${f(y0)} L${f(mx)} ${f(my)}" fill="none"/>`);
-        }
-      } else if (pattern === 'scallop') {
-        const [x0, y0] = pt(ri, a);
-        const [x1, y1] = pt(ri, a + da);
-        const r = (ro - ri) * 0.95;
-        shapes.push(`<path d="M${f(x0)} ${f(y0)} A${f(r)} ${f(r)} 0 0 1 ${f(x1)} ${f(y1)}"/>`);
-      } else if (pattern === 'circles' || pattern === 'dots') {
-        const rm = (ri + ro) / 2;
-        const [x, y] = pt(rm, a + da / 2);
-        const cr = Math.min((ro - ri) / 2, (Math.PI * rm) / k) * (pattern === 'dots' ? 0.35 : 0.8);
-        shapes.push(`<circle cx="${f(x)}" cy="${f(y)}" r="${f(cr)}"/>`);
-        if (pattern === 'circles') shapes.push(`<circle cx="${f(x)}" cy="${f(y)}" r="${f(cr * 0.45)}"/>`);
-      } else if (pattern === 'spikes') {
-        const [x0, y0] = pt(ri, a);
-        const [x1, y1] = pt(ro, a + da / 2);
-        const [x2, y2] = pt(ri, a + da);
-        shapes.push(`<path d="M${f(x0)} ${f(y0)} L${f(x1)} ${f(y1)} L${f(x2)} ${f(y2)}Z"/>`);
-      } else {
-        const [x0, y0] = pt(ri + (ro - ri) * 0.2, a);
-        const [x1, y1] = pt(ro - (ro - ri) * 0.2, a + da / 2);
-        const [x2, y2] = pt(ri + (ro - ri) * 0.2, a + da);
-        shapes.push(`<path d="M${f(x0)} ${f(y0)} L${f(x1)} ${f(y1)} L${f(x2)} ${f(y2)}" fill="none"/>`);
-      }
-    }
-    parts.push(`<circle cx="${C}" cy="${C}" r="${f(ro)}"/>`);
-    parts.push(`<g>${shapes.join('')}</g>`);
-  }
-  parts.push(`<circle cx="${C}" cy="${C}" r="${f(r0)}"/>`);
-  parts.push(`<circle cx="${C}" cy="${C}" r="${f(r0 * 0.45)}"/>`);
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" width="1000" height="1000"><rect width="1000" height="1000" fill="#ffffff"/><g fill="#ffffff" stroke="#000000" stroke-width="${sw}" stroke-linejoin="round" stroke-linecap="round">${parts.join('')}</g></svg>`;
+  const spec = specFor(opts.detail, rand, { symmetry: opts.symmetry, motifSet: opts.motifSet, minStrokeWidth: opts.minStrokeWidth });
+  return composeMandala(spec, rand);
 }
 
 // ---------------------------------------------------------------- maze

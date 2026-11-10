@@ -1,4 +1,6 @@
-import { existsSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import puppeteer, { type Browser, type Page } from 'puppeteer-core';
 import { PDFDocument } from 'pdf-lib';
 import { Semaphore } from '../../core/semaphore.ts';
@@ -83,8 +85,38 @@ function withTimeout<T>(p: Promise<T>, ms: number, step: string): Promise<T> {
   return Promise.race([p, t]).finally(() => clearTimeout(timer));
 }
 
+/** Profile folders this process made and has not removed yet; cleared on exit so a hard stop leaves none behind. */
+const liveProfiles = new Set<string>();
+let exitHookInstalled = false;
+
+function removeProfile(dir: string): void {
+  liveProfiles.delete(dir);
+  try {
+    rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  } catch {
+    // Chrome may still hold a file for a moment; the folder is in the temp folder, so the OS clears it eventually.
+  }
+}
+
+/**
+ * A fresh, empty Chrome profile folder for one browser launch. Each Renderer launch gets its own, named with this
+ * process's id, so the app and a test run (or two test runs) never share a profile, a lock file or a cache.
+ */
+export function makeProfileDir(): string {
+  const dir = mkdtempSync(join(tmpdir(), `daf-chrome-${process.pid}-`));
+  liveProfiles.add(dir);
+  if (!exitHookInstalled) {
+    exitHookInstalled = true;
+    process.once('exit', () => {
+      for (const d of [...liveProfiles]) removeProfile(d);
+    });
+  }
+  return dir;
+}
+
 export class Renderer {
   private browser: Browser | null = null;
+  private profile: string | null = null;
   private launching: Promise<Browser> | null = null;
   private sem: Semaphore;
   private chromePath: string;
@@ -108,9 +140,13 @@ export class Renderer {
     if (!this.available()) {
       throw new AppError('chrome_not_found', `Google Chrome or Microsoft Edge was not found at "${this.chromePath}". Install Chrome, or set Settings → Rendering → Chrome path.`, { httpStatus: 424 });
     }
+    const profile = makeProfileDir();
+    this.profile = profile;
     this.launching = puppeteer
       .launch({
         executablePath: this.chromePath,
+        // Our own profile folder per launch (see makeProfileDir), removed again when this browser goes away.
+        userDataDir: profile,
         headless: true,
         // The app owns signal handling; puppeteer's handlers would exit(130) before graceful shutdown finishes.
         handleSIGINT: false,
@@ -123,9 +159,16 @@ export class Renderer {
       .then((b) => {
         this.browser = b;
         b.on('disconnected', () => {
-          this.browser = null;
+          if (this.browser === b) this.browser = null;
+          if (this.profile === profile) this.profile = null;
+          removeProfile(profile);
         });
         return b;
+      })
+      .catch((err) => {
+        if (this.profile === profile) this.profile = null;
+        removeProfile(profile);
+        throw err;
       })
       .finally(() => {
         this.launching = null;
@@ -286,9 +329,17 @@ export class Renderer {
     });
   }
 
+  /** The profile folder of the running browser, or null when none is running. */
+  profileDir(): string | null {
+    return this.profile;
+  }
+
   async close(): Promise<void> {
     const b = this.browser;
+    const profile = this.profile;
     this.browser = null;
+    this.profile = null;
     if (b) await b.close().catch((err) => this.log.warn('Chrome close failed', { err }));
+    if (profile) removeProfile(profile);
   }
 }
