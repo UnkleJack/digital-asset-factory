@@ -17,7 +17,7 @@ test('a public picture link is fetched with its file name', async () => {
 
 test('links to this computer or a private network are refused, even after a redirect', async () => {
   for (const u of ['http://127.0.0.1:4317/api/settings', 'http://192.168.1.5/x.png', 'http://[::1]/x.png', 'http://169.254.169.254/latest', 'file:///etc/passwd']) {
-    await assert.rejects(fetchImage(u, reply('x', { status: 200 }) as typeof fetch), undefined, u);
+    await assert.rejects(fetchImage(u, reply('x', { status: 200 }) as typeof fetch), Error, u);
   }
   await assert.rejects(fetchImage(`${PUBLIC}/a.png`, reply(null, { status: 302, headers: { location: 'http://10.0.0.2/a.png' } }) as typeof fetch), /private network/);
 });
