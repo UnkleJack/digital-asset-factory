@@ -604,7 +604,7 @@ type BmoAction =
   | { kind: 'create_world'; name: string; description: string; milestones: string[] }
   | { kind: 'add_task'; worldId: string; milestoneId: string; title: string; characterId: string; taskType: string; difficulty: string; estimatedEffort: number }
   | { kind: 'make_product'; productType: string; title: string; brief: string };
-interface Turn { role: 'owner' | 'bmo'; text: string; actions?: { action: BmoAction; why: string; state?: 'done' | 'skipped' | 'failed'; note?: string }[] }
+interface Turn { role: 'owner' | 'bmo'; text: string; actions?: { action: BmoAction; why: string; proposalId: string; state?: 'done' | 'skipped' | 'failed'; note?: string }[] }
 
 function describe(a: BmoAction): string {
   if (a.kind === 'create_world') return `MAKE A WORLD "${a.name}" with milestones: ${a.milestones.join(', ')}`;
@@ -629,7 +629,7 @@ export function BmoScreen({ onBack }: { onBack: () => void }) {
     setBusy(true);
     setProblem(null);
     try {
-      const r = await api<{ reply: string; actions: { action: BmoAction; why: string }[] }>('/arcade/bmo/chat', { body: { messages: [...history, { role: 'owner', text: q }] } });
+      const r = await api<{ reply: string; actions: { action: BmoAction; why: string; proposalId: string }[] }>('/arcade/bmo/chat', { body: { messages: [...history, { role: 'owner', text: q }] } });
       setTurns([...next, { role: 'bmo', text: r.reply, actions: r.actions }]);
     } catch (err) {
       setProblem(errorText(err));
@@ -643,7 +643,9 @@ export function BmoScreen({ onBack }: { onBack: () => void }) {
     let state: 'done' | 'skipped' | 'failed' = 'skipped';
     let note = '';
     if (yes) {
-      try { await api('/arcade/bmo/act', { body: { action: a.action } }); state = 'done'; } catch (err) { state = 'failed'; note = errorText(err); }
+      try { await api('/arcade/bmo/act', { body: { proposalId: a.proposalId } }); state = 'done'; } catch (err) { state = 'failed'; note = errorText(err); }
+    } else {
+      await api('/arcade/bmo/decline', { body: { proposalId: a.proposalId } }).catch(() => undefined);
     }
     setTurns(turns.map((x, i) => (i === ti ? { ...x, actions: x.actions!.map((y, j) => (j === ai ? { ...y, state, note } : y)) } : x)));
   };

@@ -18,7 +18,7 @@ import { packsView, packContents, buildPack, finalizePack } from '../../engine/a
 import { leaderboards } from '../../engine/arcade/leaderboards.ts';
 import { codexFor, recordXp } from '../../engine/arcade/codex.ts';
 import { creditState, ledger } from '../../engine/arcade/credits.ts';
-import { chat as bmoChat, act as bmoAct, BmoAction, ChatBody } from '../../engine/arcade/bmo.ts';
+import { chat as bmoChat, act as bmoAct, decline as bmoDecline, ChatBody } from '../../engine/arcade/bmo.ts';
 import { notFound } from '../../core/errors.ts';
 import { parse, type P, type Q } from './util.ts';
 
@@ -195,7 +195,12 @@ export function registerArcadeRoutes(s: FastifyInstance, { app }: ServerDeps): v
 
   // B.M.O.: chat that can propose actions; each runs only when the owner says yes to it.
   s.post('/api/arcade/bmo/chat', async (req) => bmoChat(app, parse(ChatBody, req.body, 'chat').messages));
-  s.post('/api/arcade/bmo/act', async (req) => bmoAct(app, parse(z.object({ action: BmoAction }), req.body, 'action').action));
+  // YES and NO name a proposal B.M.O. made; the server holds the action itself, so a client can't send its own.
+  s.post('/api/arcade/bmo/act', async (req) => bmoAct(app, parse(z.object({ proposalId: z.string().min(4).max(60) }), req.body, 'answer').proposalId));
+  s.post('/api/arcade/bmo/decline', async (req) => {
+    bmoDecline(parse(z.object({ proposalId: z.string().min(4).max(60) }), req.body, 'answer').proposalId);
+    return { ok: true };
+  });
 
   // Player side: only worlds where the character has open tasks.
   s.get('/api/arcade/worlds', async (req) => ({ worlds: worldsFor(app, characterOf(req)) }));
