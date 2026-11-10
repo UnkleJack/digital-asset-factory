@@ -800,7 +800,7 @@ Each world card shows its rank, a progress bar towards the next milestone, **TAS
 
 ### THE TABS AT THE BOTTOM
 
-**WORLDS** is where you are. **MISSIONS** opens your mission list (see below). **PACKS** shows your packs and the pack pool, **LEADERBOARDS** your FINISHED, REJECTED WELL, per-type and LAST 3 SHIPPED boards, and **CODEX** your player's XP and what they've learned. Next to WORLD BUILDER, **ASK B.M.O.** opens your advisor and **BIN** holds what you deleted to the bin.
+**WORLDS** is where you are. **MISSIONS** opens your mission list (see below). **PACKS** shows your packs and the pack pool, **LEADERBOARDS** your FINISHED, REJECTED WELL, per-type and LAST 3 SHIPPED boards, and **CODEX** your player's XP and what they've learned. Next to WORLD BUILDER, **ASK B.M.O.** opens your advisor and **BIN** holds what you deleted to the bin. When B.M.O. suggests something, press **YES, DO IT**, **NO**, or **SAVE FOR LATER**. Saved ones wait under **SAVED IDEAS** at the top of B.M.O.'s screen, even after a restart, with **DO IT** and **DISCARD**.
 
 ## MISSIONS
 

@@ -604,7 +604,8 @@ type BmoAction =
   | { kind: 'create_world'; name: string; description: string; milestones: string[] }
   | { kind: 'add_task'; worldId: string; milestoneId: string; title: string; characterId: string; taskType: string; difficulty: string; estimatedEffort: number }
   | { kind: 'make_product'; productType: string; title: string; brief: string };
-interface Turn { role: 'owner' | 'bmo'; text: string; actions?: { action: BmoAction; why: string; proposalId: string; state?: 'done' | 'skipped' | 'failed'; note?: string }[] }
+interface Turn { role: 'owner' | 'bmo'; text: string; actions?: { action: BmoAction; why: string; proposalId: string; state?: 'done' | 'skipped' | 'saved' | 'failed'; note?: string }[] }
+interface SavedIdea { id: string; action: BmoAction; why: string; savedAt: string }
 
 function describe(a: BmoAction): string {
   if (a.kind === 'create_world') return `MAKE A WORLD "${a.name}" with milestones: ${a.milestones.join(', ')}`;
@@ -617,6 +618,8 @@ export function BmoScreen({ onBack }: { onBack: () => void }) {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const saved = useApi<{ ideas: SavedIdea[] }>('/arcade/bmo/saved');
+  const [savedNote, setSavedNote] = useState<string | null>(null);
   useFocusMainWhenReady(true);
   const history = useMemo(() => turns.map((t) => ({ role: t.role, text: t.text })), [turns]);
   const ask = async (e: FormEvent) => {
@@ -637,13 +640,15 @@ export function BmoScreen({ onBack }: { onBack: () => void }) {
       setBusy(false);
     }
   };
-  const answer = async (ti: number, ai: number, yes: boolean) => {
+  const answer = async (ti: number, ai: number, choice: 'yes' | 'no' | 'save') => {
     const t = turns[ti]!;
     const a = t.actions![ai]!;
-    let state: 'done' | 'skipped' | 'failed' = 'skipped';
+    let state: 'done' | 'skipped' | 'saved' | 'failed' = 'skipped';
     let note = '';
-    if (yes) {
+    if (choice === 'yes') {
       try { await api('/arcade/bmo/act', { body: { proposalId: a.proposalId } }); state = 'done'; } catch (err) { state = 'failed'; note = errorText(err); }
+    } else if (choice === 'save') {
+      try { await api('/arcade/bmo/save', { body: { proposalId: a.proposalId } }); state = 'saved'; await saved.reload(); } catch (err) { state = 'failed'; note = errorText(err); }
     } else {
       await api('/arcade/bmo/decline', { body: { proposalId: a.proposalId } }).catch(() => undefined);
     }
@@ -652,7 +657,29 @@ export function BmoScreen({ onBack }: { onBack: () => void }) {
   return (
     <div className="scr bmo">
       <h2 className="screen-title">B.M.O. · YOUR ADVISOR</h2>
-      <p className="fine center-text">Ask about your worlds, products, QA, packs or sales. B.M.O. answers only from what the factory has recorded and says when it has no data. It can suggest actions; nothing happens until you press YES on one.</p>
+      <p className="fine center-text">Ask about your worlds, products, QA, packs or sales. B.M.O. answers only from what the factory has recorded and says when it has no data. It can suggest actions; nothing happens until you press YES on one. Like one but not ready? SAVE FOR LATER keeps it here.</p>
+      {saved.data?.ideas.length ? (
+        <section className="hub-zone" aria-label="Saved ideas">
+          <h3 className="zone-title">SAVED IDEAS · {saved.data.ideas.length}</h3>
+          <ul className="saved-ideas">
+            {saved.data.ideas.map((s) => (
+              <li key={s.id} className="bmo-action">
+                <p className="crt-text">{describe(s.action)}</p>
+                <p className="fine">{s.why}{s.why ? ' · ' : ''}SAVED {day(s.savedAt)}</p>
+                <div className="row-actions">
+                  <button type="button" className="arc-btn small primary" data-nav onClick={() => void (async () => {
+                    setSavedNote(null);
+                    try { await api(`/arcade/bmo/saved/${s.id}/act`, { body: {} }); setSavedNote(`✓ DONE: ${describe(s.action)}`); } catch (err) { setSavedNote(`DIDN'T WORK: ${errorText(err)}`); }
+                    await saved.reload();
+                  })()}>DO IT</button>
+                  <button type="button" className="arc-btn small" data-nav onClick={() => void api(`/arcade/bmo/saved/${s.id}`, { method: 'DELETE' }).then(() => saved.reload(), (err) => setSavedNote(errorText(err)))}>DISCARD</button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      {savedNote ? <p className={savedNote.startsWith('✓') ? 'done-line center-text' : 'crt-error'} role="status">{savedNote}</p> : null}
       <ol className="chat-log" aria-live="polite">
         {turns.map((t, ti) => (
           <li key={ti} className={`chat-turn ${t.role}`}>
@@ -661,10 +688,11 @@ export function BmoScreen({ onBack }: { onBack: () => void }) {
               <div key={ai} className="bmo-action">
                 <p className="crt-text">{describe(a.action)}</p>
                 <p className="fine">{a.why}</p>
-                {a.state ? <p className={a.state === 'failed' ? 'form-error' : 'fine'}>{a.state === 'done' ? '✓ DONE' : a.state === 'skipped' ? 'SKIPPED' : `DIDN'T WORK: ${a.note}`}</p> : (
+                {a.state ? <p className={a.state === 'failed' ? 'form-error' : 'fine'}>{a.state === 'done' ? '✓ DONE' : a.state === 'saved' ? '★ SAVED FOR LATER' : a.state === 'skipped' ? 'SKIPPED' : `DIDN'T WORK: ${a.note}`}</p> : (
                   <div className="row-actions">
-                    <button type="button" className="arc-btn small primary" data-nav onClick={() => void answer(ti, ai, true)}>YES, DO IT</button>
-                    <button type="button" className="arc-btn small" data-nav onClick={() => void answer(ti, ai, false)}>NO</button>
+                    <button type="button" className="arc-btn small primary" data-nav onClick={() => void answer(ti, ai, 'yes')}>YES, DO IT</button>
+                    <button type="button" className="arc-btn small" data-nav onClick={() => void answer(ti, ai, 'save')}>SAVE FOR LATER</button>
+                    <button type="button" className="arc-btn small" data-nav onClick={() => void answer(ti, ai, 'no')}>NO</button>
                   </div>
                 )}
               </div>

@@ -124,7 +124,7 @@ Adopted 2026-11-03.
 | Arcade screens | `web/src/arcade/` (`Arcade.tsx` cabinet and Hub, `Play.tsx` Task Workspace, QA Review, Bin, Packs, Leaderboards, Codex and B.M.O., `Worlds.tsx`, `Ai.tsx`, `Ticker.tsx`, `input.ts`, `arcade.css`) |
 | Back-office screens | `web/src/pages/` |
 | Settings schema | `src/config/settings.ts` |
-| Database migrations | `src/db/migrations/` (001 to 010; 008 is World Builder drafts, from pull request #13, 009 is rework marks, and 010 is notes for the AI, from pull request #19) |
+| Database migrations | `src/db/migrations/` (001 to 016; 008 is World Builder drafts, from pull request #13, 009 is rework marks, 010 is notes for the AI, from pull request #19, 013 is missions, 014 is tags on imports, 015 is the arcade play loop, from pull request #32, and 016 is B.M.O. saved ideas) |
 | Tests | `tests/` (`npm test`) |
 | Mac Dock app (`npm run make-mac-app`) | `src/ops/macApp.ts` (bundle and launcher), `src/ops/macIcon.ts` (GAGE icon), `scripts/make-mac-app.ts`; built into `dist-mac/` (not in git) |
 | Security policy (how to report a problem privately) | `SECURITY.md` |
@@ -183,7 +183,7 @@ As of 2026-11-06: `main` after pull requests #12 (backup AI models), #15 (sample
   - **Codex.** XP per character for finishing world tasks (by difficulty), clearing a mission while playing (a tab learned) and four cross-tab links. Every XP amount starts blank (Settings → arcade → xp); events are recorded either way. EYE, CRAFT, TASTE and PATIENCE stay blank (item G).
   - **Leaderboards.** FINISHED (QA'd + finalized + in the pool), REJECTED WELL (qualifying rejections, counted per character), one board per product type, and LAST 3 SHIPPED. The Hub's hi-score banner shows real finished packs.
   - **Laziness failsafe.** Weighted signals (approval streak, fast review, empty note, copied reason) and four cumulative stages (shuffled queue, swapped buttons, name one thing wrong, 5-second approve hold). Every weight and threshold starts blank, so it is off until the owner sets them. It never changes an asset and never scolds.
-  - **B.M.O.** Chat that answers from real rows only and can propose up to three actions (make a world, add a task, start a product). Nothing runs until the owner presses YES on that card. Needs a working AI provider; the chat is not saved.
+  - **B.M.O.** Chat that answers from real rows only and can propose up to three actions (make a world, add a task, start a product). Nothing runs until the owner presses YES on that card. **SAVE FOR LATER** (owner request, 2026-11-10; migration 016) keeps a suggestion on a SAVED IDEAS list that survives restarts, with DO IT (runs it once) and DISCARD. Only a suggestion B.M.O. actually made can be saved. Needs a working AI provider; the chat itself is not saved.
   - Tested in `tests/arcade-play.test.ts` with the real pipeline and a stand-in AI for reason checks and B.M.O. **Not yet tried live** with the owner's NVIDIA key.
 - Tests: 168 tests, 168 pass, 0 skipped, 0 fail (branch `claude/arcade-start-flow` with `main` merged in, run on the Mac, 2026-11-06).
 
