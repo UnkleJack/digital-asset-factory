@@ -9,7 +9,7 @@ import type { AppContext } from '../../app/context.ts';
 import { errorMessage } from '../../core/errors.ts';
 import { structuredCall, textMode } from '../generation/service.ts';
 
-export type ReasonKind = 'rejected' | 'revision_requested' | 'regenerate_requested' | 'note' | 'lesson';
+export type ReasonKind = 'rejected' | 'revision_requested' | 'regenerate_requested' | 'note' | 'lesson' | 'drop';
 
 const ASKED_FOR: Record<ReasonKind, string> = {
   rejected: 'why they are rejecting this product',
@@ -17,6 +17,7 @@ const ASKED_FOR: Record<ReasonKind, string> = {
   regenerate_requested: 'why they want this product made again',
   note: "what is wrong with this product, or what they'd like next time",
   lesson: 'a standing rule for every future product (for example "Keep checklist items under 8 words")',
+  drop: 'why they are giving up on an earlier review action (a reject, a send-back or a note) instead of fixing its reason. It is usable when it says why that action no longer applies (for example "I approved a newer version that fixed the margins")',
 };
 
 export type ReasonVerdict =

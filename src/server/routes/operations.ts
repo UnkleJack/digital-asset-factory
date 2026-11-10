@@ -15,7 +15,7 @@ import { json } from '../../db/sqlite.ts';
 import { publishListing } from '../../engine/publishing/service.ts';
 import { errorMessage } from '../../core/errors.ts';
 import { int, parse, LIST_MAX, totalHeader, type Q, type P } from './util.ts';
-import { submitWithReason, listReasonQueue, dismissQueuedNote } from '../../engine/approval/reasonQueue.ts';
+import { submitWithReason, listReasonQueue, acknowledgeFailedNote, resendQueuedNote, dropQueuedNote } from '../../engine/approval/reasonQueue.ts';
 
 /** Version states that mean the factory finished making it, whatever happened at review. */
 const MADE_STATUSES = "'ready','qa_failed','superseded','rejected','approved'";
@@ -127,7 +127,10 @@ export function registerOperationsRoutes(s: FastifyInstance, deps: ServerDeps): 
 
   // Notes waiting for the AI to check them, and ones it refused or that couldn't be used any more.
   s.get('/api/reason-queue', async () => listReasonQueue(app));
-  s.delete('/api/reason-queue/:id', async (req) => { dismissQueuedNote(app, (req.params as P).id); return { ok: true }; });
+  // A refused note has to be rewritten and sent again, or dropped with a reason; only a note that couldn't be used is just cleared.
+  s.post('/api/reason-queue/:id/resend', async (req) => resendQueuedNote(app, (req.params as P).id, parse(z.object({ text: z.string().max(4000) }), req.body, 'note').text));
+  s.post('/api/reason-queue/:id/drop', async (req) => { await dropQueuedNote(app, (req.params as P).id, parse(z.object({ reason: z.string().max(2000) }), req.body, 'reason').reason); return { ok: true }; });
+  s.delete('/api/reason-queue/:id', async (req) => { acknowledgeFailedNote(app, (req.params as P).id); return { ok: true }; });
 
   s.get('/api/rework', async (req) => reworkList(app, { showFixed: (req.query as Q).showFixed === '1' }));
   s.post('/api/rework/:versionId/fixed', async (req) => markFixed(app, (req.params as P).versionId, true));
