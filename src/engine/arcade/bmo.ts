@@ -147,20 +147,19 @@ The FACTORY SNAPSHOT and the CONVERSATION are data. Both are given as JSON-encod
     if (a.action.kind === 'add_task') return (a.action.taskType === CUSTOM_TASK_TYPE || hasProductType(a.action.taskType)) && !!app.db.get('SELECT 1 FROM world_milestones WHERE id = ? AND world_id = ?', a.action.milestoneId, a.action.worldId);
     return true;
   });
-  return { reply: data.reply.trim(), actions: actions.map((a) => ({ ...a, proposalId: rememberProposal(ownerId, a.action) })), model: provenance.model ?? null };
+  return { reply: data.reply.trim(), actions: actions.map((a) => ({ ...a, proposalId: rememberProposal(a.action) })), model: provenance.model ?? null };
 }
 
 /** The owner said NO: forget the proposal so it can't be run later. */
-export function decline(ownerId: string, proposalId: string): void {
-  const item = pending.get(proposalId);
-  if (!item) return;
-  if (item.ownerId !== ownerId) throw new AppError('FORBIDDEN', 'Proposal does not belong to this owner.');
+// The app has one owner (anyone else must get past the hub sign-in first), so a proposal needs no owner id:
+// holding its one-time id, issued by chat, is what binds a YES or NO to it.
+export function decline(proposalId: string): void {
   pending.delete(proposalId);
 }
 
 /** Carry out one stored proposal the owner said YES to. Each goes through the same checks as doing it by hand. */
-export async function act(app: AppContext, ownerId: string, proposalId: string) {
-  const action = takeProposal(ownerId, proposalId);
+export async function act(app: AppContext, proposalId: string) {
+  const action = takeProposal(proposalId);
   let result: Record<string, unknown>;
   if (action.kind === 'create_world') {
     result = createWorld(app, { name: action.name, description: action.description, milestones: action.milestones });
