@@ -44,10 +44,14 @@ adding a plugin; the pipeline does not change.
 | Printable + structured | `invoice-template` | PDF + XLSX (formulas) + CSV | Deterministic business form |
 | Printable | `guided-journal` | PDF | AI journal prompts |
 | Printable | `goal-planner` | PDF | AI goal-setting prompts |
-| Coloring / activity | `mandala-coloring` | PDF + PNG + SVG | Procedural seeded SVG line art (no AI required) |
+| Coloring / activity | `mandala-coloring` | PDF + PNG + SVG | Procedural seeded SVG line art (no AI required): 14 motifs, mirror symmetry, 4 detail levels (`procedural-mandala@2`) |
 | Coloring / activity | `maze-activity` | PDF (puzzles + answer key) + SVG | Procedural seeded mazes |
 | Coloring / activity | `word-search` | PDF (puzzles + answer key) | AI themed word lists; deterministic grid |
 | Coloring / activity | `illustrated-coloring` | PDF + PNG | **AI image provider** line art (requires configured provider) |
+| School & Study | `assignment-tracker` | PDF | AI subjects and tips; deterministic log layout (combined or a page per subject) |
+| School & Study | `timetable` | PDF (one week, or Week A and B) | AI subject key; period times computed from the school day |
+| School & Study | `reading-log` | PDF | AI challenge genres and review questions; numbered book list, minutes and review pages |
+| Geometric patterns | `geometric-pattern-art` | PDF + SVG | Procedural seeded patterns in 8 families (`family`: tessellate, girih, opart, truchet, guilloche, fractal, lace, herringbone); `mode` coloring (black line art) or print (wall art in the design's colors). No AI required |
 | Bundle | `bundle` | ZIP of member deliverables + combined PDF | Composed from approved/QA-passed members |
 
 Structured assets (CSV, XLSX, ZIP, license and instruction documents) are produced by the
@@ -118,7 +122,7 @@ The app distinguishes five operations: **generate listing**, **prepare export pa
 1. Local server + SQLite persistence + asset store, one-command install and start; restart-safe.
 2. Browser UI with all screens listed in ACCEPTANCE_CRITERIA.md showing persisted data only.
 3. All product types in §3 except `illustrated-coloring` producing validated deliverables
-   without AI; `illustrated-coloring` working when an image provider is configured.
+   without AI (including `geometric-pattern-art` in both its coloring and print modes); `illustrated-coloring` working when an image provider is configured.
 4. Anthropic text provider (structured output, retries, timeouts, usage/cost tracking) and
    OpenAI image provider behind the provider abstraction; deterministic/procedural fallbacks.
 5. Automated QA with hard failures vs. warnings, enforced at approval and publish time.

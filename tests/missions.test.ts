@@ -39,9 +39,12 @@ test('missions: every guide chapter has a mission and every mission finds its ch
   assert.equal(r.body.guideFound, true);
   assert.equal(r.body.missions.length, MISSIONS.length);
   for (const m of r.body.missions) assert.equal(m.hasInstructions, true, `no guide chapter for mission "${m.title}"`);
-  // Owner, 2026-11-09: student product types come first, locked until they're built.
+  // Owner, 2026-11-09: student product types come first. Built 2026-11-10, but still earned: locked until
+  // Product library and Templates are cleared.
   assert.equal(r.body.missions[0].id, 'student-types');
   assert.equal(r.body.missions[0].locked, true);
+  assert.deepEqual(r.body.missions[0].needs, ['Product library', 'Templates']);
+  assert.equal(MISSIONS.some((m) => m.locked), false, 'nothing is locked as unbuilt any more');
   assert.equal(r.body.missions.filter((m: any) => m.locked).length, 1);
   // The list sends titles only, never the chapter text.
   assert.equal('text' in r.body.missions[0], false);
@@ -72,17 +75,25 @@ test('missions: mark done and undo', async () => {
   lib = (await call('GET', '/api/arcade/missions')).body.missions.find((m: any) => m.id === 'library');
   assert.equal(lib.done, false);
   assert.equal((await call('PUT', '/api/arcade/missions/nope/done')).status, 404);
-  // A locked mission can't be marked done, and its popup shows the lock note.
+  // A mission still to be earned can't be marked done; its popup is its guide chapter, now that the types exist.
   assert.equal((await call('PUT', '/api/arcade/missions/student-types/done')).status, 422);
   const note = await call('GET', '/api/arcade/missions/student-types/instructions');
-  assert.match(note.body.text, /NOT BUILT YET/);
-  assert.match(note.body.text, /B1/);
+  assert.equal(note.body.source, 'docs/guide/WALKTHROUGH.md');
+  assert.match(note.body.text, /Assignment tracker/);
+  assert.match(note.body.text, /Class timetable/);
+  assert.match(note.body.text, /Reading log/);
+  assert.doesNotMatch(note.body.text, /NOT BUILT/);
   // It's earned: it lists the missions to clear first, and drops each one as it's cleared.
   const needsOf = async () => (await call('GET', '/api/arcade/missions')).body.missions[0].needs as string[];
   assert.deepEqual(await needsOf(), ['Product library', 'Templates']);
   await call('PUT', '/api/arcade/missions/templates/done');
   assert.deepEqual(await needsOf(), ['Product library']);
-  await call('DELETE', '/api/arcade/missions/templates/done');
+  // Clearing both earns it: it unlocks and can be marked done.
+  await call('PUT', '/api/arcade/missions/library/done');
+  assert.deepEqual(await needsOf(), []);
+  assert.equal((await call('GET', '/api/arcade/missions')).body.missions[0].locked, false);
+  assert.equal((await call('PUT', '/api/arcade/missions/student-types/done')).status, 200);
+  for (const id of ['student-types', 'library', 'templates']) await call('DELETE', `/api/arcade/missions/${id}/done`);
 });
 
 test('parseGuide: numbered chapters end at the next heading; Part 2 keeps its sections', () => {

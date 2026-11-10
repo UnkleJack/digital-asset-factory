@@ -219,3 +219,51 @@ export const US_FEDERAL_HOLIDAYS = (year: number): Record<string, string> => {
     [k(11, 25)]: 'Christmas Day',
   };
 };
+
+// ---------------------------------------------------------------- student types (2026-11-10)
+
+/** Built-in subject lists for assignment trackers and timetables, by who the product is for. */
+export const SCHOOL_SUBJECTS: Record<'school' | 'kids', string[]> = {
+  school: ['English', 'Math', 'Biology', 'Chemistry', 'Physics', 'History', 'Geography', 'Art', 'Music', 'Physical Education', 'Computer Science', 'Spanish'],
+  kids: ['Reading', 'Writing', 'Math', 'Science', 'Art', 'Music', 'Gym', 'Library'],
+};
+
+export function schoolKey(audienceName: string | undefined): 'school' | 'kids' {
+  return (audienceName ?? '').toLowerCase().includes('kid') ? 'kids' : 'school';
+}
+
+export const ASSIGNMENT_TIPS: Record<'school' | 'kids', string[]> = {
+  school: [
+    'Write each assignment down on the day it is set.', 'Break a big project into steps, each with its own date.', 'Check this list at the same time every day.',
+    'Start with whatever is due first.', 'Tick it off the moment it is handed in.', 'Note the grade so you can see where to focus next.',
+  ],
+  kids: ['Write it down when your teacher gives it to you.', 'Do a little every day.', 'Ask a grown-up to check it with you.', 'Color the box when it is done.'],
+};
+
+export const TIMETABLE_NOTES: Record<'school' | 'kids', string> = {
+  school: 'Room changes, clubs and things to bring',
+  kids: 'What to bring each day',
+};
+
+export const READING_GENRES: Record<'general' | 'kids', string[]> = {
+  general: [
+    'A mystery', 'A fantasy story', 'Science fiction', 'Historical fiction', 'A biography', 'A poetry collection', 'A graphic novel', 'Nonfiction about nature',
+    'A classic', 'An adventure', 'Short stories', 'A book set in another country', 'A book by a new author', 'A book a friend suggested',
+  ],
+  kids: [
+    'A picture book', 'An animal story', 'A fairy tale', 'A funny book', 'A book about science', 'A book of poems', 'An adventure',
+    'A book about a friendship', 'A book from the library', 'A book read aloud together',
+  ],
+};
+
+export const READING_REVIEW_PROMPTS: Record<'general' | 'kids', string[]> = {
+  general: [
+    'What was this book about, in two sentences?', 'Which character would you most like to meet, and why?', 'What surprised you?',
+    'Which part would you read again?', 'Who would you give this book to?', 'What will you remember from it?',
+  ],
+  kids: ['What happened in the story?', 'Who was your favorite character?', 'What was the funniest or best part?', 'Would you read it again? Why?'],
+};
+
+export function readingKey(audienceName: string | undefined): 'general' | 'kids' {
+  return (audienceName ?? '').toLowerCase().includes('kid') ? 'kids' : 'general';
+}

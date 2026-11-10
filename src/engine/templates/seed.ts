@@ -8,6 +8,7 @@ const DEFAULT_DESIGN: Record<string, string> = {
   'todo-checklist': 'Minimal Mono', 'cleaning-schedule': 'Warm Neutral', 'home-inventory': 'Bold Modern', 'budget-planner': 'Bold Modern',
   'invoice-template': 'Bold Modern', 'guided-journal': 'Warm Neutral', 'goal-planner': 'Botanical Sage', 'mandala-coloring': 'Minimal Mono',
   'maze-activity': 'Kids Bright', 'word-search': 'Kids Bright', 'illustrated-coloring': 'Minimal Mono', bundle: 'Minimal Mono',
+  'geometric-pattern-art': 'Minimal Mono', 'assignment-tracker': 'Soft Pastel', timetable: 'Bold Modern', 'reading-log': 'Warm Neutral',
 };
 
 export function seedBuiltins(db: Db): { inserted: number } {

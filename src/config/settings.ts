@@ -33,11 +33,12 @@ export type ListingRules = z.infer<typeof ListingRulesSchema>;
 
 const MB = 1024 * 1024;
 
-const DEFAULT_PRICES: Record<string, number> = {
+export const DEFAULT_PRICES: Record<string, number> = {
   'monthly-calendar': 499, 'weekly-planner': 599, 'daily-planner': 499, 'habit-tracker': 349,
   'todo-checklist': 299, 'cleaning-schedule': 349, 'home-inventory': 399, 'budget-planner': 599,
   'invoice-template': 499, 'guided-journal': 599, 'goal-planner': 449, 'mandala-coloring': 399,
   'maze-activity': 349, 'word-search': 349, 'illustrated-coloring': 449, bundle: 1299,
+  'geometric-pattern-art': 399, 'assignment-tracker': 349, timetable: 299, 'reading-log': 349,
 };
 
 const DEFAULT_BLOCKED_TERMS = [
