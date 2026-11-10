@@ -91,6 +91,12 @@ Workstreams A, B and C1 of `docs/plans/2026-10-28-audit-mandala-geometric-ship.m
 
 | ID | Task | Status | Evidence |
 |---|---|---|---|
+| A1 | Mandala motif library: 14 motifs drawn one wedge at a time (`src/engine/generation/mandala/motifs.ts`) | [x] | `tests/mandala.test.ts` A1: each motif is well-formed SVG, stays inside its ring band, mirrored halves never cross the axis, pure |
+| A2 | Symmetry engine: one wedge defined once, placed N times at j*360/N with `<use>`, mirrored by reflection (`symmetry.ts`) | [x] | `tests/mandala.test.ts` A2: exact angles for every allowed N, mirrored wedge reflects, every ring of real designs repeats a whole multiple of N evenly |
+| A3 | Ring and medallion composer: detail levels 3/5/7/10 rings, sub-rings, 5 centres, 4 borders, even or tapered lines (`compose.ts`); `mandalaSvg(seed, complexity)` kept and delegates | [x] | `tests/mandala.test.ts` A3: deterministic per seed, symmetry from the level's range, inside the box, intricate stays under 60 KB |
+| A4 | Mandala product type: `detail`, `symmetry`, `motifSet` settings, old `complexity` read as `detail`, variation axes, provenance `procedural-mandala@2` | [x] | `tests/mandala.test.ts` A4 tests; `tests/restore.test.ts` restored settings; every detail level renders a PDF |
+| A5 | Mandala QA: `mandala_viewbox`, `mandala_min_stroke`, `mandala_density` (warning), `mandala_line_art` | [x] | `tests/mandala.test.ts` A5: A5 paper keeps lines at or above 0.2 mm; five bad fixtures each caught; @1 designs counted, not failed. **Limits not yet checked against real prints** |
+| A6 | Tests | [x] | `tests/mandala.test.ts` (6 tests) |
 | C1 | Test-browser isolation: every Chrome launch gets its own profile folder (`daf-chrome-<pid>-…` in the temp folder), removed on close, on a lost browser and at process exit; a relaunch gets a fresh one | [x] | `tests/renderer-isolation.test.ts` (two renderers get different folders named after the process, closing one removes only its folder, relaunch gets a new one, nothing left after close); README `npm test` row and troubleshooting. Not yet timed with the app running on the Mac |
 
 ## Build list (owner, 2026-11-09)

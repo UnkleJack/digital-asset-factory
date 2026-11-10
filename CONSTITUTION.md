@@ -115,7 +115,7 @@ Adopted 2026-11-03.
 | Names | `src/core/brand.ts` |
 | Server entry point | `src/main.ts` (Fastify on `127.0.0.1:4317`) |
 | Product types | `src/engine/producttypes/` (registry: `registry.ts`) |
-| Mandala and other procedural art | `src/engine/generation/procedural.ts` |
+| Mandala and other procedural art | `src/engine/generation/procedural.ts`; the mandala engine is `src/engine/generation/mandala/` (`motifs.ts` motif library, `symmetry.ts` symmetry engine, `compose.ts` rings, centre and border) |
 | AI providers (10 text, 8 image) and pacing | `src/engine/generation/providers.ts`, `pacing.ts` |
 | QA, packaging, listings, approval, publishing | `src/engine/qa/`, `packaging/`, `listing/`, `approval/`, `publishing/` |
 | Packs ("factory floor") | `src/engine/packing/` |
@@ -185,6 +185,12 @@ As of 2026-11-06: `main` after pull requests #12 (backup AI models), #15 (sample
   - **Laziness failsafe.** Weighted signals (approval streak, fast review, empty note, copied reason) and four cumulative stages (shuffled queue, swapped buttons, name one thing wrong, 5-second approve hold). Every weight and threshold starts blank, so it is off until the owner sets them. It never changes an asset and never scolds.
   - **B.M.O.** Chat that answers from real rows only and can propose up to three actions (make a world, add a task, start a product). Nothing runs until the owner presses YES on that card. Needs a working AI provider; the chat is not saved.
   - Tested in `tests/arcade-play.test.ts` with the real pipeline and a stand-in AI for reason checks and B.M.O. **Not yet tried live** with the owner's NVIDIA key.
+- **Mandala engine** (2026-10-28 plan, Workstream A; built 2026-11-10). Mandala pages are drawn by a new engine, `procedural-mandala@2`:
+  - 14 motifs (petal, trefoil, arch, teardrop, diamond, chevron, fan, scale, dot cluster, ring shell, sunburst, lattice, rope, wheat). Each ring repeats one motif around the centre; most motifs are drawn as a half and mirrored, so designs have true mirror symmetry.
+  - New settings: **detail** (simple, medium, detailed, intricate: 3, 5, 7 or 10 rings, with sub-rings, centres and borders getting richer as detail goes up), **symmetry** (auto, or 6, 8, 10, 12, 16, 18, 20 or 24) and **motif set** (classic, botanical, geometric, celestial). Older products made with the old `complexity` setting still open and remake; it is read as `detail`. A remade older product gets new designs, because the same seed now draws a different picture.
+  - Each repeated shape is stored once in the SVG and reused, so even an intricate design stays under about 40 KB (the largest of 600 test designs was 38 KB).
+  - Lines are thickened when needed so none prints under 0.2 mm on the chosen paper. New QA checks: everything inside the drawing box, minimum line width, density (warning: over 20,000 path segments or rings under 2 mm), and clean black-on-white line art with no missing shapes. These limits are starting values, not yet checked against real prints.
+  - Tested in `tests/mandala.test.ts`.
 - **Test-browser isolation** (2026-10-28 plan, C1; built 2026-11-10). Every Chrome the app or a test run starts gets its own empty profile folder in the temp folder, named `daf-chrome-<process id>-…`, and the folder is removed when that Chrome closes or the process exits. So `npm test` can run while the app is open without the two sharing a profile. They still share the processor and disk, so tests are slower while the app renders. Puppeteer already gave each launch a temporary profile before this change; the app now makes and removes the folder itself, so the separation no longer depends on the library's default. Tested in `tests/renderer-isolation.test.ts`.
 - Tests: 168 tests, 168 pass, 0 skipped, 0 fail (branch `claude/arcade-start-flow` with `main` merged in, run on the Mac, 2026-11-06).
 
@@ -205,7 +211,7 @@ As of 2026-11-06: `main` after pull requests #12 (backup AI models), #15 (sample
 **Not built yet**
 - HAPPY DAFFY milestone 10: new modules (8-bit and 16-bit sprites, Unity pipeline).
 - A coding agent behind GAGE (item F).
-- From the 2026-10-28 plan: the mandala engine expansion (Workstream A) and geometric pattern art (Workstream B).
+- From the 2026-10-28 plan: geometric pattern art (Workstream B).
 
 ## Article 9: What comes next, and what's undecided
 
@@ -217,7 +223,7 @@ As of 2026-11-06: `main` after pull requests #12 (backup AI models), #15 (sample
    - Re-running the `prepare_listings` jobs that failed on 2026-11-04.
 3. **A guide in each area** (owner request, 2026-11-05). A HOW THIS WORKS button on each arcade area opens a short guide for just that screen, describing only what exists (Art. 5.2). The owner reviews the wording. Order: Hub, World Detail, World Builder (including the AI parts).
 4. **Play HAPPY DAFFY milestones 3 to 9 with real data**, then set the values the spec leaves open (Settings → arcade: XP amounts, pack bonus, low-credit warning, failsafe weights and thresholds) and the daily limit for NVIDIA under pacing if the credit meter should go live.
-5. **Factory upgrades from the 2026-10-28 plan:** mandala engine expansion, then geometric pattern art.
+5. **Factory upgrades from the 2026-10-28 plan:** geometric pattern art. Then print a few mandala pages at each detail level on A5 and letter, and tune the mandala print limits if the lines or rings look wrong.
 6. **AI-drawn opportunity pictures** (the owner's "later" choice, 2026-11-04): a Draw with AI button beside the free sample preview, once an image provider key works. It costs credits per idea and must be labelled as an AI impression, not the product.
 
 **Undecided**
