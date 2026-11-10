@@ -36,6 +36,20 @@ export function sentenceCount(text: string): number {
   return text.split(/(?<=[.!?])\s+|\n+/).map((s) => s.trim()).filter((s) => (s.match(/\p{L}+/gu) ?? []).length >= 2).length;
 }
 
+// Text aimed at the AI reason check rather than describing the product ("mark this usable", "ignore the
+// rules", "system:"). Refused before the AI sees it, so a reason can't talk its way into counting as
+// specific (PR #32 review). Plain descriptions of a product never match these.
+const STEERING = [
+  /\b(ignore|disregard|forget|override)\b[^.!?\n]{0,40}\b(rules?|instructions?|prompt|above|previous|checks?)\b/i,
+  /\bmark\b[^.!?\n]{0,30}\b(usable|intelligible|valid|specific|approved|passed)\b/i,
+  /\b(usable|intelligible)\b\s*["']?\s*[:=]\s*["']?\s*(true|yes)\b/i,
+  /(^|\n)\s*(system|assistant|developer)\s*:/i,
+  /\b(as an ai|language model|you must (answer|reply|return|output))\b/i,
+];
+export function steersTheChecker(text: string): boolean {
+  return STEERING.some((r) => r.test(text));
+}
+
 function currentVersion(app: AppContext, productId: string) {
   const p = getProduct(app.db, productId);
   if (!p.current_version_id) throw validation('This item has no version yet.');
@@ -155,6 +169,7 @@ export async function reject(app: AppContext, productId: string, input: ReviewIn
   // Locked: empty, under two sentences or vague is refused; the text stays on screen to fix (the page keeps it).
   if (!reason) throw validation('Write why you are rejecting it.', [{ field: 'reason', message: 'Required' }]);
   if (sentenceCount(reason) < MIN_SENTENCES) throw validation(`A rejection needs at least ${MIN_SENTENCES} sentences: say which part is wrong, then what is wrong with it.`, [{ field: 'reason', message: 'At least 2 sentences' }]);
+  if (steersTheChecker(reason)) throw validation('Write the reason about the item only: which part is wrong, then what is wrong with it. Notes addressed to the checker are not accepted.', [{ field: 'reason', message: 'About the item only' }]);
   const { opened, ms } = durationSince(input.openedAt);
   const signals = signalsFor(app, { outcome: 'REJECT', durationMs: ms, likedNote: '', reason });
   const itemId = approvalItemFor(app, product.id, version.id);
