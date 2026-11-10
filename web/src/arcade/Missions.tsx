@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { api, errorText, useApi } from '../api.ts';
 import { useFocusMainWhenReady } from './input.ts';
 import { ProgressBar, ArcadeTabs, type NavDestination } from './Worlds.tsx';
+import { ReportForm, tryItLink, type MissionPartInfo, type ReportRule } from './MissionReport.tsx';
 
 // HAPPY DAFFY missions: learn the whole suite one guide chapter at a time (owner's choice, 2026-11-09).
 // INSTRUCTIONS opens that chapter of the walkthrough guide as a text popup, so you can read up on a
@@ -18,6 +19,9 @@ interface Mission {
   hasInstructions: boolean;
   locked: boolean;
   needs: string[];
+  /** Cleared by a report instead of MARK DONE. */
+  report: ReportRule | null;
+  parts: MissionPartInfo[];
 }
 interface Instructions { id: string; title: string; text: string; source: string }
 
@@ -26,6 +30,8 @@ export function MissionsScreen({ character, onBack, onGo }: { character: string 
   const [open, setOpen] = useState<Mission | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // The report form that's open: a mission id, plus the part's id for a multi-part mission.
+  const [reporting, setReporting] = useState<{ mission: string; part: string | null } | null>(null);
   useFocusMainWhenReady(!!data);
   const missions = data?.missions ?? [];
   const doneCount = missions.filter((m) => m.done).length;
@@ -68,12 +74,41 @@ export function MissionsScreen({ character, onBack, onGo }: { character: string 
                   INSTRUCTIONS
                 </button>
                 {m.route === '/arcade' || m.locked ? null : <Link className="arc-btn small" data-nav to={m.route} title={`Open ${m.title}`}>GO</Link>}
-                {m.locked ? null : (
+                {m.locked || (m.report && !m.done) ? null : (
                   <button type="button" className="arc-btn small" data-nav disabled={busy === m.id} aria-pressed={m.done} onClick={() => void toggle(m)}>
                     {m.done ? 'UNDO' : 'MARK DONE'}
                   </button>
                 )}
+                {!m.locked && m.report && !m.done && !m.parts.length ? (
+                  <button type="button" className="arc-btn small" data-nav onClick={() => setReporting({ mission: m.id, part: null })}>REPORT</button>
+                ) : null}
               </span>
+              {m.parts.length ? (
+                <ul className="mission-parts">
+                  {m.parts.map((p) => (
+                    <li key={p.id} className={`mission-part${p.done ? ' done' : ''}`}>
+                      <span>{p.title}{p.done ? ' ✓' : ''}{p.report ? <span className="mission-report-line">{p.report.productTitle}: {p.report.report}</span> : null}</span>
+                      {m.locked || p.done ? null : (
+                        <span className="mission-actions">
+                          <Link className="arc-btn small" data-nav to={tryItLink(p)} title={p.presetId ? 'Open New product with its preset' : 'Open New product (no preset for this one yet)'}>TRY IT</Link>
+                          <button type="button" className="arc-btn small" data-nav onClick={() => setReporting({ mission: m.id, part: p.id })}>REPORT</button>
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {reporting?.mission === m.id && m.report ? (
+                <ReportForm
+                  key={`${m.id}:${reporting.part ?? ''}`}
+                  missionId={m.id}
+                  rule={m.report}
+                  part={m.parts.find((p) => p.id === reporting.part) ?? null}
+                  arcade
+                  onCancel={() => setReporting(null)}
+                  onDone={() => { setReporting(null); void reload(); }}
+                />
+              ) : null}
             </li>
           ))}
         </ol>

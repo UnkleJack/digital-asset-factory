@@ -32,6 +32,7 @@ New to the app? Read [Getting started](../GETTING_STARTED.md) first. It covers i
   17. [Analytics](#17-analytics)
   18. [Settings & integrations](#18-settings--integrations)
   19. [Student product types](#19-student-product-types)
+  20. [Presets and the Brief box](#20-presets-and-the-brief-box)
 - **Part 2: [HAPPY DAFFY, the arcade](#part-2-happy-daffy)**
 - [Things this guide found that need your call](#things-this-guide-found-that-need-your-call)
 
@@ -762,6 +763,16 @@ Ticked boxes are on/off settings. A box marked "one per line" takes a list. Boxe
 
 **The mission.** The HAPPY DAFFY mission for this chapter is earned: clear the **Product library** and **Templates** missions first.
 
+## 20. Presets and the Brief box
+
+**What it's for:** two quick ways to steer a new product, both on the **New product** window in the [Product library](#6-product-library).
+
+**Presets.** The row of preset buttons at the top fills in the whole form in one click: the kind, audience, theme, design, paper, the kind's own settings and a Brief. They're grouped for Students, Teachers, Home and family, Work and Everyone. A preset only fills the boxes. Change anything you like before you press **Create**. If a preset names an audience, theme or design you've since deleted, that box is left empty.
+
+**Brief for the AI.** The optional box near the bottom, up to 600 characters. Write wording instructions there, like "Keep the habits countable and kind. Nothing about weight loss." The AI follows it when it writes the words on the pages and the shop listing. It doesn't change the layout. The Brief carries over to every new version and variation of the product. A preset fills the box with its own Brief, which you can edit or clear.
+
+**The mission.** The HAPPY DAFFY mission for this chapter is cleared by a report, not by **Mark done**. Make a product with a Brief you wrote, then press **Report**, pick that product and write how the wording came out and whether the AI followed your Brief. Your report is also saved as a note for the AI on that product, so it shows up in [Notes for the AI](#14-notes-for-the-ai) and feeds what the factory learns.
+
 ---
 
 # Part 2: HAPPY DAFFY
@@ -848,10 +859,11 @@ Each world card shows its rank, a progress bar towards the next milestone, **TAS
 
 ## MISSIONS
 
-Want to learn the whole Foundry? Here's your quest log. There's one mission for every chapter of this guide, from the arcade menu link down to Student product types, plus one for the arcade itself. The bar up top shows how many you've cleared.
+Want to learn the whole Foundry? Here's your quest log. There's one mission for every chapter of this guide, from the arcade menu link down to Presets and the Brief box, plus one for the arcade itself. The bar up top shows how many you've cleared.
 - **INSTRUCTIONS** pops up that chapter of this guide as plain text, right there in the cabinet, so you can read up on a screen without loading it. Arrow keys scroll it. **CLOSE**, Esc or B shuts it.
 - **GO** opens the screen the mission is about.
 - **MARK DONE** clears a mission and puts a **✓ DONE** beside it. **UNDO** takes it back.
+- Some missions are cleared by a **REPORT** instead: you try the thing, pick the product you made and write a line or two on how it came out. The report is saved as a note for the AI on that product too. **UNDO** on one of these clears its reports; the notes for the AI stay.
 - **■ LOCKED** missions are either for things that aren't built yet, whose INSTRUCTIONS say what's coming and where it sits on the build list (`TASKS.md`), or ones that have to be earned: **NEEDS** lists the missions to clear first. Student product types, for one, needs Product library and Templates cleared. A locked mission can't be cleared until it unlocks.
 - Missions don't earn XP yet. That waits until the XP rules are decided.
 - **BACK TO HUB** (or B) heads home.

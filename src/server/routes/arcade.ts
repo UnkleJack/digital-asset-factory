@@ -11,7 +11,7 @@ import { generateWorld, checkGenerate, suggestWorlds, suggestTasks, tidyNotes, r
 import { startDraft, getDraft, listDrafts, discardDraft, DRAFT_KINDS } from '../../engine/arcade/drafts.ts';
 import { tickerCatalog, tickerValues, chosenTickerStats } from '../../engine/arcade/ticker.ts';
 import { setPortrait, clearPortrait, portraitFor, MAX_PORTRAIT_BYTES } from '../../engine/arcade/portraits.ts';
-import { loadGuide, listMissions, missionInstructions, setMissionDone } from '../../engine/arcade/missions.ts';
+import { loadGuide, listMissions, missionInstructions, reportCandidates, reportMission, setMissionDone, REPORT_MAX } from '../../engine/arcade/missions.ts';
 import { taskWorkspace, makeTaskAsset, progressTask } from '../../engine/arcade/workspace.ts';
 import { reviewScreen, reviewQueue, approve, reject, remake, deleteItem, binList, restoreFromBin, deleteFromBin, settleWaitingRejections } from '../../engine/arcade/review.ts';
 import { packsView, packContents, buildPack, finalizePack } from '../../engine/arcade/packs.ts';
@@ -143,6 +143,12 @@ export function registerArcadeRoutes(s: FastifyInstance, { app }: ServerDeps): v
       if (m) recordXp(app, character, 'tab', id, m.title);
     }
     return { ok: true };
+  });
+  // A report clears a report mission (or one part of a multi-part one) and is filed as a note for the AI.
+  s.get('/api/arcade/missions/:id/report-products', async (req) => reportCandidates(app, (req.params as P).id, (req.query as Q).part as string | undefined));
+  s.post('/api/arcade/missions/:id/report', async (req) => {
+    const b = parse(z.object({ partId: z.string().max(60).optional(), productId: z.string().min(1).max(80), report: z.string().max(REPORT_MAX + 200) }), req.body ?? {}, 'report');
+    return reportMission(app, (req.params as P).id, b);
   });
   s.delete('/api/arcade/missions/:id/done', async (req) => {
     setMissionDone(app, (req.params as P).id, false);
