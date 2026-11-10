@@ -3,6 +3,12 @@ import type { Db } from '../db/sqlite.ts';
 import { validation } from '../core/errors.ts';
 import { SUITE_NAME } from '../core/brand.ts';
 
+/** A web address as typed or pasted ("https://DAF.example.com/", "daf.example.com:443") down to its bare host name. */
+export function normalizeHost(value: string): string {
+  return value.trim().toLowerCase().replace(/^[a-z][a-z0-9+.-]*:\/\//, '').replace(/[/?#].*$/, '').replace(/:\d+$/, '').replace(/\.$/, '');
+}
+const HOSTNAME = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$/;
+
 const effort = z.enum(['low', 'medium', 'high', 'xhigh', 'max']);
 // More models to try at the same provider, in order, before moving on to the next provider.
 // They share that provider's key, so a provider can answer from a second model when the first is retired or busy.
@@ -378,6 +384,10 @@ export const SettingsSchema = z.object({
     // Hub mode: other computers on your network (or Tailscale) can open this app with the access token. Restart to apply.
     enabled: z.boolean().default(false),
     bindAddress: z.string().trim().min(2).max(60).default('0.0.0.0'),
+    // Public web addresses that reach this app through a tunnel on this computer (Cloudflare Tunnel, say),
+    // such as daf.promptpimps.com. The tunnel connects from this computer, so without this list its
+    // requests would look local. Requests to a listed address always need the access token. See docs/PUBLIC_ACCESS.md.
+    publicHosts: z.array(z.string().trim().max(300).transform(normalizeHost).pipe(z.string().regex(HOSTNAME, 'Use a web address like daf.example.com'))).max(10).default(() => []),
   }).prefault({}),
   arcade: z.object({
     // The arcade's credit meter runs on this test number until live provider headroom is wired in
