@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { api, errorText, useApi } from '../api.ts';
 import { useFocusMainWhenReady } from './input.ts';
-import { ProgressBar, ArcadeTabs } from './Worlds.tsx';
+import { ProgressBar, ArcadeTabs, type NavDestination } from './Worlds.tsx';
 
 // HAPPY DAFFY missions: learn the whole suite one guide chapter at a time (owner's choice, 2026-11-09).
 // INSTRUCTIONS opens that chapter of the walkthrough guide as a text popup, so you can read up on a
@@ -21,7 +21,7 @@ interface Mission {
 }
 interface Instructions { id: string; title: string; text: string; source: string }
 
-export function MissionsScreen({ onBack }: { onBack: () => void }) {
+export function MissionsScreen({ character, onBack, onGo }: { character: string | null; onBack: () => void; onGo: (d: NavDestination) => void }) {
   const { data, error, loading, reload } = useApi<{ missions: Mission[]; guideFound: boolean }>('/arcade/missions');
   const [open, setOpen] = useState<Mission | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -34,7 +34,7 @@ export function MissionsScreen({ onBack }: { onBack: () => void }) {
     setBusy(m.id);
     setErr(null);
     try {
-      await api(`/arcade/missions/${m.id}/done`, { method: m.done ? 'DELETE' : 'PUT' });
+      await api(`/arcade/missions/${m.id}/done${!m.done && character ? `?character=${encodeURIComponent(character)}` : ''}`, { method: m.done ? 'DELETE' : 'PUT' });
       await reload();
     } catch (e) {
       setErr(errorText(e));
@@ -82,7 +82,7 @@ export function MissionsScreen({ onBack }: { onBack: () => void }) {
       <div className="row-actions">
         <button type="button" className="arc-btn" data-nav onClick={onBack}>BACK TO HUB</button>
       </div>
-      <ArcadeTabs current="MISSIONS" onGo={(d) => d === 'WORLDS' && onBack()} onSoon={(d) => setErr(`${d} UNLOCKS IN A LATER BUILD`)} />
+      <ArcadeTabs current="MISSIONS" onGo={(d) => (d === 'WORLDS' ? onBack() : onGo(d))} onSoon={(d) => setErr(`${d} UNLOCKS IN A LATER BUILD`)} />
 
       {open ? <InstructionsPopup mission={open} onClose={() => setOpen(null)} /> : null}
     </div>

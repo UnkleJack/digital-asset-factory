@@ -431,6 +431,14 @@ export class RoutedTextProvider implements TextProvider {
     throw new ProviderError(this.activeId(), 'unconfigured', tried ? 'No text provider answered.' : 'No AI text provider has an API key (Settings → AI providers).');
   }
 
+  /** Per configured provider in the chain: today's usage against its daily ceiling. Null when pacing is off. */
+  async headroom(): Promise<{ id: string; limit: number; used: number; coolingUntil: string | null }[] | null> {
+    if (!this.pacer) return null;
+    const out: { id: string; limit: number; used: number; coolingUntil: string | null }[] = [];
+    for (const p of this.chain()) if (await p.isConfigured()) out.push({ id: p.id, ...this.pacer.usage(p.id) });
+    return out;
+  }
+
   /** The selected provider, then the backups, each once. */
   chain(): TextProvider[] {
     const active = this.activeId();

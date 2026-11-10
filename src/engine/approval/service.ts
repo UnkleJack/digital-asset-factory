@@ -11,6 +11,7 @@ import { newId } from '../../core/ids.ts';
 import { conflict, notFound, validation } from '../../core/errors.ts';
 import { audit, type AuditActor } from '../../logging/logger.ts';
 import { onProductFinished } from '../packing/service.ts';
+import { completeTasksForVersion } from '../arcade/workspace.ts';
 
 export type Decision = 'approved' | 'rejected' | 'revision_requested' | 'regenerate_requested';
 
@@ -108,6 +109,8 @@ export function decide(app: AppContext, itemId: string, input: { decision: Decis
     });
     refreshBatch(app, item.batch_id);
     onProductFinished(app, version.id, 'approved');
+    // HAPPY DAFFY: an arcade task whose asset this is completes now, whichever screen approved it.
+    completeTasksForVersion(app, version.id);
     return { decisionIds: ids };
   }
 

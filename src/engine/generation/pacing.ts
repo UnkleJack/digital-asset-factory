@@ -54,6 +54,18 @@ export class Pacer {
     if (mins > 0) this.cooledUntil.set(provider, this.now() + mins * 60_000);
   }
 
+  /** Today's calls against the daily ceiling (0 = no ceiling set) and whether the provider is resting after a rate limit. */
+  usage(provider: string): { limit: number; used: number; coolingUntil: string | null } {
+    const day = new Date(this.now());
+    day.setUTCHours(0, 0, 0, 0);
+    const until = this.cooledUntil.get(provider) ?? 0;
+    return {
+      limit: this.cfg().dailyCallLimits[provider] ?? 0,
+      used: this.callsToday(provider, day.toISOString()),
+      coolingUntil: until > this.now() ? new Date(until).toISOString() : null,
+    };
+  }
+
   status(): Record<string, string | null> {
     const ids = new Set([...this.cooledUntil.keys(), ...Object.keys(this.cfg().dailyCallLimits)]);
     return Object.fromEntries([...ids].map((id) => [id, this.blocked(id)]));

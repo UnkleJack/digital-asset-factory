@@ -1,8 +1,10 @@
 import type { AppContext } from '../../app/context.ts';
 import { portraitUrl } from './portraits.ts';
+import { creditState, canStartWork, type CreditState as Credits } from './credits.ts';
+import { finishedBoard } from './leaderboards.ts';
+import { xpTotals } from './codex.ts';
 
-// The arcade front end ("Asset Foundry") from the UX spec. Milestone 1 covers the entry flow only:
-// Insert Coin → Start Gate → Title → Character Select. Worlds, tasks, XP and leaderboards come later.
+// The arcade front end ("Asset Foundry") from the UX spec: the cabinet, its characters and their credits.
 
 export type CharacterType = 'IDE' | 'AI_CHATBOT' | 'DAF';
 
@@ -57,31 +59,24 @@ export const CHARACTERS: readonly ArcadeCharacter[] = [
   },
 ];
 
-export type CreditState = 'normal' | 'zero';
-
 export interface ArcadeState {
-  credits: {
-    value: number;
-    /** 'test' until live provider headroom is built (spec milestone 6). Never shown as live. */
-    source: 'test';
-    live: false;
-    state: CreditState;
-  };
-  characters: readonly (ArcadeCharacter & { portraitUrl: string | null })[];
-  /** Leaderboard records. Empty until leaderboards exist; the title screen shows a placeholder, never made-up entries. */
+  /** Live provider headroom when a provider reports a limit, otherwise the labelled TEST number (credits.ts). */
+  credits: Credits;
+  characters: readonly (ArcadeCharacter & { portraitUrl: string | null; xp: number; xpEvents: number })[];
+  /** The hi-score banner: the Finished leaderboard's top entries (spec B10). Empty until a pack is finalized; never made up. */
   hiScores: { label: string; score: number }[];
 }
 
-export function arcadeState(app: AppContext): ArcadeState {
-  const value = app.settings.get('arcade').testCredits;
+export async function arcadeState(app: AppContext): Promise<ArcadeState> {
+  const xp = xpTotals(app);
   return {
-    credits: { value, source: 'test', live: false, state: value <= 0 ? 'zero' : 'normal' },
-    characters: CHARACTERS.map((c) => ({ ...c, portraitUrl: portraitUrl(app, c.id) })),
-    hiScores: [],
+    credits: await creditState(app),
+    characters: CHARACTERS.map((c) => ({ ...c, portraitUrl: portraitUrl(app, c.id), xp: xp[c.id]?.xp ?? 0, xpEvents: xp[c.id]?.events ?? 0 })),
+    hiScores: finishedBoard(app).slice(0, 5).map((e) => ({ label: e.title, score: e.items })),
   };
 }
 
-/** The Start Gate rule (spec B2, locked): PRESS START opens the Title Screen only when N > 0. */
-export function canStart(state: ArcadeState): boolean {
-  return state.credits.value > 0;
+/** The Start Gate rule (spec B2, locked): ENTER WORLD works only when N > 0. */
+export function canStart(state: Pick<ArcadeState, 'credits'>): boolean {
+  return canStartWork(state.credits);
 }
