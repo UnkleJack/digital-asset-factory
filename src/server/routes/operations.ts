@@ -13,12 +13,25 @@ import { textMode } from '../../engine/generation/service.ts';
 import { adapters } from '../../engine/publishing/adapters.ts';
 import { json } from '../../db/sqlite.ts';
 import { publishListing } from '../../engine/publishing/service.ts';
-import { errorMessage } from '../../core/errors.ts';
+import { errorMessage, validation } from '../../core/errors.ts';
 import { int, parse, LIST_MAX, totalHeader, type Q, type P } from './util.ts';
 import { submitWithReason, listReasonQueue, acknowledgeFailedNote, resendQueuedNote, dropQueuedNote } from '../../engine/approval/reasonQueue.ts';
+import { createBoxes, describeNow, discardBoxes, boxPicture, MAX_BOXES } from '../../engine/approval/reviewBoxes.ts';
+
+const BoxSchema = z.object({ previewId: z.string().min(1).max(80), x: z.number().min(0).max(1), y: z.number().min(0).max(1), w: z.number().min(0).max(1), h: z.number().min(0).max(1) });
 
 /** Version states that mean the factory finished making it, whatever happened at review. */
 const MADE_STATUSES = "'ready','qa_failed','superseded','rejected','approved'";
+
+/**
+ * Which provider would answer the next call, and with which model. A routed provider tries the
+ * selected one first and then its backups, skipping any without a key, so the first configured
+ * one in its chain is the one that answers. Falls back to the selected provider's own id.
+ */
+async function answeringProvider(p: { id: string; model(): string; isConfigured(): Promise<boolean>; chain?: () => { id: string; model(): string; isConfigured(): Promise<boolean> }[] }, selected: string): Promise<{ provider: string; model: string | null }> {
+  for (const c of p.chain ? p.chain() : [p]) if (await c.isConfigured()) return { provider: c.id, model: c.model() };
+  return { provider: selected, model: p.model() };
+}
 
 export function registerOperationsRoutes(s: FastifyInstance, deps: ServerDeps): void {
   const { app } = deps;
@@ -50,8 +63,10 @@ export function registerOperationsRoutes(s: FastifyInstance, deps: ServerDeps): 
       },
       batches: app.db.all("SELECT id, name, status, created_at, (SELECT count(*) FROM approval_items i WHERE i.batch_id = b.id) AS items FROM approval_batches b WHERE status = 'ready_for_review' ORDER BY created_at DESC LIMIT 5"),
       providers: {
-        text: { provider: g.textProvider, model: g.anthropic.model, mode: tm.mode, reason: 'reason' in tm ? tm.reason : null },
-        image: { provider: g.imageProvider, configured: g.imageProvider === 'none' ? false : await app.providers.image.isConfigured(), model: app.providers.image.model() },
+        text: { ...(await answeringProvider(app.providers.text, g.textProvider)), selected: g.textProvider, mode: tm.mode, reason: 'reason' in tm ? tm.reason : null },
+        image: g.imageProvider === 'none'
+          ? { provider: 'none', model: null, selected: 'none', configured: false }
+          : { ...(await answeringProvider(app.providers.image, g.imageProvider)), selected: g.imageProvider, configured: await app.providers.image.isConfigured() },
         chrome: app.renderer.available(),
       },
       marketplaces: adapters().map((a) => ({ id: a.id, name: a.displayName, verification: a.verification, directPublishing: a.capabilities.publish && a.verification === 'verified' })),
@@ -150,6 +165,16 @@ export function registerOperationsRoutes(s: FastifyInstance, deps: ServerDeps): 
   });
   s.get('/api/batches/:id', async (req) => batchDetail(app, (req.params as P).id));
   s.get('/api/batch-items/:id', async (req) => itemDetail(app, (req.params as P).id));
+  // A box drawn on a reject or revise note: the cut-out (crop) or the page with the box outlined in red (page).
+  s.get('/api/review-boxes/:id/picture', async (req, reply) => {
+    const kind = (req.query as Q).kind === 'page' ? 'page' : 'crop';
+    const body = boxPicture(app, (req.params as P).id, kind);
+    reply.header('Content-Type', 'image/png');
+    reply.header('Content-Disposition', 'inline');
+    reply.header('Content-Security-Policy', "default-src 'none'; sandbox");
+    reply.header('Cache-Control', 'private, max-age=86400');
+    return reply.send(body);
+  });
   // Approved items whose warnings were never accepted (approved before the warning gate). Blocked from packing and publishing.
   s.get('/api/warnings-to-accept', async () => unacceptedApprovals(app));
   // Suggestion only: explains one open QA warning and how to fix it. Nothing is saved or approved.
@@ -158,15 +183,30 @@ export function registerOperationsRoutes(s: FastifyInstance, deps: ServerDeps): 
     return warningHelp(app, (req.params as P).id, b.check);
   });
   s.post('/api/batch-items/:id/decision', async (req) => {
-    const b = parse(z.object({ decision: z.enum(['approved', 'rejected', 'revision_requested', 'regenerate_requested']), marketplaces: z.array(z.string()).optional(), notes: z.string().max(4000).optional(), acceptWarnings: z.boolean().optional(), warningNote: z.string().max(2000).optional() }), req.body, 'decision');
+    const b = parse(z.object({ decision: z.enum(['approved', 'rejected', 'revision_requested', 'regenerate_requested']), marketplaces: z.array(z.string()).optional(), notes: z.string().max(4000).optional(), acceptWarnings: z.boolean().optional(), warningNote: z.string().max(2000).optional(), boxes: z.array(BoxSchema).max(MAX_BOXES).optional() }), req.body, 'decision');
+    const itemId = (req.params as P).id;
+    if (b.decision === 'approved' && b.boxes?.length) throw validation('Boxes go with a reject or revise note, not an approval.');
+    // Boxes drawn on the page previews: saved (and cut out) first, then looked at by the picture-reading AI when one is ready.
+    let boxIds: string[] = [];
+    if (b.boxes?.length) {
+      const versionId = app.db.value<string>('SELECT version_id FROM approval_items WHERE id = ?', itemId);
+      if (!versionId) throw validation('That batch item does not exist.');
+      boxIds = createBoxes(app, versionId, b.boxes);
+      await describeNow(app, boxIds, b.notes ?? '');
+    }
     // Reject / Return for revision / Regenerate with a note: the AI checks the note before anything happens.
     // A refused note throws and leaves the item as it was; when the AI can't be reached it waits in line.
     // (Regenerate's note is optional, so an empty one skips the check.)
     if (b.decision !== 'approved' && (b.decision !== 'regenerate_requested' || b.notes?.trim())) {
-      const r = await submitWithReason(app, { action: 'decision', itemId: (req.params as P).id, decision: b.decision, notes: b.notes ?? '' });
-      return r.queued ? r : r.result;
+      try {
+        const r = await submitWithReason(app, { action: 'decision', itemId, decision: b.decision, notes: b.notes ?? '', ...(boxIds.length && { boxIds }) });
+        return r.queued ? r : r.result;
+      } catch (err) {
+        discardBoxes(app, boxIds);
+        throw err;
+      }
     }
-    const result = decide(app, (req.params as P).id, b);
+    const result = decide(app, itemId, { ...b, boxIds });
     // A note was written: once 10 have piled up, the AI reads them all in the background.
     if (b.notes?.trim() || b.warningNote?.trim()) void maybeDigest(app);
     const g = app.settings.get('marketplaces').gumroad;

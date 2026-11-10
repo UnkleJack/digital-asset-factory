@@ -216,6 +216,14 @@ export const SettingsSchema = z.object({
       timeoutMs: z.number().int().min(5000).max(600000).default(180000),
       maxRetries: z.number().int().min(0).max(6).default(2),
     }).prefault({}),
+    // Picture-reading AI: looks at the boxes drawn on page previews in reject and revise notes (review boxes).
+    // It uses that provider's key, base address and time limit from its own settings above.
+    // Owner's pick (2026-11-10): NVIDIA, with meta/llama-3.2-90b-vision-instruct (on NVIDIA's model list and
+    // documented as taking pictures). Whether a free key covers it was not confirmed; use Test in Settings.
+    vision: z.object({
+      provider: z.enum(['off', 'anthropic', 'openrouter', 'groq', 'nvidia', 'cerebras', 'together', 'gemini', 'mistral', 'github', 'huggingface']).default('nvidia'),
+      model: z.string().trim().max(200).default('meta/llama-3.2-90b-vision-instruct'),
+    }).prefault({}),
     textPrices: z.record(z.string(), z.object({ inputPerMTok: z.number().min(0), outputPerMTok: z.number().min(0) })).default({
       'claude-opus-5-5': { inputPerMTok: 4, outputPerMTok: 20 },
       'claude-sonnet-5-5': { inputPerMTok: 2, outputPerMTok: 10 },

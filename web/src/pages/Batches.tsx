@@ -3,6 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router';
 import { api, assetUrl, useApi, usePagedApi } from '../api.ts';
 import { CompactList, CompactRow, PreviewButton, PreviewPane, ShowDone, usePreview, useReveal } from '../compact.tsx';
 import { ActionButton, Async, Card, CheckList, Empty, Modal, PageHead, Pill, useToast } from '../ui.tsx';
+import { BoxDrawer, SavedBoxes, type DraftBox } from '../reviewBoxes.tsx';
 import { WaitingNotes, sentText } from '../waitingNotes.tsx';
 import { ReasonPicks } from '../reasons.tsx';
 import { ago, bytes, fmtDate, generatorLabel, label, money, pct, usd } from '../format.ts';
@@ -147,6 +148,7 @@ function ItemCard({ it, reload }: { it: any; reload: () => void }) {
   const [markets, setMarkets] = useState<string[]>(it.listings.filter((l: any) => !l.validation.issues.length).map((l: any) => l.marketplace));
   const [modal, setModal] = useState<null | 'revise' | 'reject' | 'regen'>(null);
   const [notes, setNotes] = useState('');
+  const [boxes, setBoxes] = useState<DraftBox[]>([]);
   const v = it.version;
   const decided = it.decisions.find((x: any) => !x.invalidated_at);
   const busy = v.status === 'in_progress';
@@ -161,6 +163,7 @@ function ItemCard({ it, reload }: { it: any; reload: () => void }) {
     toast(sentText(r, decision === 'approved' ? 'Approved' : decision === 'rejected' ? 'Rejected' : 'New version is being produced'));
     setModal(null);
     setNotes('');
+    setBoxes([]);
     reload();
   };
   return (
@@ -205,7 +208,7 @@ function ItemCard({ it, reload }: { it: any; reload: () => void }) {
             ))}
           </div>
 
-          {decided && <div className="small">Decision: <Pill value={decided.decision} /> by {decided.decided_by} {ago(decided.decided_at)}{decided.notes ? ` — “${decided.notes}”` : ''}</div>}
+          {decided && <div className="small">Decision: <Pill value={decided.decision} /> by {decided.decided_by} {ago(decided.decided_at)}{decided.notes ? ` — “${decided.notes}”` : ''}<SavedBoxes boxes={decided.boxes} /></div>}
           {it.decisions.some((x: any) => x.invalidated_at) && <div className="small muted">Earlier approvals were withdrawn: {it.decisions.filter((x: any) => x.invalidated_at).map((x: any) => x.invalidated_reason).join('; ')}</div>}
 
           <div className="row">
@@ -220,11 +223,12 @@ function ItemCard({ it, reload }: { it: any; reload: () => void }) {
         </div>
       </div>
       {modal && (
-        <Modal title={modal === 'revise' ? 'Return for revision' : modal === 'regen' ? 'Regenerate' : 'Reject'} onClose={() => setModal(null)} footer={<><button onClick={() => setModal(null)}>Cancel</button><ActionButton className={modal === 'reject' ? 'danger' : 'primary'} disabled={modal !== 'regen' && notes.trim().length < 3} title={modal !== 'regen' && notes.trim().length < 3 ? 'Write a reason first' : ''} onClick={() => decide(modal === 'revise' ? 'revision_requested' : modal === 'regen' ? 'regenerate_requested' : 'rejected', { notes })}>{modal === 'revise' ? 'Send back with notes' : modal === 'regen' ? 'Regenerate' : 'Reject version'}</ActionButton></>}>
+        <Modal title={modal === 'revise' ? 'Return for revision' : modal === 'regen' ? 'Regenerate' : 'Reject'} onClose={() => setModal(null)} footer={<><button onClick={() => setModal(null)}>Cancel</button><ActionButton className={modal === 'reject' ? 'danger' : 'primary'} disabled={modal !== 'regen' && notes.trim().length < 3} title={modal !== 'regen' && notes.trim().length < 3 ? 'Write a reason first' : ''} onClick={() => decide(modal === 'revise' ? 'revision_requested' : modal === 'regen' ? 'regenerate_requested' : 'rejected', { notes, ...(boxes.length && { boxes: boxes.map(({ previewId, x, y, w, h }) => ({ previewId, x, y, w, h })) }) })}>{modal === 'revise' ? 'Send back with notes' : modal === 'regen' ? 'Regenerate' : 'Reject version'}</ActionButton></>}>
           <p className="small muted" style={{ marginTop: 0 }}>{modal === 'revise' ? 'Your notes are given to the generator for the next version.' : modal === 'regen' ? 'A fresh version is produced with a new random seed.' : 'The version is marked rejected and can never be published.'}</p>
+          <BoxDrawer previews={it.previews} boxes={boxes} setBoxes={setBoxes} />
           {modal !== 'regen' && <ReasonPicks notes={notes} setNotes={setNotes} />}
           <textarea rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={modal === 'revise' ? 'What should change? Say which part and what, e.g. "make the title on the cover bigger"' : modal === 'reject' ? 'Why are you rejecting it? Say which part and what is wrong, e.g. "the title on the cover is too small to read"' : 'Notes (optional)'} />
-          <p className="small muted" style={{ marginBottom: 0 }}>{modal === 'regen' ? 'Anything you write here is checked first:' : 'Pick a common reason to start, then finish it in your own words. It is checked first:'} it has to say which part is wrong and what is wrong with it, not just “too blurry”. Vague notes and keyboard-mash get sent back and nothing changes.</p>
+          <p className="small muted" style={{ marginBottom: 0 }}>{modal === 'regen' ? 'Anything you write here is checked first:' : 'Pick a common reason to start, then finish it in your own words. It is checked first:'} it has to say which part is wrong and what is wrong with it, not just “too blurry”. A box you draw counts as the which part, so “too blurry” with a box around the blurry lines is fine. Vague notes and keyboard-mash get sent back and nothing changes.</p>
         </Modal>
       )}
     </Card>

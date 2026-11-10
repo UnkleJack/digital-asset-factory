@@ -32,6 +32,7 @@ import { resolveChromePath } from '../config/chrome.ts';
 import { systemClock, type Clock } from '../core/time.ts';
 import { recoverDrafts } from '../engine/arcade/drafts.ts';
 import type { AppContext } from './context.ts';
+import { SettingsVisionProvider, type VisionProvider } from '../engine/generation/vision.ts';
 
 export interface BootstrapOptions {
   /** false turns off spacing out AI calls (tests). */
@@ -43,6 +44,7 @@ export interface BootstrapOptions {
   clock?: Clock;
   textProvider?: TextProvider;
   imageProvider?: ImageProvider;
+  visionProvider?: VisionProvider;
 }
 
 export interface App extends AppContext {
@@ -147,6 +149,7 @@ export function bootstrap(opts: BootstrapOptions = {}): App {
 
       return {
         text: opts.textProvider ?? routedText,
+        vision: opts.visionProvider ?? new SettingsVisionProvider(() => settings.get('generation'), secrets),
         image: opts.imageProvider ?? routedImage,
         imageOpenAI: openAiImage,
         imageReplicate: replicateImage,
