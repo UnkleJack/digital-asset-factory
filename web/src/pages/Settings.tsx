@@ -19,7 +19,7 @@ const HELP: Record<string, string> = {
   rendering: 'Chrome is used to render PDFs and previews. Changing these restarts the renderer.',
   qa: 'Thresholds for near-duplicate detection, spelling and image checks. Add words the spell-checker should accept to the allowlist (one per line).',
   scoring: 'Factor weights and the score/confidence thresholds. These thresholds are starting points — tune them as you learn what sells.',
-  marketplaces: 'Listing rules per marketplace and default prices per product type (in cents). Rules marked unverified could not be confirmed from official pages; check them against the marketplace.',
+  marketplaces: 'The AI disclosure setting controls when Etsy listings get an AI DISCLOSURE paragraph (Etsy requires one for items created with AI). Listing rules per marketplace and default prices per product type (in cents). Rules marked unverified could not be confirmed from official pages; check them against the marketplace.',
   scheduler: 'How often the scheduler checks plans, the catch-up window for runs missed while the app was off, retry policy and concurrency.',
   licensing: 'The license included in every download. {{shopName}} and {{year}} are filled in automatically.',
   compliance: 'Terms that block a product or listing in QA (trademarks, licensed characters, brands). One per line.',
@@ -89,9 +89,12 @@ const SELECT_OPTIONS: Record<string, string[]> = {
   unconfiguredPolicy: ['deterministic', 'fail'],
   effort: ['low', 'medium', 'high', 'xhigh', 'max'],
   quality: ['low', 'medium', 'high'],
+  aiDisclosure: ['art_only', 'art_and_text'],
 };
 
 const OPTION_LABELS: Record<string, string> = {
+  art_only: 'Etsy AI disclosure: only when AI made the artwork',
+  art_and_text: 'Etsy AI disclosure: also when AI wrote the page text',
   ...AI_PROVIDER_LABELS,
   pollinations: 'Pollinations.ai (FLUX / SD, 100% Free, no key)',
   together: 'Together AI (FLUX / SDXL, free / fast)',

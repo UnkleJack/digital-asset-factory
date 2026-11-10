@@ -320,6 +320,10 @@ export const SettingsSchema = z.object({
       }),
     }).prefault({}),
     defaultPriceCents: z.record(z.string(), z.number().int().min(0)).default(DEFAULT_PRICES),
+    // When an Etsy listing gets an "AI DISCLOSURE" paragraph (Etsy's Creativity Standards require one for items
+    // "created with the use of AI"). art_only: only when AI-made pictures are part of the product.
+    // art_and_text: also when AI wrote the text printed on the pages. Other marketplaces never get one.
+    aiDisclosure: z.enum(['art_only', 'art_and_text']).default('art_only'),
   }).prefault({}),
   licensing: z.object({
     licenseText: z.string().min(20).default(LICENSE_PERSONAL),
@@ -397,6 +401,45 @@ export const SettingsSchema = z.object({
       'arcade.openTasks', 'listings.published.etsy', 'listings.published.gumroad',
       'sales.orders.marketplace_api', 'sales.orders.csv_import', 'sales.revenue_cents.marketplace_api', 'sales.revenue_cents.csv_import', 'ai.cost30',
     ]),
+    // ---- Spec values. LOCKED ones have their spec value as default; TBD ones start blank (null) and
+    // do nothing until the owner sets them (Constitution Art. 5.2: nothing is invented). ----
+    // Low-credit warning (spec H5 option 3): warn when fewer AI calls than this are left. TBD.
+    lowCreditWarning: z.number().int().min(1).max(100_000).nullable().default(null),
+    // Rejection reward (spec D4, locked): every `rejectionsPerCredit` qualifying rejections earn `rejectionRewardCredits`.
+    rejectionsPerCredit: z.number().int().min(1).max(100).default(5),
+    rejectionRewardCredits: z.number().int().min(0).max(100).default(1),
+    // Packs (spec B9/D3, locked): a pack qualifies at `qualifyingPackSize` items; every `packsPerBonus` qualifying packs earn the bonus.
+    qualifyingPackSize: z.number().int().min(2).max(500).default(15),
+    packsPerBonus: z.number().int().min(1).max(100).default(3),
+    // The pack bonus amount is TBD in the spec: no bonus is paid until this is set.
+    packBonusCredits: z.number().int().min(1).max(100).nullable().default(null),
+    // XP (spec D6): every amount is TBD. A blank value records the event with no XP.
+    xp: z.object({
+      taskLow: z.number().int().min(0).max(100_000).nullable().default(null),
+      taskMedium: z.number().int().min(0).max(100_000).nullable().default(null),
+      taskHigh: z.number().int().min(0).max(100_000).nullable().default(null),
+      tab: z.number().int().min(0).max(100_000).nullable().default(null),
+      crossTab: z.number().int().min(0).max(100_000).nullable().default(null),
+    }).prefault({}),
+    // Laziness failsafe (spec D5, H10 option 2): weighted signals add to a score; stages start at these
+    // scores. Every weight and threshold is TBD, so the failsafe stays off until the owner sets them.
+    // The 5-second approve hold is locked at 5 seconds by the spec.
+    failsafe: z.object({
+      streakLength: z.number().int().min(2).max(500).nullable().default(null),
+      fastReviewSeconds: z.number().min(1).max(600).nullable().default(null),
+      copiedReasonSimilarity: z.number().min(0.5).max(1).nullable().default(null),
+      weights: z.object({
+        streak: z.number().min(0).max(100).nullable().default(null),
+        fast: z.number().min(0).max(100).nullable().default(null),
+        empty: z.number().min(0).max(100).nullable().default(null),
+        copied: z.number().min(0).max(100).nullable().default(null),
+      }).prefault({}),
+      // Score where each friction stage starts: 1 shuffled order, 2 moving buttons, 3 "name one thing wrong", 4 the approve hold.
+      stageThresholds: z.array(z.number().min(0).max(10_000)).max(4).default([]),
+      // How much one genuinely careful review lowers the score.
+      cooldownPerCarefulReview: z.number().min(0).max(100).nullable().default(null),
+      approveHoldSeconds: z.number().int().min(1).max(30).default(5),
+    }).prefault({}),
   }).prefault({}),
   email: z.object({
     // Gmail's SMTP relay: the Gmail address you send from goes here; its app password is the smtp_password secret.

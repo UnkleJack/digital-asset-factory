@@ -59,7 +59,7 @@ function previewSpec(app: AppContext, o: OppLike): { spec: SpecRow; designUpdate
   const designUpdatedAt = app.db.value<string>('SELECT updated_at FROM design_systems WHERE id = ?', designSystemId) ?? null;
   // A seed fixed per idea, so remaking an unchanged idea draws the same page.
   const seed = parseInt(sha256(o.id).slice(0, 8), 16);
-  const spec: SpecRow = { id: `preview_${o.id}`, product_id: o.id, product_type: def.id, params, design_system_id: designSystemId, audience_id: o.audience_id, theme_id: o.theme_id, paper: PaperSchema.parse({}), seed, created_at: new Date().toISOString() };
+  const spec: SpecRow = { id: `preview_${o.id}`, product_id: o.id, product_type: def.id, params, design_system_id: designSystemId, audience_id: o.audience_id, theme_id: o.theme_id, paper: PaperSchema.parse({}), seed, brief: '', created_at: new Date().toISOString() };
   return { spec, designUpdatedAt };
 }
 

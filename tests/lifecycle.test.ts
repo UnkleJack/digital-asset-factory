@@ -106,6 +106,8 @@ test('QA failure blocks approval; revision creates a new version that re-enters 
   const item = app.db.get<{ id: string }>('SELECT id FROM approval_items WHERE version_id = ?', v.id)!;
   assert.throws(() => decide(app, item.id, { decision: 'approved' }), /cannot be approved/);
   assert.throws(() => decide(app, item.id, { decision: 'revision_requested', notes: '' }), /Describe what should change/);
+  assert.throws(() => decide(app, item.id, { decision: 'rejected', notes: '' }), /Say why you are rejecting it/);
+  assert.throws(() => decide(app, item.id, { decision: 'rejected' }), /Say why you are rejecting it/);
   const r = decide(app, item.id, { decision: 'regenerate_requested', notes: 'try again' });
   await idle(app);
   const nv = getVersion(app.db, r.newVersionId!);

@@ -8,6 +8,8 @@ import { api, errorText, useApi } from '../api.ts';
 import { useArcadeInput, type Direction } from './input.ts';
 import { WorldList, WorldDetail, BuilderScreen, BuilderWorldScreen, ArcadeTabs } from './Worlds.tsx';
 import { StatsTicker } from './Ticker.tsx';
+import { MissionsScreen } from './Missions.tsx';
+import { TaskWorkspace, QaReview, BinScreen, PacksScreen, LeaderboardsScreen, CodexScreen, BmoScreen, type TabDestination } from './Play.tsx';
 import { ARCADE_GAME_NAME, ARCADE_TAGLINE, ENGINE_NAME } from '../../../src/core/brand.ts';
 
 // HAPPY DAFFY: the arcade front end of Asset Foundry.
@@ -27,9 +29,12 @@ interface Character {
   portraitUrl: string | null;
   scope: string;
   stats: { eye: number | null; craft: number | null; taste: number | null; patience: number | null };
+  /** Codex XP: 0 while no XP amounts are set (spec D6), and how many things this character has learned. */
+  xp: number;
+  xpEvents: number;
 }
 interface ArcadeData {
-  credits: { value: number; source: 'test'; live: false; state: 'normal' | 'zero' };
+  credits: { value: number; source: 'live' | 'test'; live: boolean; state: 'normal' | 'low' | 'zero'; bottleneck: string | null; unknown: string[]; earned: number };
   characters: Character[];
   hiScores: { label: string; score: number }[];
   startAllowed: boolean;
@@ -37,9 +42,12 @@ interface ArcadeData {
 
 const TITLE_WORDS = ARCADE_GAME_NAME.split(' ');
 
-type Screen = 'hub' | 'world' | 'builder' | 'builderWorld';
-const SCREEN_TITLES: Record<Screen, string> = { hub: 'HUB', world: 'WORLD DETAIL', builder: 'WORLD BUILDER', builderWorld: 'WORLD BUILDER' };
-const BACK: Partial<Record<Screen, Screen>> = { world: 'hub', builder: 'hub', builderWorld: 'builder' };
+type Screen = 'hub' | 'world' | 'builder' | 'builderWorld' | 'missions' | 'task' | 'review' | 'bin' | 'packs' | 'leaderboards' | 'codex' | 'bmo';
+const SCREEN_TITLES: Record<Screen, string> = {
+  hub: 'HUB', world: 'WORLD DETAIL', builder: 'WORLD BUILDER', builderWorld: 'WORLD BUILDER', missions: 'MISSIONS',
+  task: 'TASK WORKSPACE', review: 'QA REVIEW', bin: 'BIN', packs: 'PACKS', leaderboards: 'LEADERBOARDS', codex: 'CODEX', bmo: 'B.M.O.',
+};
+const BACK: Partial<Record<Screen, Screen>> = { world: 'hub', builder: 'hub', builderWorld: 'builder', missions: 'hub', task: 'world', bin: 'hub', packs: 'hub', leaderboards: 'hub', codex: 'hub', bmo: 'hub' };
 const CHARACTER_KEY = 'daf.arcade.character';
 const MOTION_KEY = 'daf.arcade.reducedMotion';
 
@@ -87,6 +95,10 @@ export function Arcade() {
   const [coin, setCoin] = useState(false);
   const [worldId, setWorldId] = useState<string | null>(null);
   const [builderWorldId, setBuilderWorldId] = useState<string | null>(null);
+  const [taskId, setTaskId] = useState<string | null>(null);
+  const [reviewId, setReviewId] = useState<string | null>(null);
+  // Where QA Review returns to: the task it came from, the packs list or the bin.
+  const [reviewFrom, setReviewFrom] = useState<Screen>('hub');
   const screenRef = useRef<HTMLDivElement>(null);
 
   const credits = data?.credits;
@@ -100,9 +112,20 @@ export function Arcade() {
     setScreen(s);
   }, []);
   const back = useCallback(() => {
-    const to = BACK[screen];
+    // An open popup (mission instructions) closes first, so B on a controller doesn't leave the screen.
+    const popup = document.querySelector<HTMLDialogElement>('.crt-screen dialog[open]');
+    if (popup) return popup.close();
+    const to = screen === 'review' ? reviewFrom : BACK[screen];
     if (to) go(to);
-  }, [screen, go]);
+  }, [screen, go, reviewFrom]);
+  const openReview = useCallback((productId: string, from: Screen) => {
+    setReviewId(productId);
+    setReviewFrom(from);
+    go('review');
+  }, [go]);
+  const goTab = useCallback((d: TabDestination) => {
+    go(d === 'WORLDS' ? 'hub' : d === 'MISSIONS' ? 'missions' : d === 'PACKS' ? 'packs' : d === 'LEADERBOARDS' ? 'leaderboards' : 'codex');
+  }, [go]);
   const insertCoin = useCallback(() => {
     // Cabinet flair only (owner confirmed 2026-11-03): it never changes the credit balance.
     setCoin(true);
@@ -147,7 +170,15 @@ export function Arcade() {
 
   let body: ReactNode;
   if (loading && !data) body = <Loading />;
-  else if (screen === 'world' && worldId) body = <WorldDetail worldId={worldId} character={active} onBack={() => go('hub')} />;
+  else if (screen === 'world' && worldId) body = <WorldDetail worldId={worldId} character={active} onBack={() => go('hub')} onOpenTask={(id) => { setTaskId(id); go('task'); }} />;
+  else if (screen === 'task' && taskId) body = <TaskWorkspace taskId={taskId} character={active} onBack={() => go('world')} onReview={(id) => openReview(id, 'task')} />;
+  else if (screen === 'review' && reviewId) body = <QaReview productId={reviewId} character={active} onBack={() => go(reviewFrom)} onDone={() => { void reload(); go(reviewFrom); }} />;
+  else if (screen === 'bin') body = <BinScreen onBack={() => go('hub')} onOpen={(id) => openReview(id, 'bin')} />;
+  else if (screen === 'packs') body = <PacksScreen character={active} onBack={() => go('hub')} onReview={(id) => openReview(id, 'packs')} onGo={goTab} onSoon={() => {}} />;
+  else if (screen === 'leaderboards') body = <LeaderboardsScreen onBack={() => go('hub')} onGo={goTab} onSoon={() => {}} />;
+  else if (screen === 'codex') body = <CodexScreen character={active} onBack={() => go('hub')} onGo={goTab} onSoon={() => {}} />;
+  else if (screen === 'bmo') body = <BmoScreen onBack={() => go('hub')} />;
+  else if (screen === 'missions') body = <MissionsScreen character={active?.id ?? null} onBack={() => go('hub')} onGo={goTab} />;
   else if (screen === 'builder') body = <BuilderScreen onOpen={(id) => { setBuilderWorldId(id); go('builderWorld'); }} onBack={() => go('hub')} />;
   else if (screen === 'builderWorld' && builderWorldId) body = <BuilderWorldScreen worldId={builderWorldId} defaultCharacter={character} onBack={() => go('builder')} onHub={() => go('hub')} />;
   else {
@@ -166,6 +197,9 @@ export function Arcade() {
         onEnterWorld={enterWorld}
         onBuilder={() => go('builder')}
         onSoon={(d) => setNotice(`${d} UNLOCKS IN A LATER BUILD`)}
+        onTab={goTab}
+        onBin={() => go('bin')}
+        onBmo={() => go('bmo')}
       />
     );
   }
@@ -252,11 +286,17 @@ function CreditMeter({ credits, error }: { credits?: ArcadeData['credits']; erro
     );
   }
   const zero = credits.state === 'zero';
+  const low = credits.state === 'low';
+  const tag = credits.live ? 'LIVE' : 'TEST';
+  const title = credits.live
+    ? `AI calls left today at ${credits.bottleneck}, the provider with the least room.${credits.unknown.length ? ` No daily limit is set for ${credits.unknown.join(', ')}, so they can't be counted.` : ''}`
+    : 'Test number from Settings: no AI provider here reports a daily limit yet (Settings → Generation → pacing).';
   return (
-    <div className={`credit-meter${zero ? ' zero' : ''}`} aria-label={`Credits ${credits.value}, test data${zero ? ', no credits' : ''}`}>
+    <div className={`credit-meter${zero ? ' zero' : low ? ' low' : ''}`} aria-label={`Credits ${credits.value}, ${credits.live ? 'live' : 'test data'}${zero ? ', no credits' : low ? ', low' : ''}. Earned credits ${credits.earned}`}>
       <span className="led-label">CREDITS</span>
       <span className="led-value">{String(credits.value).padStart(2, '0')}</span>
-      <span className="led-tag" title="Test number from Settings. Live provider credits come in a later build.">{zero ? 'EMPTY · TEST' : 'TEST'}</span>
+      <span className="led-tag" title={title}>{zero ? `EMPTY · ${tag}` : low ? `LOW · ${tag}` : tag}</span>
+      <span className="led-tag earned" title="Earned by qualifying rejections and packs. Kept apart: rewards never add AI capacity.">EARNED {credits.earned}</span>
     </div>
   );
 }
@@ -346,11 +386,11 @@ function PortraitControls({ character, onChanged }: { character: Character; onCh
 }
 
 /** The opening screen: pick a player, pick one of their worlds, check the stats. */
-function Hub({ data, chosen, highlight, onHighlight, onChoose, onPortraitChanged, locked, lockText, notice, reduced, onEnterWorld, onBuilder, onSoon }: {
+function Hub({ data, chosen, highlight, onHighlight, onChoose, onPortraitChanged, locked, lockText, notice, reduced, onEnterWorld, onBuilder, onSoon, onTab, onBin, onBmo }: {
   data: ArcadeData | null; chosen: string | null; highlight: string | null;
   onHighlight: (id: string) => void; onChoose: (id: string) => void; onPortraitChanged: () => void;
   locked: boolean; lockText: string; notice: string | null; reduced: boolean;
-  onEnterWorld: (id: string) => void; onBuilder: () => void; onSoon: (name: string) => void;
+  onEnterWorld: (id: string) => void; onBuilder: () => void; onSoon: (name: string) => void; onTab: (d: TabDestination) => void; onBin: () => void; onBmo: () => void;
 }) {
   const characters = data?.characters ?? [];
   const player = characters.find((c) => c.id === chosen) ?? null;
@@ -401,7 +441,7 @@ function Hub({ data, chosen, highlight, onHighlight, onChoose, onPortraitChanged
                     </div>
                   ))}
                 </dl>
-                <p className="fine">Stats stay blank until the XP rules are decided.</p>
+                <p className="fine">XP: {shown.xp} ({shown.xpEvents} things learned). EYE, CRAFT, TASTE and PATIENCE stay blank until their rules are decided.</p>
               </>
             ) : null}
           </div>
@@ -415,6 +455,8 @@ function Hub({ data, chosen, highlight, onHighlight, onChoose, onPortraitChanged
         {notice && notice !== lockText ? <p className="lock-line center-text" role="status">{notice}</p> : null}
         <div className="row-actions">
           <button type="button" className="arc-btn" data-nav onClick={onBuilder}>WORLD BUILDER</button>
+          <button type="button" className="arc-btn" data-nav onClick={onBmo} title="Ask B.M.O., your advisor">ASK B.M.O.</button>
+          <button type="button" className="arc-btn small" data-nav onClick={onBin}>BIN</button>
         </div>
       </section>
 
@@ -423,7 +465,7 @@ function Hub({ data, chosen, highlight, onHighlight, onChoose, onPortraitChanged
         <StatsTicker character={chosen} reduced={reduced} />
       </section>
 
-      <ArcadeTabs onSoon={onSoon} />
+      <ArcadeTabs onGo={onTab} onSoon={onSoon} />
     </div>
   );
 }

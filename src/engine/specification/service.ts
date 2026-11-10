@@ -24,6 +24,8 @@ export interface CreateProductInput {
   seed?: number;
   /** Overrides the design system's fonts (a matching custom design system is reused or created). */
   fonts?: FontChoice;
+  /** Free-text wording instructions for the AI (see briefClause). */
+  brief?: string;
 }
 
 function zodIssues(err: { issues: { path: PropertyKey[]; message: string }[] }) {
@@ -61,6 +63,7 @@ export function buildContextFromSpec(app: AppContext, spec: SpecRow, title: stri
     shopName: app.settings.get('general').shopName,
     seed: spec.seed,
     revisionNotes,
+    brief: spec.brief,
     loadReferenceImage: (id: string) => referenceImageAsPng(app, id),
   };
 }
@@ -95,7 +98,7 @@ export function createProduct(app: AppContext, input: CreateProductInput, actor:
   const productId = newId('prd');
   const specId = newId('spc');
   const versionId = newId('ver');
-  const spec: SpecRow = { id: specId, product_id: productId, product_type: def.id, params, design_system_id: designSystemId, audience_id: input.audienceId ?? null, theme_id: input.themeId ?? null, paper: paperParsed.data, seed: input.seed ?? randomSeed(), created_at: now };
+  const spec: SpecRow = { id: specId, product_id: productId, product_type: def.id, params, design_system_id: designSystemId, audience_id: input.audienceId ?? null, theme_id: input.themeId ?? null, paper: paperParsed.data, seed: input.seed ?? randomSeed(), brief: (input.brief ?? '').trim(), created_at: now };
   const title = (input.title?.trim() || def.defaultTitle({ ...buildContextFromSpec(app, spec, ''), title: undefined } as never)).slice(0, 120);
   const categoryId = app.db.value<string>('SELECT id FROM categories WHERE name = ?', def.category) ?? null;
   app.db.tx(() => {

@@ -1,6 +1,6 @@
 # Getting started with Asset Foundry
 
-This guide assumes you have never opened the app before. Follow it top to bottom once; after that, the daily routine at the end is all you need.
+This guide assumes you have never opened the app before. Follow it top to bottom once; after that, the daily routine at the end is all you need. For a button-by-button tour of every screen, see the [walkthrough](guide/WALKTHROUGH.md).
 
 Everything runs on your own computer (Mac or Windows 11). Nothing is posted anywhere until you approve it. On Windows, read [WINDOWS.md](WINDOWS.md) first for the install steps.
 

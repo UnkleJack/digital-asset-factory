@@ -46,8 +46,8 @@ test('three characters: IDE, AI Chatbot, DAF, with no invented stats', () => {
   }
 });
 
-test('credits are labelled test data and Start follows N > 0', () => {
-  const s = arcadeState(app);
+test('credits are labelled test data and Start follows N > 0', async () => {
+  const s = await arcadeState(app);
   assert.equal(s.credits.source, 'test');
   assert.equal(s.credits.live, false);
   assert.ok(s.credits.value > 0, 'default test credits let the cabinet start');

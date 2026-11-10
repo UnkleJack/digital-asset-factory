@@ -9,6 +9,7 @@ import '@fontsource/cinzel/700.css';
 import '@fontsource/press-start-2p/400.css';
 import './styles.css';
 import { ToastProvider } from './ui.tsx';
+import { ImageCatcher } from './imageCatcher.tsx';
 import { useApi } from './api.ts';
 import { Dashboard } from './pages/Dashboard.tsx';
 import { CalendarPage } from './pages/Calendar.tsx';
@@ -29,11 +30,13 @@ import { Settings } from './pages/Settings.tsx';
 import { Packing } from './pages/Packing.tsx';
 import { Imports } from './pages/Imports.tsx';
 import { Arcade } from './arcade/Arcade.tsx';
+import { MissionsPage, ScreenInstructions } from './pages/Missions.tsx';
 import { ARCADE_GAME_NAME, SUITE_NAME } from '../../src/core/brand.ts';
 
-const NAV_ICONS: Record<string, string> = { '/arcade': '◉', '/': '⌂', '/calendar': '⏲', '/digest': '✉', '/research': '⌕', '/library': '▦', '/imports': '⇩', '/packing': '⛭', '/templates': '✎', '/jobs': '⚙', '/qa': '⚖', '/batches': '⚔', '/rework': '↺', '/ai-notes': '✍', '/listings': '☰', '/publishing': '⇪', '/analytics': '◔', '/settings': '⚒' };
+const NAV_ICONS: Record<string, string> = { '/arcade': '◉', '/missions': '★', '/': '⌂', '/calendar': '⏲', '/digest': '✉', '/research': '⌕', '/library': '▦', '/imports': '⇩', '/packing': '⛭', '/templates': '✎', '/jobs': '⚙', '/qa': '⚖', '/batches': '⚔', '/rework': '↺', '/ai-notes': '✍', '/listings': '☰', '/publishing': '⇪', '/analytics': '◔', '/settings': '⚒' };
 const NAV_HINTS: Record<string, string> = {
   '/arcade': 'The arcade cabinet: play your way through the suite (early build)',
+  '/missions': 'Learn every screen, one mission at a time (shared with the arcade)',
   '/': 'What the factory is doing right now',
   '/calendar': 'Schedule automatic daily production',
   '/digest': 'Market research emailed every few days, with new ideas',
@@ -65,6 +68,7 @@ function Nav() {
     <nav className="sidebar nav" aria-label="Main">
       <div className="brand">{SUITE_NAME}<small>{data ? (data.providers.text.mode === 'ai' ? `AI: ${data.providers.text.model}` : 'AI not configured') : ' '}</small></div>
       {link('/arcade', `${ARCADE_GAME_NAME} arcade`)}
+      {link('/missions', 'Missions')}
       {link('/', 'Dashboard')}
       {link('/calendar', 'Production calendar')}
       <div className="nav-section">Make</div>
@@ -102,6 +106,8 @@ function App() {
           <Route path="/arcade/*" element={<Arcade />} />
           <Route path="*" element={<BackOffice />} />
         </Routes>
+        {/* Drop a picture on any page, back office or arcade, to add it to the image library. */}
+        <ImageCatcher />
       </ToastProvider>
     </BrowserRouter>
   );
@@ -112,6 +118,7 @@ function BackOffice() {
     <div className="shell">
       <Nav />
       <main className="main">
+        <ScreenInstructions />
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/calendar" element={<CalendarPage />} />
@@ -132,6 +139,7 @@ function BackOffice() {
           <Route path="/publishing" element={<Publishing />} />
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/missions" element={<MissionsPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>

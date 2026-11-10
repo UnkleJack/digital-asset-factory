@@ -77,7 +77,7 @@ function Spread({ types, onList }: { types: any[]; onList: () => void }) {
             <div className="product-cards">
               {l.items.map((p: any) => (
                 <Link key={p.id} to={`/products/${p.id}`} className="pcard">
-                  <div className="img">{p.thumb ? <AssetImg id={p.thumb} alt={`${p.title} preview`} /> : <span className="muted small">No preview</span>}</div>
+                  <div className="img">{p.thumb ? <AssetImg id={p.thumb} thumb={200} alt={`${p.title} preview`} /> : <span className="muted small">No preview</span>}</div>
                   <div className="body">
                     <div className="title">{p.title}</div>
                     <div className="small muted">v{p.version_no}{p.category ? ` · ${p.category}` : ''} · {ago(p.created_at)}</div>
@@ -133,6 +133,7 @@ function NewProductModal({ onClose }: { onClose: () => void }) {
   const designs = useApi<any[]>('/design-systems');
   const audiences = useApi<any[]>('/audiences');
   const themes = useApi<any[]>('/themes');
+  const presets = useApi<any[]>('/presets');
   const fontsApi = useApi<any>('/fonts');
   const secrets = useApi<any>('/secrets');
   const nav = useNavigate();
@@ -140,7 +141,8 @@ function NewProductModal({ onClose }: { onClose: () => void }) {
   const [category, setCategory] = useState('');
   const [typeId, setTypeId] = useState('');
   const [params, setParams] = useState<Record<string, any>>({});
-  const [f, setF] = useState({ title: '', designSystemId: '', audienceId: '', themeId: '', size: 'letter', orientation: 'portrait', grayscale: false, marketplaces: ['etsy'] as string[] });
+  const [f, setF] = useState({ title: '', designSystemId: '', audienceId: '', themeId: '', size: 'letter', orientation: 'portrait', grayscale: false, marketplaces: ['etsy'] as string[], brief: '' });
+  const [presetId, setPresetId] = useState('');
   const [pairing, setPairing] = useState('');
   const [custom, setCustom] = useState<Fonts>({ heading: 'playfair-display', body: 'lora', accent: 'playfair-display' });
   const [axis, setAxis] = useState('');
@@ -148,7 +150,7 @@ function NewProductModal({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const type = types.data?.find((t) => t.id === typeId);
-  useEffect(() => { setParams({}); setAxis(''); setPicked([]); }, [typeId]);
+  useEffect(() => { if (presetId) { setPresetId(''); return; } setParams({}); setAxis(''); setPicked([]); }, [typeId]);
   useEffect(() => setPicked([]), [axis]);
 
   const fontList: any[] = fontsApi.data?.fonts ?? [];
@@ -178,11 +180,26 @@ function NewProductModal({ onClose }: { onClose: () => void }) {
   const chosen = axis ? axisValues(axis).filter((v) => picked.includes(v.key)) : [];
   const extraCount = axis === 'seed' ? Number(chosen[0]?.body.count ?? 0) : chosen.length;
 
+  // A preset fills the whole form in one go. Anything it names that doesn't exist any more is left blank.
+  const applyPreset = (pr: any) => {
+    const t = types.data?.find((x) => x.id === pr.productType);
+    if (!t) return;
+    const idOf = (list: any[] | null | undefined, name?: string) => (name ? list?.find((x) => x.name === name)?.id ?? '' : '');
+    if (t.id !== typeId) setPresetId(pr.id);
+    setCategory(t.category);
+    setTypeId(t.id);
+    setParams({ ...(pr.params ?? {}) });
+    setAxis('');
+    setPicked([]);
+    setPairing('');
+    setF((cur) => ({ ...cur, title: '', designSystemId: idOf(designs.data, pr.designSystem), audienceId: idOf(audiences.data, pr.audience), themeId: idOf(themes.data, pr.theme), size: pr.paper?.size ?? 'letter', orientation: pr.paper?.orientation ?? 'portrait', grayscale: pr.paper?.grayscale ?? false, brief: pr.brief ?? '' }));
+  };
+
   const submit = async () => {
     setBusy(true);
     setErr(null);
     try {
-      const r = await api('/products', { body: { productType: typeId, title: f.title || undefined, params, designSystemId: f.designSystemId || undefined, audienceId: f.audienceId || null, themeId: f.themeId || null, paper: { size: f.size, orientation: f.orientation, grayscale: f.grayscale }, marketplaces: f.marketplaces, ...(fonts && { fonts }) } });
+      const r = await api('/products', { body: { productType: typeId, title: f.title || undefined, params, designSystemId: f.designSystemId || undefined, audienceId: f.audienceId || null, themeId: f.themeId || null, paper: { size: f.size, orientation: f.orientation, grayscale: f.grayscale }, marketplaces: f.marketplaces, ...(f.brief.trim() && { brief: f.brief.trim() }), ...(fonts && { fonts }) } });
       const bodies = axis === 'seed' ? Array.from({ length: extraCount }, () => ({ newSeed: true })) : chosen.map((v) => v.body);
       let made = 0;
       const failures: string[] = [];
@@ -204,6 +221,11 @@ function NewProductModal({ onClose }: { onClose: () => void }) {
       <FontFaces fonts={fontList} />
       <Async state={types}>{() => (
         <div className="stack">
+          {(presets.data ?? []).length > 0 && <>
+            <h3>Quick start (optional)</h3>
+            <p className="small muted" style={{ margin: 0 }}>One click fills in the kind, audience, design, settings and brief below. Change anything you like before you press Create.</p>
+            <div className="chips">{(presets.data ?? []).map((pr: any) => <button key={pr.id} className="chip" title={`${pr.group}${pr.brief ? ' · ' + pr.brief : ''}`} onClick={() => applyPreset(pr)}>{pr.name}</button>)}</div>
+          </>}
           <h3>1. What are you making?</h3>
           <div className="chips">{categories.map((c) => <button key={c} className={`chip${c === category ? ' on' : ''}`} onClick={() => { setCategory(c); setTypeId(''); }}>{c}</button>)}</div>
           {category && <>
@@ -269,6 +291,7 @@ function NewProductModal({ onClose }: { onClose: () => void }) {
                 <label className="f">Theme<select value={f.themeId} onChange={(e) => setF({ ...f, themeId: e.target.value })}><option value="">None</option>{themes.data?.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
                 <label className="f">Paper size<select value={f.size} onChange={(e) => setF({ ...f, size: e.target.value })}>{['letter', 'a4', 'a5', 'half-letter', 'legal'].map((s) => <option key={s} value={s}>{label(s)}</option>)}</select></label>
                 <label className="f">Orientation<select value={f.orientation} onChange={(e) => setF({ ...f, orientation: e.target.value })}><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label>
+                <label className="f" style={{ gridColumn: '1 / -1' }}>Brief for the AI (optional)<textarea rows={3} maxLength={600} value={f.brief} placeholder="e.g. Keep the habits countable and kind. Nothing about weight loss." onChange={(e) => setF({ ...f, brief: e.target.value })} /><span className="field-help">Wording instructions the AI follows when it writes the text on the pages and the shop listing. It does not change the layout. {f.brief.length}/600</span></label>
                 <label className="check"><input type="checkbox" checked={f.grayscale} onChange={(e) => setF({ ...f, grayscale: e.target.checked })} />Ink-saver grayscale</label>
               </div>
               {shownFonts && <div className="font-sample">

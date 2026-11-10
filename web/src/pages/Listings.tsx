@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { api, errorText, useApi, usePagedApi } from '../api.ts';
 import { CompactList } from '../compact.tsx';
-import { Async, Card, Empty, Modal, PageHead, Pill, useToast } from '../ui.tsx';
+import { Async, Card, ClearViewControls, Empty, Modal, PageHead, Pill, useClearView, useToast } from '../ui.tsx';
 import { ago, generatorLabel, label, money } from '../format.ts';
 
 export function Listings() {
@@ -13,6 +13,7 @@ export function Listings() {
   const qs = new URLSearchParams({ ...(market && { marketplace: market }), ...(status && { status }), ...(current && { current: '1' }) });
   const st = usePagedApi<any[]>(`/listings?${qs}`, { poll: 10000 });
   const open = sp.get('open');
+  const view = useClearView<any>('listings', st.data, (l) => l.updated_at);
   return (
     <div className="page">
       <PageHead title="Marketplace listings" sub="Listing drafts per product version and marketplace, checked against each marketplace's rules." />
@@ -23,10 +24,10 @@ export function Listings() {
       </div>
       <Card>
         <Async state={st}>{(list) => list.length === 0 ? <Empty title="No listings">Listings are drafted automatically after a product is packaged.</Empty> : (
-          <CompactList total={st.total} shown={list.length} onMore={st.more} noun="listings">
+          <CompactList total={st.total == null ? null : st.total - view.hiddenCount} shown={view.visible.length} onMore={st.more} noun="listings" tools={<ClearViewControls view={view} noun="listings" />}>
           <table className="t">
             <thead><tr><th>Listing</th><th>Marketplace</th><th>Price</th><th>Status</th><th>Approval</th><th>Updated</th></tr></thead>
-            <tbody>{list.map((l) => (
+            <tbody>{view.visible.map((l: any) => (
               <tr key={l.id} className="click" onClick={() => setSp({ open: l.id })}>
                 <td><b>{l.title}</b><div className="small muted"><Link to={`/products/${l.product_id}`} onClick={(e) => e.stopPropagation()}>{l.product_title}</Link> · v{l.version_no}{!l.is_current ? ' (old version)' : ''}</div></td>
                 <td>{label(l.marketplace)}</td>

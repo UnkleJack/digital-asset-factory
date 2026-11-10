@@ -2,7 +2,7 @@ import { Fragment, useState } from 'react';
 import { Link } from 'react-router';
 import { useApi, usePagedApi } from '../api.ts';
 import { CompactList } from '../compact.tsx';
-import { Async, Card, CheckList, Empty, PageHead, Pill } from '../ui.tsx';
+import { Async, Card, CheckList, ClearViewControls, Empty, PageHead, Pill, useClearView } from '../ui.tsx';
 import { ago, label } from '../format.ts';
 
 export function QaPage() {
@@ -10,6 +10,7 @@ export function QaPage() {
   const runs = usePagedApi<any[]>(`/qa${status ? `?status=${status}` : ''}`, { poll: 8000 });
   const summary = useApi<any[]>('/qa/summary', { poll: 15000 });
   const [open, setOpen] = useState<string | null>(null);
+  const view = useClearView<any>('qa', runs.data, (r) => r.started_at);
   return (
     <div className="page">
       <PageHead title="QA results" sub="Automated checks on every version. A failed hard check blocks approval and publication; warnings are shown to the reviewer." />
@@ -25,10 +26,10 @@ export function QaPage() {
       </div>
       <Card title="Recent QA runs" actions={<select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Filter"><option value="failed">Failed</option><option value="passed_with_warnings">Passed with warnings</option><option value="passed">Passed</option><option value="">All</option></select>}>
         <Async state={runs}>{(list) => list.length === 0 ? <Empty title="Nothing to show" /> : (
-          <CompactList total={runs.total} shown={list.length} onMore={runs.more} noun="QA runs">
+          <CompactList total={runs.total == null ? null : runs.total - view.hiddenCount} shown={view.visible.length} onMore={runs.more} noun="QA runs" tools={<ClearViewControls view={view} noun="runs" />}>
           <table className="t">
             <thead><tr><th>Product</th><th>Version</th><th>Checks</th><th>Result</th><th>When</th></tr></thead>
-            <tbody>{list.map((r) => (
+            <tbody>{view.visible.map((r: any) => (
               <Fragment key={r.id}>
                 <tr className="click" onClick={() => setOpen(open === r.id ? null : r.id)}>
                   <td><Link to={`/products/${r.product_id}`} onClick={(e) => e.stopPropagation()}>{r.title}</Link><div className="small muted">{label(r.product_type)}</div></td>

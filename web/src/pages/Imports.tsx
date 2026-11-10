@@ -1,7 +1,8 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { api, errorText, useApi } from '../api.ts';
-import { ActionButton, Async, Card, Empty, PageHead, Pill, useToast } from '../ui.tsx';
+import { api, useApi } from '../api.ts';
+import { IMAGES_IMPORTED, NO_PICTURE, fromFiles, importPictures, linksIn, picturesIn, type ImportResult, type Pending } from '../imageImport.ts';
+import { ActionButton, Async, Card, ClearViewControls, Empty, PageHead, Pill, useClearView, useToast } from '../ui.tsx';
 import { fmtDate } from '../format.ts';
 
 const TOOLS = ['Grok Imagine', 'ChatGPT images', 'Gemini (Nano Banana)', 'arena.ai', 'Flux', 'Venice AI', 'Midjourney', 'Canva'];
@@ -12,17 +13,6 @@ const FIELDS: { id: string; label: string; hint: string }[] = [
   { id: 'page_text', label: 'Page text', hint: 'Prompts, affirmations, journal questions…' },
   { id: 'other', label: 'Other', hint: 'Anything else that shows your style' },
 ];
-
-type Result = { name: string; status: 'imported' | 'duplicate' | 'rejected' | 'error'; detail: string };
-
-function readBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result).slice(String(r.result).indexOf(',') + 1));
-    r.onerror = () => reject(r.error ?? new Error('Could not read the file'));
-    r.readAsDataURL(file);
-  });
-}
 
 function ToolPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const known = TOOLS.includes(value) || value === '';
@@ -41,11 +31,17 @@ function ToolPicker({ value, onChange }: { value: string; onChange: (v: string) 
 export function Imports() {
   const images = useApi<any[]>('/references?kind=image');
   const texts = useApi<any[]>('/references?kind=text');
+  // Pictures imported from the box here or dropped anywhere in the app: refresh the library.
+  useEffect(() => {
+    const refresh = () => images.reload();
+    window.addEventListener(IMAGES_IMPORTED, refresh);
+    return () => window.removeEventListener(IMAGES_IMPORTED, refresh);
+  });
   return (
     <div className="page">
       <PageHead title="Imports" sub="Bring in things you made with other tools. Images become coloring-page products; text you like becomes style examples for the AI. Exact duplicates are skipped automatically." />
       <div className="grid g2">
-        <ImageUpload onDone={() => images.reload()} />
+        <ImageUpload />
         <TextUpload onDone={() => texts.reload()} />
       </div>
       <ImageLibrary state={images} />
@@ -54,31 +50,41 @@ export function Imports() {
   );
 }
 
-function ImageUpload({ onDone }: { onDone: () => void }) {
+function ImageUpload() {
   const [tool, setTool] = useState('');
   const [label, setLabel] = useState('');
   const [prompt, setPrompt] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
-  const [results, setResults] = useState<Result[]>([]);
+  const [results, setResults] = useState<ImportResult[]>([]);
   const [drag, setDrag] = useState(false);
   const input = useRef<HTMLInputElement>(null);
 
-  const upload = async (files: File[]) => {
-    const out: Result[] = [];
-    for (const [i, f] of files.entries()) {
-      setBusy(`Importing ${i + 1} of ${files.length}…`);
-      try {
-        const r = await api<any>('/references/images', { body: { fileName: f.name, dataBase64: await readBase64(f), label: label || undefined, sourceTool: tool.trim() || undefined, prompt: prompt || undefined, madeAt: f.lastModified ? new Date(f.lastModified).toISOString() : undefined } });
-        out.push(r.status === 'imported' ? { name: f.name, status: 'imported', detail: `saved as ${r.path}` }
-          : r.status === 'duplicate' ? { name: f.name, status: 'duplicate', detail: `same image as ${r.existingPath ?? r.existingLabel}, skipped` }
-          : { name: f.name, status: 'rejected', detail: r.reason });
-      } catch (e) {
-        out.push({ name: f.name, status: 'error', detail: errorText(e) });
-      }
-      setResults([...out]);
-    }
+  const take = async (dt: DataTransfer | null) => {
+    if (!dt) return;
+    const items = picturesIn(dt);
+    if (!items.length) { setResults([{ name: 'Dropped item', status: 'rejected', detail: NO_PICTURE }]); return; }
+    return upload(items);
+  };
+
+  // Paste (⌘V / Ctrl+V) anywhere on this page works like a drop, unless you are typing in a box.
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (!e.clipboardData) return;
+      const hasPicture = [...e.clipboardData.files].length > 0 || linksIn(e.clipboardData).length > 0;
+      if (!hasPicture) return;
+      e.preventDefault();
+      void take(e.clipboardData);
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  });
+
+  // What's typed in the fields above is saved with every picture dropped in this box.
+  const upload = async (items: Pending[]) => {
+    await importPictures(items, { label: label || undefined, sourceTool: tool.trim() || undefined, prompt: prompt || undefined }, (step, done) => { setBusy(step); setResults(done); });
     setBusy(null);
-    onDone();
   };
 
   return (
@@ -93,13 +99,13 @@ function ImageUpload({ onDone }: { onDone: () => void }) {
           className={`dropzone${drag ? ' on' : ''}`}
           onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
           onDragLeave={() => setDrag(false)}
-          onDrop={(e) => { e.preventDefault(); setDrag(false); upload([...e.dataTransfer.files]); }}
+          onDrop={(e) => { e.preventDefault(); setDrag(false); void take(e.dataTransfer); }}
           onClick={() => input.current?.click()}
           role="button"
           tabIndex={0}
         >
-          {busy ?? 'Drop images here, or click to choose (PNG, JPEG, WebP, GIF)'}
-          <input ref={input} type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif" hidden onChange={(e) => { upload([...(e.target.files ?? [])]); e.target.value = ''; }} />
+          {busy ?? 'Drop pictures here: files, or straight from a web page. You can also paste one (⌘V) or click to choose. Any picture type works; unusual ones are saved as PNG.'}
+          <input ref={input} type="file" multiple accept="image/*" hidden onChange={(e) => { void upload(fromFiles([...(e.target.files ?? [])])); e.target.value = ''; }} />
         </div>
         {results.length > 0 && (
           <div className="stack small">
@@ -145,12 +151,19 @@ function TextUpload({ onDone }: { onDone: () => void }) {
 function ImageLibrary({ state }: { state: any }) {
   const [sel, setSel] = useState<string[]>([]);
   const [title, setTitle] = useState('');
+  // Only one preview is open at a time, so only one full image is ever loaded.
+  const [preview, setPreview] = useState<string | null>(null);
   const toast = useToast();
   const nav = useNavigate();
   const toggle = (id: string) => setSel(sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id]);
+  // "Clear view" hides pictures imported before the clear. Nothing is deleted, new imports still show,
+  // and ticked pictures stay so a selection in progress never disappears.
+  const view = useClearView<any>('imports-images', state.data, (r) => r.created_at, (r) => sel.includes(r.id));
   return (
-    <Card title="Image library" className="imports-lib" actions={sel.length > 0 && (
+    <Card title="Image library" className="imports-lib" actions={(
       <>
+        <ClearViewControls view={view} noun="pictures" />
+        {sel.length > 0 && <>
         <input placeholder="Product title (optional)" value={title} onChange={(e) => setTitle(e.target.value)} style={{ width: 220 }} />
         <ActionButton className="primary" onClick={async () => {
           const r = await api<any>('/references/products', { body: { referenceIds: sel, title: title || undefined } });
@@ -160,27 +173,41 @@ function ImageLibrary({ state }: { state: any }) {
           state.reload();
           nav(`/products/${r.productId}`);
         }}>Make coloring product from {sel.length} selected</ActionButton>
+        </>}
       </>
     )}>
-      <Async state={state}>{(d: any[]) => d.length === 0 ? <Empty title="No images yet">Add some above.</Empty> : (
+      <Async state={state}>{(all: any[]) => all.length === 0 ? <Empty title="No images yet">Add some above.</Empty>
+        : view.visible.length === 0 ? <Empty title="View cleared">Nothing was deleted. New pictures show up here as you import them, and "Show {view.hiddenCount} cleared pictures" above brings the rest back.</Empty> : (
         <>
-          <p className="small muted">Click images to pick them, in the order you want the pages. {sel.length ? `${sel.length} picked.` : ''}</p>
-          <div className="thumbs">
-            {d.map((r) => {
+          <p className="small muted">Tick files to pick them, in the order you want the pages. Press Preview to see one. {sel.length ? `${sel.length} picked.` : ''}</p>
+          <div className="ref-list" role="list">
+            {view.visible.map((r: any) => {
               const n = sel.indexOf(r.id);
+              const name = r.rel_path?.split('/').pop() ?? r.original_name;
+              const open = preview === r.id;
               return (
-                <div key={r.id} className={`ref-card${n >= 0 ? ' on' : ''}`}>
-                  <button className="thumb sq ref-pick" onClick={() => toggle(r.id)} title={r.original_name}>
-                    <img src={`/api/references/${r.id}/file`} alt={r.label} loading="lazy" />
-                    {n >= 0 && <span className="ref-n">{n + 1}</span>}
-                  </button>
-                  <div className="small"><b>{r.rel_path?.split('/').pop()}</b></div>
-                  <div className="small muted">{r.source_tool || 'tool not recorded'} · {r.width_px}×{r.height_px} · {fmtDate(r.made_at)}</div>
-                  {r.usedBy.length > 0 && <div className="small">In {r.usedBy.map((u: any, i: number) => <span key={u.id}>{i ? ', ' : ''}<Link to={`/products/${u.id}`}>{u.title}</Link></span>)}</div>}
-                  <div className="row">
-                    <EditTool item={r} onSaved={() => state.reload()} />
-                    <ActionButton className="small danger" disabled={r.usedBy.length > 0} title={r.usedBy.length ? 'Used by a product' : 'Delete this image from the library'} confirm={`Delete ${r.rel_path?.split('/').pop()}? This removes the file.`} onClick={async () => { await api(`/references/${r.id}`, { method: 'DELETE' }); setSel(sel.filter((x) => x !== r.id)); state.reload(); }}>Delete</ActionButton>
+                <div key={r.id} role="listitem" className={`ref-row${n >= 0 ? ' on' : ''}`}>
+                  <div className="ref-line">
+                    <label className="ref-check" title={r.original_name}>
+                      <input type="checkbox" checked={n >= 0} onChange={() => toggle(r.id)} aria-label={`Pick ${name}`} />
+                      <span className="ref-n">{n >= 0 ? n + 1 : ''}</span>
+                    </label>
+                    <div className="ref-name">
+                      <b>{name}</b>
+                      <div className="small muted">{r.source_tool || 'tool not recorded'} · {r.width_px}×{r.height_px} · {fmtDate(r.made_at)}</div>
+                      {r.usedBy.length > 0 && <div className="small">In {r.usedBy.map((u: any, i: number) => <span key={u.id}>{i ? ', ' : ''}<Link to={`/products/${u.id}`}>{u.title}</Link></span>)}</div>}
+                    </div>
+                    <div className="row ref-actions">
+                      <button className="small" aria-expanded={open} onClick={() => setPreview(open ? null : r.id)}>{open ? 'Hide preview' : 'Preview'}</button>
+                      <EditTool item={r} onSaved={() => state.reload()} />
+                      <ActionButton className="small danger" disabled={r.usedBy.length > 0} title={r.usedBy.length ? 'Used by a product' : 'Delete this image from the library'} confirm={`Delete ${name}? This removes the file.`} onClick={async () => { await api(`/references/${r.id}`, { method: 'DELETE' }); setSel(sel.filter((x) => x !== r.id)); if (open) setPreview(null); state.reload(); }}>Delete</ActionButton>
+                    </div>
                   </div>
+                  {open && (
+                    <div className="ref-preview">
+                      <img src={`/api/references/${r.id}/file`} alt={r.label || name} />
+                    </div>
+                  )}
                 </div>
               );
             })}

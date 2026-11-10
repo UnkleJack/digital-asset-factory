@@ -95,7 +95,7 @@ Return coverSubtitle (one short line) and monthIntentions: exactly ${ctx.params.
       const body = p.notesPanel && landscape
         ? html`<div class="row fill">${html`<div class="col grow">${grid}</div>`}${side}</div>`
         : p.notesPanel
-          ? html`<div class="col fill">${grid}<div class="row" style="height:28mm;flex:none"><div class="box grow"><div class="label">Notes</div>${lines(3)}</div><div class="box" style="width:44mm;flex:none">${miniMonth(nextM.year, nextM.month0, p.weekStart)}</div></div></div>`
+          ? html`<div class="col fill">${grid}<div class="row" style="height:32mm;flex:none"><div class="box grow"><div class="label">Notes</div>${lines(3)}</div><div class="box" style="width:44mm;flex:none">${miniMonth(nextM.year, nextM.month0, p.weekStart)}</div></div></div>`
           : html`<div class="col fill">${grid}</div>`;
       pages.push(page(html`${header(`${MONTH_NAMES[m.month0]} ${m.year}`, content.monthIntentions[i] ?? '', ornament(ctx.tokens))}${body}${stdFooter(ctx, ctx.title)}`));
     });

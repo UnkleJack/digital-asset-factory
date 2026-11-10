@@ -11,6 +11,7 @@ import { runDigest, isDigestDue } from './engine/digest/service.ts';
 import { buildServer } from './server/app.ts';
 import { SUITE_NAME } from './core/brand.ts';
 import { verificationRoot, verificationCleanupDue, planVerificationCleanup, applyVerificationCleanup } from './ops/cleanVerification.ts';
+import { processReasonQueue, RETRY_SECONDS } from './engine/approval/reasonQueue.ts';
 
 const port = Number(process.env.DAF_PORT ?? 4317);
 const paths = resolvePaths();
@@ -84,6 +85,8 @@ const checkVerificationCleanup = () => {
   }
 };
 const cleanupTimer = setInterval(checkVerificationCleanup, 3_600_000);
+// Review notes that waited because the AI couldn't be reached: every 60 seconds, if the AI is back, check them.
+const reasonTimer = setInterval(() => { processReasonQueue(app).catch((err) => app.log.warn('Checking waiting review notes failed', { err: (err as Error).message })); }, RETRY_SECONDS * 1000);
 setTimeout(checkVerificationCleanup, 120_000);
 app.log.info(`${SUITE_NAME} is running at http://127.0.0.1:${port}`, { dataDir: paths.dataDir, chrome: app.renderer.available() });
 if (!app.renderer.available()) app.log.warn('Google Chrome or Microsoft Edge was not found; rendering jobs will fail until one is installed or Settings → Rendering → Chrome path is set.');
@@ -96,6 +99,7 @@ async function shutdown(signal: string) {
   clearInterval(recTimer);
   clearInterval(digestTimer);
   clearInterval(cleanupTimer);
+  clearInterval(reasonTimer);
   scheduler.stop();
   await server.close().catch(() => undefined);
   await worker.stop(20_000);

@@ -1,4 +1,4 @@
-import { createReadStream } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
@@ -18,8 +18,11 @@ import { qaReport } from '../../engine/qa/service.ts';
 import { retryJob } from '../../jobs/queue.ts';
 import { seededRandom } from '../../core/hash.ts';
 import { newId } from '../../core/ids.ts';
+import { makeThumbnail } from '../../storage/thumbnail.ts';
 import { validation, notFound, conflict } from '../../core/errors.ts';
 import { audit } from '../../logging/logger.ts';
+import { PRESETS } from '../../engine/templates/presets.ts';
+import { BRIEF_MAX } from '../../engine/producttypes/types.ts';
 import { int, parse, LIST_MAX, type Q, type P } from './util.ts';
 
 const CreateBody = z.object({
@@ -34,6 +37,7 @@ const CreateBody = z.object({
   marketplaces: z.array(z.string()).optional(),
   batchId: z.string().optional(),
   fonts: FontChoiceSchema.optional(),
+  brief: z.string().max(BRIEF_MAX).optional(),
 });
 
 const previewCache = new Map<string, Buffer>();
@@ -166,6 +170,30 @@ export function registerProductRoutes(s: FastifyInstance, { app }: ServerDeps): 
     return reply.send(createReadStream(app.assets.pathOf(a)));
   });
 
+  // A small copy of a PNG preview for lists and galleries. Made once, kept in data/tmp/thumbs; the original is untouched.
+  s.get('/api/assets/:id/thumb', async (req, reply) => {
+    const a = app.assets.get((req.params as P).id);
+    if (!app.assets.exists(a)) throw notFound('File for asset', a.id);
+    const width = int((req.query as Q).w, 200, 48, 480);
+    if (a.mime !== 'image/png') return reply.redirect(`/api/assets/${a.id}/file`);
+    const dir = join(app.paths.tmpDir, 'thumbs');
+    const file = join(dir, `${a.id.replace(/[^A-Za-z0-9_-]/g, '_')}-w${width}.png`);
+    let body: Buffer | null = existsSync(file) ? readFileSync(file) : null;
+    if (!body) {
+      body = makeThumbnail(app.assets.read(a), width);
+      if (!body) return reply.redirect(`/api/assets/${a.id}/file`);
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(`${file}.part`, body);
+      renameSync(`${file}.part`, file);
+    }
+    reply.header('Content-Type', 'image/png');
+    reply.header('Content-Disposition', 'inline');
+    reply.header('Content-Security-Policy', "default-src 'none'; sandbox");
+    reply.header('Cache-Control', 'private, max-age=86400');
+    return reply.send(body);
+  });
+
+  s.get('/api/presets', async () => PRESETS);
   s.get('/api/product-types', async () => productTypes().map(describeType));
 
   s.get('/api/fonts', async () => ({

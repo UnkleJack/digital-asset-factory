@@ -6,7 +6,7 @@ import { MemorySecretStore } from '../src/config/secrets.ts';
 import { createWorker } from '../src/jobs/handlers.ts';
 import { buildServer } from '../src/server/app.ts';
 import type { Worker } from '../src/jobs/worker.ts';
-import { tempDir, idle } from './helpers.ts';
+import { tempDir, idle, withReasonAi } from './helpers.ts';
 
 // Compact output lists: true totals for paged lists, the library gallery spread, "made" counts and the Rework page.
 
@@ -44,7 +44,7 @@ test('approved work shows in the gallery, rejected work waits on the Rework page
   const ib = await itemOf(b.batchId);
   assert.equal(ia.version.status, 'ready');
   assert.equal((await call('POST', `/api/batch-items/${ia.item.id}/decision`, { decision: 'approved' })).statusCode, 200);
-  assert.equal((await call('POST', `/api/batch-items/${ib.item.id}/decision`, { decision: 'rejected', notes: 'too plain' })).statusCode, 200);
+  assert.equal((await withReasonAi(app, () => call('POST', `/api/batch-items/${ib.item.id}/decision`, { decision: 'rejected', notes: 'too plain' }))).statusCode, 200);
 
   // Gallery: approved only, grouped by type.
   const spread = (await call('GET', '/api/products/spread?types=5&per=4')).json();

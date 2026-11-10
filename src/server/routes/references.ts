@@ -10,6 +10,7 @@ import {
 import { createBatch, addToBatch } from '../../engine/approval/batches.ts';
 import { startPipeline } from '../../jobs/pipeline.ts';
 import { parse, type P, type Q } from './util.ts';
+import { fetchImage } from '../../engine/references/fetchImage.ts';
 
 const ImageBody = z.object({
   fileName: z.string().min(1).max(255),
@@ -72,6 +73,17 @@ export function registerReferenceRoutes(s: FastifyInstance, { app }: ServerDeps)
   s.post('/api/references/images', async (req) => {
     const b = parse(ImageBody, req.body, 'image');
     return summary(importReferenceImage(app, { ...b, data: Buffer.from(b.dataBase64, 'base64') }));
+  });
+
+  // A picture dragged in from a web page arrives as its link. The app fetches the bytes and hands them back,
+  // so the page can convert formats the factory doesn't store (AVIF, BMP, SVG...) before importing.
+  s.post('/api/references/fetch-image', async (req, reply) => {
+    const { url } = parse(z.object({ url: z.string().min(8).max(4000) }), req.body, 'link');
+    const f = await fetchImage(url);
+    reply.header('Content-Type', f.contentType);
+    reply.header('X-File-Name', encodeURIComponent(f.fileName));
+    reply.header('Content-Security-Policy', "default-src 'none'; sandbox");
+    return reply.send(f.bytes);
   });
 
   s.post('/api/references/texts', async (req) => {

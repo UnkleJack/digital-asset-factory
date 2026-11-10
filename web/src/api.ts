@@ -51,6 +51,8 @@ export function errorText(err: unknown): string {
 }
 
 export const assetUrl = (id: string, download = false) => `/api/assets/${id}/file${download ? '?download=1' : ''}`;
+/** A small copy of an image asset, `width` px wide (made once on the server, about a tenth of the full size). */
+export const thumbUrl = (id: string, width = 200) => `/api/assets/${id}/thumb?w=${width}`;
 
 export function useApi<T = any>(path: string | null, opts: { poll?: number; keepData?: boolean } = {}) {
   const [data, setData] = useState<T | null>(null);

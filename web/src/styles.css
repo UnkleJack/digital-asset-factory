@@ -279,11 +279,21 @@ span.chip:not(.on) { border: 1px solid var(--border); }
 /* Imports */
 .dropzone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 28px 16px; text-align: center; color: var(--muted); cursor: pointer; background: var(--surface-2); }
 .dropzone.on, .dropzone:hover { border-color: var(--primary); color: var(--primary); }
-.ref-card { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.ref-card .small { overflow-wrap: anywhere; }
-.ref-pick { position: relative; padding: 0; cursor: pointer; width: 100%; }
-.ref-card.on .ref-pick { outline: 3px solid var(--primary); outline-offset: 1px; }
-.ref-n { position: absolute; top: 6px; left: 6px; background: var(--primary); color: var(--surface); border-radius: 999px; min-width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
+.drop-anywhere { position: fixed; inset: 12px; z-index: 90; pointer-events: none; display: flex; align-items: center; justify-content: center; border: 3px dashed var(--primary); border-radius: var(--radius); background: color-mix(in srgb, var(--bg) 70%, transparent); }
+.drop-anywhere > div { background: var(--primary); color: var(--primary-ink); padding: 14px 22px; border-radius: var(--radius); font-size: 18px; font-weight: 600; box-shadow: var(--shadow); }
+.drop-busy { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 100; background: var(--surface-2); color: var(--text); border: 1px solid var(--primary); padding: 10px 18px; border-radius: 8px; box-shadow: var(--shadow); }
+.ref-list { max-height: 480px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); }
+.ref-row { border-bottom: 1px solid var(--border); padding: 8px 10px; }
+.ref-row:last-child { border-bottom: none; }
+.ref-row.on { background: var(--surface); }
+.ref-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ref-check { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.ref-name { flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
+.ref-actions { flex-wrap: wrap; }
+.ref-n { background: var(--primary); color: var(--surface); border-radius: 999px; min-width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; }
+.ref-n:empty { visibility: hidden; }
+.ref-preview { margin-top: 8px; display: flex; justify-content: center; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px; }
+.ref-preview img { max-width: 100%; max-height: 320px; object-fit: contain; }
 
 /* Opportunity sample previews (Research & opportunities). Always labelled as a sample, never the final product. */
 .opp-thumb { position: relative; width: 44px; aspect-ratio: 8.5/11; border-radius: 4px; overflow: hidden; background: var(--surface-2); border: 1px solid var(--border); flex: none; }
@@ -325,7 +335,9 @@ span.chip:not(.on) { border: 1px solid var(--border); }
 .view-switch button.on { background: var(--primary); color: var(--surface); }
 .lane { margin-bottom: 14px; }
 .lane h3 { margin: 0 0 8px; display: flex; gap: 8px; align-items: baseline; }
-.lane .product-cards { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+.lane .product-cards { grid-template-columns: repeat(auto-fill, minmax(120px, 140px)); gap: 10px; }
+.lane .pcard .body { padding: 8px 10px; gap: 4px; }
+.lane .pcard .title { font-size: 13px; line-height: 1.3; }
 .made-strip { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
 .made-box { flex: 1 1 150px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
 .made-num { font-size: 28px; font-weight: 700; color: var(--primary); line-height: 1.1; }
@@ -340,3 +352,16 @@ span.chip:not(.on) { border: 1px solid var(--border); }
 .warn-row { border-top: 1px dashed var(--border); padding-top: 6px; }
 .warn-row:first-child { border-top: 0; padding-top: 0; }
 .warn-row .checks { flex: 1; min-width: 0; }
+
+/* Mission instructions on the back-office side (the arcade styles its own copy). */
+.guide-text.office { font-size: 14.5px; line-height: 1.55; }
+.guide-text.office .guide-h { margin: 16px 0 6px; font-size: 15px; font-weight: 600; color: var(--primary); }
+.guide-text.office .guide-p { margin: 0 0 8px; }
+.guide-text.office .guide-list { margin: 0 0 8px; padding-left: 20px; }
+.guide-text.office .guide-list li { margin-bottom: 4px; }
+.guide-text.office .guide-list li.ordered { list-style: none; }
+.guide-text.office .guide-table { border-collapse: collapse; margin: 0 0 10px; font-size: 13.5px; }
+.guide-text.office .guide-table th, .guide-text.office .guide-table td { border: 1px solid var(--border); padding: 4px 8px; text-align: left; vertical-align: top; }
+.guide-text.office .guide-table th { color: var(--muted); }
+/* "? Instructions" on every back-office screen: opens that screen's guide chapter. */
+.screen-guide { position: fixed; right: 22px; bottom: 22px; z-index: 40; border-radius: 999px; padding: 8px 16px; font-weight: 600; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25); }

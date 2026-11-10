@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { api, errorText, useApi } from '../api.ts';
 import { CompactList } from '../compact.tsx';
-import { ActionButton, Async, Card, Empty, PageHead, Pill, useToast } from '../ui.tsx';
+import { ActionButton, Async, Card, ClearViewControls, Empty, PageHead, Pill, useClearView, useToast } from '../ui.tsx';
 import { ago, fmtDate } from '../format.ts';
 
 const PLATFORM_SUGGESTIONS = ['etsy', 'gumroad', 'creative market', 'teachers pay teachers', 'payhip', 'sellfy', 'shopify stores', 'amazon kdp', 'redbubble', 'zazzle', 'canva templates', 'ko-fi'];
@@ -12,6 +12,7 @@ export function Digest() {
   const settings = useApi<any>('/settings');
   const toast = useToast();
   const [open, setOpen] = useState<string | null>(null);
+  const view = useClearView<any>('digest', st.data?.runs, (r) => r.created_at, (r) => !['sent', 'failed'].includes(r.status));
   return (
     <div className="page">
       <PageHead title="Research digest" sub="Every few days the app searches the web for what's selling, checks the competitor shops you list, puts new product ideas through three rounds of critique, and emails you the result." actions={<ActionButton className="primary" onClick={async () => { await api('/digest/run-now', { body: {} }); toast('Digest started — it takes a few minutes'); st.reload(); }}>Run a digest now</ActionButton>} />
@@ -26,7 +27,7 @@ export function Digest() {
         <Async state={settings}>{(s) => <DigestSettings value={s.settings.research} onSaved={() => { settings.reload(); st.reload(); }} />}</Async>
         <Card title="Past digests">
           <Async state={st}>{(d) => d.runs.length === 0 ? <Empty title="No digests yet">Run one now, or turn on the schedule.</Empty> : (
-            <CompactList total={d.runs.length} shown={d.runs.length} noun="digests" height={560}><div className="stack">{d.runs.map((r: any) => (
+            <CompactList total={view.visible.length} shown={view.visible.length} noun="digests" height={560} tools={<ClearViewControls view={view} noun="digests" />}><div className="stack">{view.visible.map((r: any) => (
               <div key={r.id} className="digest-run">
                 <div className="spread"><span><b>{fmtDate(r.created_at)}</b> <span className="small muted">{r.trigger} · {r.search_queries} searches</span></span><span className="row"><Pill value={r.status === 'sent' ? 'ready' : r.status === 'failed' ? 'failed' : 'running'} text={r.status} /><button className="small" onClick={() => setOpen(open === r.id ? null : r.id)}>{open === r.id ? 'Hide' : 'Open'}</button></span></div>
                 {r.error && <div className="small" style={{ color: 'var(--bad)' }}>{r.error}</div>}

@@ -442,7 +442,7 @@ export function applyRestore(app: AppContext, plan: RestorePlan): RestoreResult 
           } else {
             // Rebuild the text from the seed here, not in the pipeline: the pipeline would ask an AI provider if
             // one is set up now, and replace what this product originally said.
-            const spec: SpecRow = { id: specId, product_id: productId, product_type: def.id, params: it.params, design_system_id: ds.id, audience_id: null, theme_id: null, paper: it.paper, seed: it.seed, created_at: it.createdAt };
+            const spec: SpecRow = { id: specId, product_id: productId, product_type: def.id, params: it.params, design_system_id: ds.id, audience_id: null, theme_id: null, paper: it.paper, seed: it.seed, brief: '', created_at: it.createdAt };
             const content = def.contentSchema.parse(def.deterministicContent(buildContextFromSpec(app, spec, it.title), seededRandom(it.seed)));
             app.db.insert('product_versions', { ...base, content: JSON.stringify(content), content_signature: contentSignature(def.id, spec, content), stage: 'content_generated', status: 'in_progress', qa_status: 'pending' });
           }

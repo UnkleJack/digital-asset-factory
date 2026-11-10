@@ -77,7 +77,7 @@ function Overview({ v }: { v: any }) {
     <>
       <Card title="Page previews" actions={previews.length ? <PreviewButton open={showPages} onClick={() => setShowPages(!showPages)} label={`Show ${previews.length} page preview${previews.length === 1 ? '' : 's'}`} /> : undefined}>
         {!previews.length ? <Empty title="No previews yet">They appear once the product is rendered.</Empty>
-          : showPages ? <div className="thumbs">{previews.map((a: any) => <a key={a.id} href={assetUrl(a.id)} target="_blank" rel="noreferrer" className="thumb"><AssetImg id={a.id} alt={`Page ${a.pageIndex + 1}`} /></a>)}</div>
+          : showPages ? <div className="thumbs">{previews.map((a: any) => <a key={a.id} href={assetUrl(a.id)} target="_blank" rel="noreferrer" className="thumb"><AssetImg id={a.id} thumb={240} alt={`Page ${a.pageIndex + 1}`} /></a>)}</div>
           : <p className="small muted" style={{ margin: 0 }}>Previews load only when you press the button, to keep the page light.</p>}
       </Card>
       <div className="grid g2" style={{ marginTop: 14 }}>
