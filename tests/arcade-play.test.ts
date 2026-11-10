@@ -360,3 +360,50 @@ test('B.M.O.: says so without an AI; proposes actions that only run on yes', asy
   await ok('POST', '/api/arcade/bmo/decline', { proposalId: again.body.actions[0].proposalId });
   assert.equal((await call('POST', '/api/arcade/bmo/act', { proposalId: again.body.actions[0].proposalId })).status, 422);
 });
+
+test('B.M.O. saved ideas: only a real suggestion is saved, it outlives the hour, DO IT runs it once, DISCARD forgets it', async () => {
+  const idea = { reply: 'A sticker world could work.', actions: [
+    { action: { kind: 'create_world', name: 'Sticker line', description: 'Printable stickers', milestones: ['First sheet'] }, why: 'Stickers are unused.' },
+  ] };
+  const chatFor = (text: string) => withReasonAi(app, () => call('POST', '/api/arcade/bmo/chat', { messages: [{ role: 'owner', text }] }), idea as never);
+
+  const r = await chatFor('Could you create a new world for stickers?');
+  const proposalId = r.body.actions[0].proposalId;
+  assert.equal((await call('POST', '/api/arcade/bmo/save', { proposalId: 'bmp_made_up' })).status, 422, 'only a suggestion B.M.O. made can be saved');
+  const saved = await ok('POST', '/api/arcade/bmo/save', { proposalId });
+  assert.equal((await call('POST', '/api/arcade/bmo/act', { proposalId })).status, 422, 'a saved suggestion is no longer waiting');
+
+  // It lives in the database, not the one-hour list, so it is still there after a restart.
+  let list = (await ok('GET', '/api/arcade/bmo/saved')).ideas;
+  assert.equal(list.length, 1);
+  assert.equal(list[0].action.name, 'Sticker line');
+  assert.equal(list[0].why, 'Stickers are unused.');
+  assert.equal(app.db.value('SELECT count(*) FROM bmo_saved_ideas WHERE id = ?', saved.id), 1);
+  assert.equal(app.db.value("SELECT count(*) FROM worlds WHERE name = 'Sticker line'"), 0, 'saving does nothing yet');
+
+  await ok('POST', `/api/arcade/bmo/saved/${saved.id}/act`, {});
+  assert.equal(app.db.value("SELECT count(*) FROM worlds WHERE name = 'Sticker line'"), 1);
+  assert.equal((await call('POST', `/api/arcade/bmo/saved/${saved.id}/act`, {})).status, 422, 'DO IT runs once');
+  assert.equal((await ok('GET', '/api/arcade/bmo/saved')).ideas.length, 0);
+
+  // DISCARD forgets one without doing it.
+  const second = await chatFor('Create a new world for stickers again?');
+  const kept = await ok('POST', '/api/arcade/bmo/save', { proposalId: second.body.actions[0].proposalId });
+  await ok('DELETE', `/api/arcade/bmo/saved/${kept.id}`);
+  assert.equal((await ok('GET', '/api/arcade/bmo/saved')).ideas.length, 0);
+  assert.equal(app.db.value("SELECT count(*) FROM worlds WHERE name = 'Sticker line'"), 1);
+
+  // A saved idea that can't run right now (no credits) stays saved for later.
+  const product = await withReasonAi(app, () => call('POST', '/api/arcade/bmo/chat', { messages: [{ role: 'owner', text: 'Please make a product: a sticker sheet' }] }),
+    { reply: 'Here is one.', actions: [{ action: { kind: 'make_product', productType: 'todo-checklist', title: 'Sticker to-do', brief: '' }, why: 'Quick win.' }] } as never);
+  const p = await ok('POST', '/api/arcade/bmo/save', { proposalId: product.body.actions[0].proposalId });
+  app.settings.update('arcade', { testCredits: 0 });
+  try {
+    assert.equal((await call('POST', `/api/arcade/bmo/saved/${p.id}/act`, {})).status, 422);
+  } finally {
+    app.settings.update('arcade', { testCredits: 3 });
+  }
+  list = (await ok('GET', '/api/arcade/bmo/saved')).ideas;
+  assert.equal(list.length, 1, 'still saved after a failed DO IT');
+  await ok('DELETE', `/api/arcade/bmo/saved/${p.id}`);
+});

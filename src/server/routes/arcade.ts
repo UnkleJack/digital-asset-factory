@@ -18,7 +18,7 @@ import { packsView, packContents, buildPack, finalizePack } from '../../engine/a
 import { leaderboards } from '../../engine/arcade/leaderboards.ts';
 import { codexFor, recordXp } from '../../engine/arcade/codex.ts';
 import { creditState, ledger } from '../../engine/arcade/credits.ts';
-import { chat as bmoChat, act as bmoAct, decline as bmoDecline, ChatBody } from '../../engine/arcade/bmo.ts';
+import { chat as bmoChat, act as bmoAct, decline as bmoDecline, saveProposal, savedIdeas, actSaved, discardSaved, ChatBody } from '../../engine/arcade/bmo.ts';
 import { notFound } from '../../core/errors.ts';
 import { parse, type P, type Q } from './util.ts';
 
@@ -197,6 +197,14 @@ export function registerArcadeRoutes(s: FastifyInstance, { app }: ServerDeps): v
   s.post('/api/arcade/bmo/chat', async (req) => bmoChat(app, parse(ChatBody, req.body, 'chat').messages));
   // YES and NO name a proposal B.M.O. made; the server holds the action itself, so a client can't send its own.
   s.post('/api/arcade/bmo/act', async (req) => bmoAct(app, parse(z.object({ proposalId: z.string().min(4).max(60) }), req.body, 'answer').proposalId));
+  // Saved ideas: SAVE FOR LATER keeps a suggestion B.M.O. made; DO IT runs it once; DISCARD forgets it.
+  s.post('/api/arcade/bmo/save', async (req) => saveProposal(app, parse(z.object({ proposalId: z.string().min(4).max(60) }), req.body, 'answer').proposalId));
+  s.get('/api/arcade/bmo/saved', async () => ({ ideas: savedIdeas(app) }));
+  s.post('/api/arcade/bmo/saved/:id/act', async (req) => actSaved(app, (req.params as P).id));
+  s.delete('/api/arcade/bmo/saved/:id', async (req) => {
+    discardSaved(app, (req.params as P).id);
+    return { ok: true };
+  });
   s.post('/api/arcade/bmo/decline', async (req) => {
     bmoDecline(parse(z.object({ proposalId: z.string().min(4).max(60) }), req.body, 'answer').proposalId);
     return { ok: true };

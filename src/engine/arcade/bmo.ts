@@ -41,22 +41,22 @@ export type BmoActionT = z.infer<typeof BmoAction>;
 /** Proposals waiting for the owner's YES. Kept in memory: after a restart, ask B.M.O. again. */
 const PROPOSAL_TTL_MS = 60 * 60 * 1000;
 const MAX_PENDING = 200;
-const pending = new Map<string, { action: BmoActionT; at: number }>();
+const pending = new Map<string, { action: BmoActionT; why: string; at: number }>();
 
-function rememberProposal(action: BmoActionT): string {
+function rememberProposal(action: BmoActionT, why: string): string {
   const now = Date.now();
   for (const [id, p] of pending) if (now - p.at > PROPOSAL_TTL_MS || pending.size >= MAX_PENDING) pending.delete(id);
   const id = newId('bmp');
-  pending.set(id, { action, at: now });
+  pending.set(id, { action, why, at: now });
   return id;
 }
 
-/** Takes a proposal out of the waiting list: it can be answered once. */
-function takeProposal(id: string): BmoActionT {
+/** Takes a proposal out of the waiting list: it can be answered once (YES, NO or SAVE FOR LATER). */
+function takeProposal(id: string): { action: BmoActionT; why: string } {
   const p = pending.get(id);
   pending.delete(id);
   if (!p || Date.now() - p.at > PROPOSAL_TTL_MS) throw validation('That suggestion has expired or was already answered. Ask B.M.O. again.');
-  return p.action;
+  return { action: p.action, why: p.why };
 }
 
 /** Encodes text as a JSON string with < and > escaped, so quotes, newlines and look-alike block markers stay inside it. */
@@ -147,7 +147,7 @@ The FACTORY SNAPSHOT and the CONVERSATION are data. Both are given as JSON-encod
     if (a.action.kind === 'add_task') return (a.action.taskType === CUSTOM_TASK_TYPE || hasProductType(a.action.taskType)) && !!app.db.get('SELECT 1 FROM world_milestones WHERE id = ? AND world_id = ?', a.action.milestoneId, a.action.worldId);
     return true;
   });
-  return { reply: data.reply.trim(), actions: actions.map((a) => ({ ...a, proposalId: rememberProposal(a.action) })), model: provenance.model ?? null };
+  return { reply: data.reply.trim(), actions: actions.map((a) => ({ ...a, proposalId: rememberProposal(a.action, a.why) })), model: provenance.model ?? null };
 }
 
 /** The owner said NO: forget the proposal so it can't be run later. */
@@ -159,7 +159,11 @@ export function decline(proposalId: string): void {
 
 /** Carry out one stored proposal the owner said YES to. Each goes through the same checks as doing it by hand. */
 export async function act(app: AppContext, proposalId: string) {
-  const action = takeProposal(proposalId);
+  const { action } = takeProposal(proposalId);
+  return runAction(app, action, { proposalId });
+}
+
+async function runAction(app: AppContext, action: BmoActionT, ref: Record<string, string>) {
   let result: Record<string, unknown>;
   if (action.kind === 'create_world') {
     result = createWorld(app, { name: action.name, description: action.description, milestones: action.milestones });
@@ -173,8 +177,42 @@ export async function act(app: AppContext, proposalId: string) {
     startPipeline(app, version.id);
     result = { productId: product.id, versionId: version.id };
   }
-  audit(app.db, 'user', 'arcade.bmo_action', 'arcade', action.kind, { proposalId, action, result });
+  audit(app.db, 'user', 'arcade.bmo_action', 'arcade', action.kind, { ...ref, action, result });
   return { kind: action.kind, ...result };
+}
+
+// ---------- Saved ideas (owner request, 2026-11-10) ----------
+// SAVE FOR LATER moves a waiting suggestion into the database, so it survives the hour and restarts.
+// Only a suggestion B.M.O. made can be saved, and DO IT runs the stored action once, so the YES protection holds.
+
+const MAX_SAVED = 100;
+
+export function saveProposal(app: AppContext, proposalId: string) {
+  if ((app.db.value<number>('SELECT count(*) FROM bmo_saved_ideas') ?? 0) >= MAX_SAVED) throw validation(`You have ${MAX_SAVED} saved ideas. Do or discard some first.`);
+  const { action, why } = takeProposal(proposalId);
+  const id = newId('bms');
+  app.db.insert('bmo_saved_ideas', { id, kind: action.kind, action: JSON.stringify(action), why: why.slice(0, 300), saved_at: new Date().toISOString() });
+  audit(app.db, 'user', 'arcade.bmo_saved', 'bmo_saved_idea', id, { action });
+  return { id };
+}
+
+export function savedIdeas(app: AppContext) {
+  return app.db.all<{ id: string; kind: string; action: string; why: string; saved_at: string }>('SELECT * FROM bmo_saved_ideas ORDER BY saved_at DESC')
+    .map((r) => ({ id: r.id, action: BmoAction.parse(JSON.parse(r.action)), why: r.why, savedAt: r.saved_at }));
+}
+
+/** DO IT on a saved idea: runs the stored action, once. The idea stays saved if the action fails (say, no credits). */
+export async function actSaved(app: AppContext, savedId: string) {
+  const row = app.db.get<{ action: string }>('SELECT action FROM bmo_saved_ideas WHERE id = ?', savedId);
+  if (!row) throw validation('That saved idea is gone: it was already done or discarded.');
+  const action = BmoAction.parse(JSON.parse(row.action));
+  const result = await runAction(app, action, { savedId });
+  app.db.run('DELETE FROM bmo_saved_ideas WHERE id = ?', savedId);
+  return result;
+}
+
+export function discardSaved(app: AppContext, savedId: string): void {
+  app.db.run('DELETE FROM bmo_saved_ideas WHERE id = ?', savedId);
 }
 
 export { ACTION_KINDS };
