@@ -34,7 +34,7 @@ export interface Provenance {
   servedByFallback?: boolean;
 }
 
-function recordRun(app: AppContext, r: { trace: CallTrace; purpose: string; provider: string; model: string | null; promptHash: string | null; settings: Record<string, unknown>; usage: Usage | null; costUsd: number | null; costBasis: string; status: 'succeeded' | 'failed'; error?: string; startedAt: string }): string {
+export function recordRun(app: AppContext, r: { trace: CallTrace; purpose: string; provider: string; model: string | null; promptHash: string | null; settings: Record<string, unknown>; usage: Usage | null; costUsd: number | null; costBasis: string; status: 'succeeded' | 'failed'; error?: string; startedAt: string }): string {
   const id = newId('gen');
   app.db.insert('generation_runs', {
     id,

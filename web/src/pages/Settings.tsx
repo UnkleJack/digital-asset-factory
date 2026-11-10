@@ -90,6 +90,8 @@ const SELECT_OPTIONS: Record<string, string[]> = {
   effort: ['low', 'medium', 'high', 'xhigh', 'max'],
   quality: ['low', 'medium', 'high'],
   aiDisclosure: ['art_only', 'art_and_text'],
+  // Generation → Vision: the picture-reading AI for boxes on reject notes.
+  provider: ['off', 'nvidia', 'gemini', 'anthropic', 'openrouter', 'github', 'mistral', 'together', 'groq', 'huggingface', 'cerebras'],
 };
 
 const OPTION_LABELS: Record<string, string> = {
@@ -105,6 +107,7 @@ const OPTION_LABELS: Record<string, string> = {
   fal: 'Fal.ai (FLUX, paid/metered)',
   grok: 'xAI Grok Imagine (paid)',
   deterministic: 'Deterministic (no AI)',
+  off: 'Off (boxes are saved, nobody looks at them)',
 };
 
 function Field({ name, value, onChange, long }: { name: string; value: any; onChange: (v: any) => void; long?: boolean }) {
@@ -198,16 +201,17 @@ function AiProviders({ onChanged }: { onChanged: () => void }) {
             <span>Backups, in order</span><span>{g.fallbackOrder.filter((x: string) => x !== g.textProvider).map(providerLabel).join(' → ') || 'none'}</span>
             <span>Images (first choice)</span><span>{g.imageProvider} · {g[g.imageProvider]?.model ?? g[g.imageProvider]?.imageModel ?? 'routed'}</span>
             <span>Image backups, in order</span><span>{(g.imageFallbackOrder ?? []).filter((x: string) => x !== g.imageProvider).join(' → ') || 'none'}</span>
+            <span>Picture-reading AI</span><span>{g.vision?.provider && g.vision.provider !== 'off' ? `${providerLabel(g.vision.provider)} · ${g.vision.model || 'no model typed yet'}` : 'Off'} <span className="muted small">(reads the boxes you draw on reject notes)</span></span>
             <span>If no AI key works</span><span>{g.unconfiguredPolicy === 'deterministic' ? 'use the built-in content library' : 'fail the job'}</span>
           </div>;
         }}</Async>
-        {(['text', 'image'] as const).map((p) => (
+        {(['text', 'image', 'vision'] as const).map((p) => (
           <div key={p} className="row" style={{ marginBottom: 8 }}>
-            <ActionButton onClick={async () => { const r = await api('/providers/test', { body: { provider: p } }); setTests({ ...tests, [p]: r }); }}>Test {p} provider</ActionButton>
+            <ActionButton onClick={async () => { const r = await api('/providers/test', { body: { provider: p } }); setTests({ ...tests, [p]: r }); }}>{p === 'vision' ? 'Test picture-reading AI' : `Test ${p} provider`}</ActionButton>
             <TestResult r={tests[p]} />
           </div>
         ))}
-        <p className="small muted">Change the first choice, backup order and models under the Generation tab.</p>
+        <p className="small muted">Change the first choice, backup order and models under the Generation tab. The picture-reading AI is under Generation → Vision: pick a provider and type a model that can read pictures.</p>
       </Card>
     </div>
   );
