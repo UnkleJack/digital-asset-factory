@@ -67,7 +67,7 @@ function versionWithPreview(): { itemId: string; versionId: string; previewId: s
   return { itemId: app.db.value<string>('SELECT id FROM approval_items WHERE version_id = ?', version.id)!, versionId: version.id, previewId: a.id };
 }
 
-async function server(): Promise<{ post: (url: string, body: unknown) => ReturnType<FastifyInstance['inject']>; close: () => Promise<void> }> {
+async function server(): Promise<{ post: (url: string, body: unknown) => Promise<Awaited<ReturnType<FastifyInstance['inject']>>>; close: () => Promise<void> }> {
   const s: FastifyInstance = await buildServer({ app, worker: null as never, scheduler: null, port: 4399, startedAt: new Date() });
   const H = { host: '127.0.0.1:4399', 'x-daf-client': '1', 'content-type': 'application/json' };
   return { post: (url, body) => s.inject({ method: 'POST', url, headers: H, payload: JSON.stringify(body) }), close: () => s.close() };
