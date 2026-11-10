@@ -1,7 +1,7 @@
 import { Link } from 'react-router';
 import { useApi } from '../api.ts';
 import { Async, Card, Empty, PageHead, Pill } from '../ui.tsx';
-import { ago, fmtDate, label, usd } from '../format.ts';
+import { ago, fmtDate, label, providerLabel, usd } from '../format.ts';
 
 export function Dashboard() {
   const state = useApi<any>('/dashboard', { poll: 5000 });
@@ -44,8 +44,8 @@ export function Dashboard() {
             </Card>
             <Card title="Integrations">
               <div className="kv">
-                <span>Text AI</span><span>{d.providers.text.mode === 'ai' ? <Pill value="ready" text={`Anthropic · ${d.providers.text.model}`} /> : <Pill value="pending" text="Not active" />}</span>
-                <span>Image AI</span><span>{d.providers.image.configured ? <Pill value="ready" text={`OpenAI · ${d.providers.image.model}`} /> : <Pill value="pending" text="Not configured" />}</span>
+                <span>Text AI</span><span>{d.providers.text.mode === 'ai' ? <Pill value="ready" text={aiLabel(d.providers.text)} /> : <Pill value="pending" text="Not active" />}</span>
+                <span>Image AI</span><span>{d.providers.image.configured ? <Pill value="ready" text={aiLabel(d.providers.image)} /> : <Pill value="pending" text="Not configured" />}</span>
                 <span>Rendering</span><span>{d.providers.chrome ? <Pill value="ready" text="Chrome found" /> : <Pill value="failed" text="Chrome missing" />}</span>
                 {d.marketplaces.map((m: any) => <span key={m.id} style={{ display: 'contents' }}><span>{m.name}</span><span>{m.directPublishing ? <Pill value="ready" text="Direct publishing (verified)" /> : <Pill value="export_prepared" text="Export package + manual publishing" />}</span></span>)}
               </div>
@@ -59,4 +59,11 @@ export function Dashboard() {
 
 function Stat({ value, label: text, to }: { value: number; label: string; to: string }) {
   return <Link to={to} className="card" style={{ color: 'inherit', textDecoration: 'none' }}><div className="stat">{value ?? 0}</div><div className="stat-label">{text}</div></Link>;
+}
+
+/** "NVIDIA NIM · model", plus "(backup)" when the selected provider has no key and a backup will answer instead. */
+function aiLabel(p: { provider: string; model: string | null; selected: string }): string {
+  const name = providerLabel(p.provider);
+  const base = p.model ? `${name} · ${p.model}` : name;
+  return p.selected && p.selected !== p.provider ? `${base} (backup for ${providerLabel(p.selected)})` : base;
 }

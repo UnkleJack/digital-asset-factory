@@ -138,7 +138,7 @@ Every back-office screen also has a round **? Instructions** button in the botto
 - **Ready for review** lists the batches waiting for you. Click a batch name to review it, or click **All batches** to open the full list.
 - **Production** shows queued jobs, what's running now and the estimated AI cost over the last 30 days. Recent failures are listed underneath with their error. **Jobs** opens Production jobs.
 - **Schedule** shows the next planned run and the latest runs. **Calendar** opens the Production calendar. If there are no plans it says so, with a **Create one** link. Runs only happen while the app is open.
-- **Integrations** shows whether text AI, image AI and Chrome are ready, and for each marketplace whether it can post directly or uses an export package that you upload yourself.
+- **Integrations** shows whether text AI, image AI and Chrome are ready. The text and image rows name the provider that will answer next and its model, such as "NVIDIA NIM · (model)". If your first choice has no key and a backup will answer instead, the row says so, for example "Google Gemini · (model) (backup for NVIDIA NIM)". The card also shows, and for each marketplace whether it can post directly or uses an export package that you upload yourself.
 
 ---
 
@@ -534,8 +534,14 @@ Each item is one slim line with its version, type, any decision so far, and stat
 - **Approve for (marketplaces)** records your approval for this version and the ticked listings. It's greyed out if QA failed, if no marketplace is ticked, or if there are warnings you haven't accepted. Hover over it to see why. After you approve, the product goes onto the Factory floor (if that's switched on), and if you turned on "Post automatically when I approve" for Gumroad, it gets posted.
 - **Return for revision** opens a box: "What should change?" Your notes go to the generator for the next version. Press **Send back with notes**.
 - **Regenerate** opens a box for optional notes. A fresh version is made with new random artwork. Press **Regenerate**.
-- **Reject** opens a box for optional notes. The version is marked rejected and can never be published. Press **Reject version**.
+- **Reject** opens a box for your reason (it has to say which part is wrong and what is wrong with it). The version is marked rejected and can never be published. Press **Reject version**.
 - **Edit…** opens the product page.
+
+**Draw a box on a page.** The Reject, Return for revision and Regenerate boxes all have a **Draw a box on a page** button. It shows the page previews (pick one with the **Page** buttons) and you drag across the part that is wrong. You can draw up to 6 boxes, on any pages, and **Remove** takes one off.
+- A box counts as saying *which part* is wrong, so your words only have to say *what* is wrong. "Too blurry" with a box around the blurry lines is fine. "Bad" with a box still isn't.
+- The picture-reading AI (Settings → Generation → Vision) looks at each box and writes down what it sees, for example "the mandala lines in the box are broken". That goes to the next version's notes when you return it for revision, and into the notes the AI learns from.
+- If the picture-reading AI isn't set up or can't be reached, the box is still saved with its page and place, and the AI tries again every minute.
+- Afterwards, **Show the box you drew** under the decision shows the cut-out and what the AI saw. Click the cut-out to open the whole page with the box drawn in red.
 
 ![Return for revision](images/11d-reject-modal.png)
 
@@ -568,7 +574,7 @@ There are two sections, and each has its own **sort** dropdown: Newest first, Pr
 - **Failed by the machine:** production that failed, and versions that failed a hard QA check.
 - **Rejected by you:** anything you rejected, returned for revision or regenerated in batch review, older versions included.
 
-Each row shows the title, which version out of how many, why it's here, when, type, category, marketplaces and the QA checks involved. Under that it shows your notes or the error.
+Each row shows the title, which version out of how many, why it's here, when, type, category, marketplaces and the QA checks involved. Under that it shows your notes or the error, and **Show the box you drew** if you drew boxes on the pages.
 - **Add note** opens a box for a note to the AI about this item. Press **Save note**. Press **Cancel note** to close the box without saving. The note goes into Notes for the AI.
 - **Preview** shows the cover.
 - **Open** opens the product page.
@@ -699,7 +705,7 @@ Ticked boxes are on/off settings. A box marked "one per line" takes a list. Boxe
 ![Settings, AI providers](images/17b-settings-ai.png)
 
 - **AI keys card.** One row per provider, saying whether it's free or paid, with a **Get a free key** or **Get a key (paid)** link and a Saved or Not set pill. Paste a key and press **Save**. **Remove** deletes a key from the Keychain (it asks first). Saved keys are never shown again. Typing a new key replaces the old one.
-- **Test the connection card.** It shows the current first choice and the backup order for text and images, and what happens if no key works. **Test text provider** and **Test image provider** each make one real API call and report whether it worked, which model answered and how long it took. If your first choice fails, it says which backup answered instead. To change the order, use the Generation tab.
+- **Test the connection card.** It shows the current first choice and the backup order for text and images, and what happens if no key works. **Test text provider**, **Test image provider** and **Test picture-reading AI** each make one real API call and report whether it worked, which model answered and how long it took. If your first choice fails, it says which backup answered instead. The picture-reading test sends a small picture of a red square and passes only if the model says "red". To change the order, use the Generation tab.
 
 ### Integrations
 
@@ -714,6 +720,13 @@ Ticked boxes are on/off settings. A box marked "one per line" takes a list. Boxe
 
   Direct posting hasn't been confirmed against a live Gumroad account yet, so try it on one product first. Cover images can't be set through Gumroad's API.
 - **Email (research digest) card.** The sending Gmail address and the From name. **Save**, then **Send a test email**. The digest goes to the address set on the Research digest page.
+
+### Arcade
+
+- **HAPPY DAFFY test credits card.** While the arcade can't count how many AI calls your providers have left today, its credit meter shows this test number, marked **TEST**. The card says what the meter shows right now and whether the test number is in use.
+- Type a whole number from 0 to 99 and press **Save**.
+- **Set to 0 (lock)** locks PRESS START, which is how you try the zero-credit lock. **Reset to 3** puts it back to the number a fresh copy starts with.
+- The arcade's other settings aren't here: the stats ticker is picked with **EDIT TICKER** on the Hub.
 
 ### Backups
 
@@ -787,7 +800,7 @@ HAPPY DAFFY is the arcade front of Asset Foundry. Same factory, same products, s
 
 ## THE TOP OF THE CABINET
 
-- **CREDITS.** Your credits meter. Right now it shows a **TEST** number, because live provider credits come in a later build. When it shows `--` and **UNAVAILABLE**, the cabinet lost its link to the factory.
+- **CREDITS.** Your credits meter. When none of your providers has a daily limit set, it shows a **TEST** number, which you change in **Settings & integrations → Arcade**. When it shows `--` and **UNAVAILABLE**, the cabinet lost its link to the factory.
 - **P1.** Whoever's playing. **NO PLAYER** means nobody's picked yet.
 - **◀ HUB** zips you back to the hub from anywhere.
 - **MOTION: FULL / LOW** turns the CRT flicker, the scrolling and the wobble down or back up. The cabinet remembers your choice on this computer.
@@ -899,10 +912,12 @@ Got a brain full of half-ideas? Dump them in the box, as messy as you like, and 
 2. **Milestones** (1 to 8) and **Tasks in each** (1 to 10).
 3. **Difficulty:** Mostly easy, A spread or Mostly hard.
 4. **Give tasks to:** whoever suits each task, or one fighter only.
-5. **Product types:** open the list and tick some to limit the AI to those types. Tick none to allow any type, plus Custom tasks.
-6. Press **WRITE MY WORLD**. It can take a minute or two. You can leave, and the draft waits for you.
+5. **Effort budget (pts):** optional. Put in a total, say 40, and the AI aims for tasks whose effort points add up to about that. With a budget, Milestones and Tasks in each turn into the most it can use, so a small budget can come back with fewer tasks. Leave it empty and you get exactly the counts you asked for.
+6. **Base effort guesses on how I sized my finished tasks:** ticked by default. The AI is shown the effort numbers you gave tasks you've already finished (grouped by type and difficulty) and sizes new tasks on the same scale. It's your own numbers, not time spent, because the factory doesn't time tasks. With nothing finished yet it just guesses.
+7. **Product types:** open the list and tick some to limit the AI to those types. Tick none to allow any type, plus Custom tasks.
+8. Press **WRITE MY WORLD**. It can take a minute or two. You can leave, and the draft waits for you.
 
-When it's ready you get **REVIEW THE AI'S WORLD**. Rename it, **REMOVE** a milestone or **DEL** a task you don't want, then press **SAVE WORLD**. Nothing becomes a real world until you press SAVE WORLD. **CLOSE** puts it back in your drafts, but any trimming you did isn't kept. **DISCARD DRAFT** throws it away.
+When it's ready you get **REVIEW THE AI'S WORLD**. **TOTAL EFFORT** adds up every task's points and, if you set a budget, says how far over or under it is. It updates as you delete things. The line under it says whether the guesses followed your finished tasks. Rename it, **REMOVE** a milestone or **DEL** a task you don't want, then press **SAVE WORLD**. Nothing becomes a real world until you press SAVE WORLD. **CLOSE** puts it back in your drafts, but any trimming you did isn't kept. **DISCARD DRAFT** throws it away.
 
 ### YOUR AI DRAFTS
 
@@ -952,9 +967,12 @@ The breadcrumb says **WORLD BUILDER / (WORLD)**. Each milestone shows its number
 
 ## Things this guide found that need your call
 
-While writing this guide I found a few gaps and mismatches. I didn't change any of them, because each one is your call.
+While writing this guide I found four gaps and mismatches. Three were fixed on 2026-11-10, at your request:
 
-1. **The arcade's test credits can't be changed from the app.** The meter reads the `arcade.testCredits` setting (3 in a fresh copy), but no Settings tab shows it. To test the zero-credit lock, someone has to change the setting outside the app.
-2. **The Dashboard's Integrations card always says "Anthropic" and "OpenAI."** The labels are fixed in the code. If your text provider is NVIDIA, it still reads "Anthropic · (model)", and the image row always reads "OpenAI · (model)", whichever provider is set.
-3. **The Constitution's screen count is out of date.** Article 3 says the back office has 17 screens. Its list is 15 sidebar pages plus the 2 sub-pages, and it leaves out Rework and Notes for the AI. The sidebar now has 17 pages, plus 2 sub-pages, which makes 19 screens. Article 3 is yours to amend.
-4. **The two Etsy keys in Settings → Integrations are marked "not used yet."** Etsy is export-package only for now.
+1. ~~The arcade's test credits can't be changed from the app.~~ Fixed: **Settings & integrations → Arcade**.
+2. ~~The Dashboard's Integrations card always says "Anthropic" and "OpenAI."~~ Fixed: it names the provider that will answer and its own model. The sidebar's "AI: (model)" line had the same fault and is fixed too.
+3. ~~The Constitution's screen count is out of date.~~ Fixed: Article 3 now lists the 17 sidebar pages, with Product detail, Batch review and Missions beside them.
+
+Still open:
+
+4. **The two Etsy keys in Settings → Integrations are marked "not used yet."** Etsy is export-package only for now. Wiring them up waits on your go-ahead.

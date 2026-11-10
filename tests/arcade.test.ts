@@ -206,6 +206,41 @@ test('AI generation: a draft that survives leaving the page, follows the setting
   assert.equal(await worldCount(), before, 'the whole proposal was rolled back');
 });
 
+test('AI generation: an effort budget and the owner\'s finished-task sizes reach the AI; counts become upper limits', async () => {
+  const task = (title: string, effort: number) => ({ title, description: 'd', characterId: 'daf', taskType: 'mandala-coloring', difficulty: 'LOW', estimatedEffort: effort });
+  const answer = { name: 'Budget world', description: 'Fits a budget.', milestones: [{ name: 'Only stage', tasks: [task('Small one', 4), task('Small two', 6)] }] };
+  // One finished task the owner sized at 7 points.
+  const w = (await post('/api/arcade/builder/worlds', { name: 'History base', milestones: ['First'] })).json();
+  const b = await getJson(`/api/arcade/builder/worlds/${w.id}`);
+  const ms = b.milestones[0].id;
+  const t = (await post(`/api/arcade/builder/worlds/${w.id}/tasks`, { milestoneId: ms, characterId: 'daf', title: 'Done before', taskType: 'mandala-coloring', difficulty: 'LOW', estimatedEffort: 7 })).json();
+  const patched = await server.inject({ method: 'PATCH', url: `/api/arcade/builder/tasks/${t.id}`, headers: H, payload: { status: 'COMPLETE' } });
+  assert.equal(patched.statusCode, 200, patched.body);
+
+  await withStandInAi(() => answer, async (seen) => {
+    const r = await post('/api/arcade/builder/generate', { ...GEN, milestones: 3, tasksPerMilestone: 4, effortBudget: 10 });
+    assert.equal(r.statusCode, 200, r.body);
+    const done = await waitDraft(r.json().draft.id);
+    assert.equal(done.status, 'ready', done.error ?? '');
+    assert.match(seen[0]!.prompt, /budget of about 10 effort points/);
+    assert.match(seen[0]!.prompt, /at most 3 milestones/);
+    assert.doesNotMatch(seen[0]!.prompt, /Make exactly/, 'with a budget the counts are limits, not exact');
+    assert.match(seen[0]!.prompt, /mandala-coloring, LOW: 1 finished, average 7 points/);
+    assert.deepEqual(done.result.sizing, { budget: 10, historyTasks: 1 });
+    assert.equal(done.result.milestones.length, 1, 'fewer milestones than the limit is fine');
+
+    const off = await post('/api/arcade/builder/generate', { ...GEN, useHistory: false });
+    const d2 = await waitDraft(off.json().draft.id);
+    assert.doesNotMatch(seen[1]!.prompt, /already finished/, 'history can be switched off');
+    assert.match(seen[1]!.prompt, /Make exactly 2 milestones/);
+    assert.deepEqual(d2.result.sizing, { budget: null, historyTasks: 0 });
+  });
+  for (const bad of [0, 501, 2.5]) {
+    const r = await post('/api/arcade/builder/generate', { ...GEN, effortBudget: bad });
+    assert.equal(r.statusCode, 422, `budget ${bad}: ${r.body}`);
+  }
+});
+
 test('AI suggestions: world ideas and task ideas, nothing saved', async () => {
   const idea = { name: 'Planner shop', description: 'Printable planners.', milestones: ['Design', 'Launch', 'Promote'] };
   const taskIdea = { title: 'Weekly planner', description: 'd', characterId: 'daf', taskType: 'weekly-planner', difficulty: 'LOW', estimatedEffort: 2 };

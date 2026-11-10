@@ -17,7 +17,10 @@ interface TidyNotes {
   constraints: string[]; doneWhen: string[]; questions: string[];
 }
 interface Draft<R, Q> { id: string; kind: 'world' | 'notes'; status: 'writing' | 'ready' | 'failed'; request: Q; result: R | null; error: string | null; model: string | null; createdAt: string }
-type WorldDraft = Draft<ProposedWorld, { goal: string }>;
+/** How the AI sized a world it wrote (settings A and B, 2026-11-10). Older drafts have none. */
+interface WorldSizing { budget: number | null; historyTasks: number }
+type GeneratedWorld = ProposedWorld & { sizing?: WorldSizing };
+type WorldDraft = Draft<GeneratedWorld, { goal: string }>;
 type NotesDraft = Draft<TidyNotes, { notes: string }>;
 
 /** Tidied notes handed to the world writer as its goal. `n` changes on every hand-off so the same text can be sent twice. */
@@ -188,7 +191,9 @@ export function WorldGenerator({ onSaved, seed }: { onSaved: (worldId: string) =
   const [difficulty, setDifficulty] = useState<'easy' | 'balanced' | 'hard'>('balanced');
   const [characterId, setCharacterId] = useState('');
   const [picked, setPicked] = useState<string[]>([]);
-  const [proposal, setProposal] = useState<ProposedWorld | null>(null);
+  const [budget, setBudget] = useState('');
+  const [useHistory, setUseHistory] = useState(true);
+  const [proposal, setProposal] = useState<GeneratedWorld | null>(null);
   const [draftId, setDraftId] = useState<string | null>(null);
   const [waitingFor, setWaitingFor] = useState<string | null>(null);
   const [busy, setBusy] = useState<'generate' | 'save' | null>(null);
@@ -226,7 +231,7 @@ export function WorldGenerator({ onSaved, seed }: { onSaved: (worldId: string) =
     setProblem(null);
     try {
       const r = await api<{ draft: WorldDraft }>('/arcade/builder/generate', {
-        body: { goal, milestones: Number(milestones), tasksPerMilestone: Number(perMilestone), difficulty, characterId: characterId || null, productTypes: picked.length ? picked : undefined },
+        body: { goal, milestones: Number(milestones), tasksPerMilestone: Number(perMilestone), difficulty, characterId: characterId || null, productTypes: picked.length ? picked : undefined, effortBudget: budget.trim() ? Number(budget) : null, useHistory },
       });
       setWaitingFor(r.draft.id);
       await reload();
@@ -271,6 +276,8 @@ export function WorldGenerator({ onSaved, seed }: { onSaved: (worldId: string) =
   const dropTask = (mi: number, ti: number) => setProposal((p) => p && { ...p, milestones: p.milestones.map((m, i) => (i === mi ? { ...m, tasks: m.tasks.filter((_, j) => j !== ti) } : m)) });
   const dropMilestone = (mi: number) => setProposal((p) => p && { ...p, milestones: p.milestones.filter((_, i) => i !== mi) });
   const emptyProposal = !!proposal && proposal.milestones.every((m) => m.tasks.length === 0);
+  const totalEffort = proposal ? proposal.milestones.reduce((n, m) => n + m.tasks.reduce((k, t) => k + t.estimatedEffort, 0), 0) : 0;
+  const sizing = proposal?.sizing;
   const draftList = (
     <DraftList
       drafts={drafts}
@@ -287,6 +294,13 @@ export function WorldGenerator({ onSaved, seed }: { onSaved: (worldId: string) =
         <h3 className="form-title">REVIEW THE AI'S WORLD</h3>
         <label>Name<input data-nav value={proposal.name} maxLength={80} onChange={(e) => setProposal({ ...proposal, name: e.target.value })} /></label>
         <p className="fine">{proposal.description}</p>
+        <p className="effort-total" data-testid="effort-total">
+          TOTAL EFFORT: {totalEffort} pts
+          {sizing?.budget ? <> of a {sizing.budget} pt budget{totalEffort > sizing.budget ? <span className="over"> ({totalEffort - sizing.budget} over)</span> : totalEffort < sizing.budget ? <> ({sizing.budget - totalEffort} under)</> : null}</> : null}
+        </p>
+        {sizing ? (
+          <p className="fine">{sizing.historyTasks > 0 ? `Effort guesses follow how you sized your ${sizing.historyTasks} finished task${sizing.historyTasks === 1 ? '' : 's'}.` : 'You have no finished tasks yet, so the effort numbers are the AI\'s own guess.'}</p>
+        ) : null}
         {proposal.milestones.map((m, mi) => (
           <div key={`${m.name}-${mi}`} className="milestone-block">
             <div className="milestone-head">
@@ -333,7 +347,10 @@ export function WorldGenerator({ onSaved, seed }: { onSaved: (worldId: string) =
             {Object.entries(CHARACTER_LABEL).map(([id, label]) => <option key={id} value={id}>{label} only</option>)}
           </select>
         </label>
+        <label>Effort budget (pts)<input data-nav type="number" min="1" max="500" step="1" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="none" /></label>
       </div>
+      <p className="fine">With a budget, the AI aims for that many effort points in total, and the milestone and task numbers become the most it can use. Leave it empty for exact counts.</p>
+      <label className="check"><input type="checkbox" data-nav checked={useHistory} onChange={(e) => setUseHistory(e.target.checked)} /> Base effort guesses on how I sized my finished tasks</label>
       <details className="type-pick">
         <summary data-nav>Product types: {picked.length ? `${picked.length} chosen` : 'any'}</summary>
         <div className="type-grid">

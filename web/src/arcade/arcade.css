@@ -730,3 +730,9 @@ a.arc-btn:hover { text-decoration: none; }
 .mission-part.done { color: var(--lime); }
 .mission-report { grid-column: 1 / -1; }
 .mission-report-line { display: block; font-family: var(--read); font-size: 12px; color: var(--muted); }
+
+/* World Builder sizing (effort budget and history, 2026-11-10) */
+.arc-form > label.check { flex-direction: row; align-items: center; gap: 8px; font-size: 13px; }
+.arc-form > label.check input { width: auto; flex: none; margin: 0; }
+.effort-total { margin: 0; font-size: 13px; letter-spacing: 1px; }
+.effort-total .over { color: var(--red); }

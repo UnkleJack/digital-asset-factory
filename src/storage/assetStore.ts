@@ -191,6 +191,11 @@ export class AssetStore {
     return readFileSync(this.resolve(rel));
   }
 
+  /** Removes a file written with writeRaw. Missing files are fine. */
+  removeRaw(rel: string): void {
+    rmSync(this.resolve(rel), { force: true });
+  }
+
   get(id: string): AssetRecord {
     const row = this.db.get('SELECT * FROM assets WHERE id = ?', id);
     if (!row) throw notFound('Asset', id);
