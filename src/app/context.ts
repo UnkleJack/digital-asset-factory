@@ -6,6 +6,7 @@ import type { Logger } from '../logging/logger.ts';
 import type { AssetStore } from '../storage/assetStore.ts';
 import type { Renderer } from '../engine/rendering/renderer.ts';
 import type { TextProvider, ImageProvider } from '../engine/generation/providers.ts';
+import type { VisionProvider } from '../engine/generation/vision.ts';
 import type { Clock } from '../core/time.ts';
 
 export interface AppContext {
@@ -27,6 +28,8 @@ export interface AppContext {
     imageTogether?: ImageProvider;
     imageHuggingFace?: ImageProvider;
     imagePollinations?: ImageProvider;
+    /** The picture-reading AI for review boxes. Off until set in Settings. */
+    vision?: VisionProvider;
   };
   clock: Clock;
 }

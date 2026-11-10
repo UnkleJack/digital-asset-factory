@@ -13,6 +13,7 @@ import { audit, type Level } from '../../logging/logger.ts';
 import { pngSize, SECRET_KEY_LINKS } from '../../engine/generation/providers.ts';
 import { int, parse, type Q, type P } from './util.ts';
 import { machineName } from '../../config/machine.ts';
+import { encodePng } from '../../storage/thumbnail.ts';
 import { resolveChromePath } from '../../config/chrome.ts';
 
 export function registerSettingsRoutes(s: FastifyInstance, { app }: ServerDeps): void {
@@ -58,9 +59,23 @@ export function registerSettingsRoutes(s: FastifyInstance, { app }: ServerDeps):
   });
 
   s.post('/api/providers/test', async (req) => {
-    const { provider } = parse(z.object({ provider: z.enum(['text', 'image']) }), req.body, 'provider test');
+    const { provider } = parse(z.object({ provider: z.enum(['text', 'image', 'vision']) }), req.body, 'provider test');
     const started = Date.now();
     try {
+      if (provider === 'vision') {
+        // A white square with a red square in the middle. A model that really reads pictures says "red".
+        const vision = app.providers.vision;
+        const st = vision ? await vision.status() : { ready: false as const, why: 'No picture-reading AI is set up.' };
+        if (!vision || !st.ready) return { ok: false, provider: 'vision', ms: 0, error: st.ready ? 'No picture-reading AI is set up.' : st.why };
+        const size = 96, data = new Uint8Array(size * size * 3).fill(255);
+        for (let y = 32; y < 64; y++) for (let x = 32; x < 64; x++) { const i = (y * size + x) * 3; data[i] = 220; data[i + 1] = 30; data[i + 2] = 30; }
+        const r = await vision.describe({ system: 'You describe pictures briefly.', prompt: 'What colour is the square in the middle of this picture? Answer in five words or fewer.', images: [encodePng({ width: size, height: size, channels: 3, data })], maxTokens: 50 });
+        const saw = /red/i.test(r.text);
+        audit(app.db, 'user', 'provider.tested', 'provider', `vision:${r.provider}`, { ok: saw });
+        return saw
+          ? { ok: true, provider: r.provider, model: r.model, ms: Date.now() - started, note: `A real picture was sent and the model answered "${r.text.slice(0, 80)}".` }
+          : { ok: false, provider: r.provider, model: r.model, ms: Date.now() - started, error: `The model answered "${r.text.slice(0, 120)}" for a red square, so it may not be reading the picture. Try another model.` };
+      }
       if (provider === 'text') {
         const selected = app.settings.get('generation').textProvider;
         if (selected === 'deterministic') return { ok: false, provider: selected, ms: 0, error: 'Text generation is set to "deterministic" in Settings → Generation; there is no API to test. Pick a provider there first.' };

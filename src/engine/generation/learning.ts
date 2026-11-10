@@ -14,6 +14,8 @@ interface DecisionRow {
   notes: string;
   title: string;
   product_type: string;
+  /** What the picture-reading AI saw in boxes the owner drew with this note, joined with " | ". */
+  boxes: string | null;
 }
 
 const LABELS: Record<DecisionRow['decision'], string> = {
@@ -57,7 +59,9 @@ export function learningBrief(app: AppContext): string {
 function recentNotesBrief(app: AppContext): string {
   // Approvals that were later invalidated (e.g. the product was then rejected) no longer count.
   const rows = app.db.all<DecisionRow>(
-    `SELECT d.decision, d.notes, p.title, p.product_type
+    `SELECT d.decision, d.notes, p.title, p.product_type,
+       (SELECT group_concat('page ' || b.page || ': ' || b.description, ' | ') FROM review_boxes b JOIN approval_decisions d4 ON d4.id = b.decision_id
+         WHERE d4.version_id = d.version_id AND d4.decision = d.decision AND b.description IS NOT NULL) AS boxes
      FROM approval_decisions d
      JOIN product_versions v ON v.id = d.version_id
      JOIN products p ON p.id = v.product_id
@@ -67,7 +71,7 @@ function recentNotesBrief(app: AppContext): string {
      LIMIT ${MAX_ITEMS}`,
   );
   if (!rows.length) return '';
-  const lines = rows.map((r) => `- ${LABELS[r.decision]} "${oneLine(r.title, 60)}" (${r.product_type}): ${oneLine(r.notes, MAX_NOTE_CHARS)}`);
+  const lines = rows.map((r) => `- ${LABELS[r.decision]} "${oneLine(r.title, 60)}" (${r.product_type}): ${oneLine(r.notes, MAX_NOTE_CHARS)}${r.boxes ? ` [boxed by the owner: ${oneLine(r.boxes, MAX_NOTE_CHARS)}]` : ''}`);
   const brief = `\n## Operator preferences learned from past review decisions\nApply these lessons to all new work: avoid what was rejected or criticized, lean toward what was approved.\n${lines.join('\n')}`;
   return brief.length <= MAX_BRIEF_CHARS ? brief : `${brief.slice(0, MAX_BRIEF_CHARS - 1)}…\n(older preferences omitted)`;
 }

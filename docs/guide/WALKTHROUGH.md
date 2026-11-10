@@ -533,8 +533,14 @@ Each item is one slim line with its version, type, any decision so far, and stat
 - **Approve for (marketplaces)** records your approval for this version and the ticked listings. It's greyed out if QA failed, if no marketplace is ticked, or if there are warnings you haven't accepted. Hover over it to see why. After you approve, the product goes onto the Factory floor (if that's switched on), and if you turned on "Post automatically when I approve" for Gumroad, it gets posted.
 - **Return for revision** opens a box: "What should change?" Your notes go to the generator for the next version. Press **Send back with notes**.
 - **Regenerate** opens a box for optional notes. A fresh version is made with new random artwork. Press **Regenerate**.
-- **Reject** opens a box for optional notes. The version is marked rejected and can never be published. Press **Reject version**.
+- **Reject** opens a box for your reason (it has to say which part is wrong and what is wrong with it). The version is marked rejected and can never be published. Press **Reject version**.
 - **Edit…** opens the product page.
+
+**Draw a box on a page.** The Reject, Return for revision and Regenerate boxes all have a **Draw a box on a page** button. It shows the page previews (pick one with the **Page** buttons) and you drag across the part that is wrong. You can draw up to 6 boxes, on any pages, and **Remove** takes one off.
+- A box counts as saying *which part* is wrong, so your words only have to say *what* is wrong. "Too blurry" with a box around the blurry lines is fine. "Bad" with a box still isn't.
+- The picture-reading AI (Settings → Generation → Vision) looks at each box and writes down what it sees, for example "the mandala lines in the box are broken". That goes to the next version's notes when you return it for revision, and into the notes the AI learns from.
+- If the picture-reading AI isn't set up or can't be reached, the box is still saved with its page and place, and the AI tries again every minute.
+- Afterwards, **Show the box you drew** under the decision shows the cut-out and what the AI saw. Click the cut-out to open the whole page with the box drawn in red.
 
 ![Return for revision](images/11d-reject-modal.png)
 
@@ -567,7 +573,7 @@ There are two sections, and each has its own **sort** dropdown: Newest first, Pr
 - **Failed by the machine:** production that failed, and versions that failed a hard QA check.
 - **Rejected by you:** anything you rejected, returned for revision or regenerated in batch review, older versions included.
 
-Each row shows the title, which version out of how many, why it's here, when, type, category, marketplaces and the QA checks involved. Under that it shows your notes or the error.
+Each row shows the title, which version out of how many, why it's here, when, type, category, marketplaces and the QA checks involved. Under that it shows your notes or the error, and **Show the box you drew** if you drew boxes on the pages.
 - **Add note** opens a box for a note to the AI about this item. Press **Save note**. Press **Cancel note** to close the box without saving. The note goes into Notes for the AI.
 - **Preview** shows the cover.
 - **Open** opens the product page.
@@ -698,7 +704,7 @@ Ticked boxes are on/off settings. A box marked "one per line" takes a list. Boxe
 ![Settings, AI providers](images/17b-settings-ai.png)
 
 - **AI keys card.** One row per provider, saying whether it's free or paid, with a **Get a free key** or **Get a key (paid)** link and a Saved or Not set pill. Paste a key and press **Save**. **Remove** deletes a key from the Keychain (it asks first). Saved keys are never shown again. Typing a new key replaces the old one.
-- **Test the connection card.** It shows the current first choice and the backup order for text and images, and what happens if no key works. **Test text provider** and **Test image provider** each make one real API call and report whether it worked, which model answered and how long it took. If your first choice fails, it says which backup answered instead. To change the order, use the Generation tab.
+- **Test the connection card.** It shows the current first choice and the backup order for text and images, and what happens if no key works. **Test text provider**, **Test image provider** and **Test picture-reading AI** each make one real API call and report whether it worked, which model answered and how long it took. If your first choice fails, it says which backup answered instead. The picture-reading test sends a small picture of a red square and passes only if the model says "red". To change the order, use the Generation tab.
 
 ### Integrations
 

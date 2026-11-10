@@ -5,12 +5,14 @@ import { CompactList, CompactRow, PreviewButton, PreviewPane, ShowDone, usePrevi
 import { ActionButton, Async, Card, Empty, PageHead, Pill } from '../ui.tsx';
 import { ago, label } from '../format.ts';
 import { WaitingNotes, sentText } from '../waitingNotes.tsx';
+import { SavedBoxes, type SavedBox } from '../reviewBoxes.tsx';
 import { useToast } from '../ui.tsx';
 
 type Item = {
   versionId: string; productId: string; title: string; productType: string; category: string | null; versionNo: number; versions: number; current: boolean;
   status: string; reason: string; at: string; notes: string; marketplaces: string[]; checks: string[]; severity: 'hard' | 'warning' | null; error: string | null; thumb: string | null; fixedAt: string | null;
   myNotes: { id: string; notes: string; at: string }[];
+  boxes: SavedBox[];
 };
 
 // Every sort uses something the app already records. Newest first is the default.
@@ -80,6 +82,7 @@ function Section({ title, help, items, reload, empty }: { title: string; help: s
                   : <ActionButton className="small primary" onClick={async () => { await api(`/rework/${i.versionId}/fixed`, { body: {} }); reload(); }} successText="Marked fixed">Mark fixed</ActionButton>}
               </>}>
               {(i.notes || i.error) && <div className="small" style={{ marginTop: 4 }}>{i.notes ? <>Your notes: “{i.notes}”</> : <span style={{ color: 'var(--bad)' }}>{i.error}</span>}</div>}
+              <SavedBoxes boxes={i.boxes} />
               {i.myNotes.map((n) => <div key={n.id} className="small" style={{ marginTop: 2 }}>Note {ago(n.at)}: “{n.notes}”</div>)}
               {noteFor === i.versionId && <AddNote versionId={i.versionId} onSaved={() => { setNoteFor(null); reload(); }} />}
               {i.fixedAt && <div className="small muted">Marked fixed {ago(i.fixedAt)}</div>}

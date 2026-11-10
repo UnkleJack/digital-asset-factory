@@ -9,12 +9,13 @@ import { validation, conflict, notFound, errorMessage } from '../../core/errors.
 import { textMode } from '../generation/service.ts';
 import { addReviewNote, addLesson, updateLesson, maybeDigest } from '../generation/notes.ts';
 import { decide, type Decision } from './service.ts';
-import { checkReason, type ReasonKind } from './reasonCheck.ts';
+import { checkReason, type ReasonKind, type BoxHint } from './reasonCheck.ts';
+import { discardBoxes, whereOnPage } from './reviewBoxes.ts';
 
 export const RETRY_SECONDS = 60;
 
 export type ReasonAction =
-  | { action: 'decision'; itemId: string; decision: Exclude<Decision, 'approved'>; notes: string }
+  | { action: 'decision'; itemId: string; decision: Exclude<Decision, 'approved'>; notes: string; boxIds?: string[] }
   | { action: 'note'; versionId: string; notes: string }
   | { action: 'lesson_add'; text: string }
   | { action: 'lesson_edit'; lessonId: string; text: string };
@@ -33,14 +34,18 @@ function targetOf(a: ReasonAction): string | null {
   return a.action === 'decision' ? a.itemId : a.action === 'note' ? a.versionId : a.action === 'lesson_edit' ? a.lessonId : null;
 }
 
-/** Product title and type, so the check knows what the note is about. */
-function contextOf(app: AppContext, a: ReasonAction): { title?: string; productType?: string } {
+/** Product title and type, and any boxes drawn with the note, so the check knows what the note is about. */
+function contextOf(app: AppContext, a: ReasonAction): { title?: string; productType?: string; boxes?: BoxHint[] } {
+  const boxes = a.action === 'decision' && a.boxIds?.length
+    ? app.db.all<{ page: number; x: number; y: number; w: number; h: number }>('SELECT page, x, y, w, h FROM review_boxes WHERE id IN (SELECT value FROM json_each(?)) ORDER BY page', JSON.stringify(a.boxIds)).map((b) => ({ page: b.page, where: whereOnPage(b) }))
+    : [];
+  const withBoxes = <T extends object>(o: T) => (boxes.length ? { ...o, boxes } : o);
   const versionId = a.action === 'decision'
     ? app.db.value<string>('SELECT version_id FROM approval_items WHERE id = ?', a.itemId)
     : a.action === 'note' ? a.versionId : undefined;
-  if (!versionId) return {};
+  if (!versionId) return withBoxes({});
   const r = app.db.get<{ title: string; product_type: string }>('SELECT p.title, p.product_type FROM product_versions v JOIN products p ON p.id = v.product_id WHERE v.id = ?', versionId);
-  return r ? { title: r.title, productType: r.product_type } : {};
+  return withBoxes(r ? { title: r.title, productType: r.product_type } : {});
 }
 
 /** Checks that what the note is attached to exists, so a queued note can't point at nothing. */
@@ -52,7 +57,7 @@ function mustExist(app: AppContext, a: ReasonAction): void {
 
 function apply(app: AppContext, a: ReasonAction): unknown {
   let result: unknown;
-  if (a.action === 'decision') result = decide(app, a.itemId, { decision: a.decision, notes: a.notes });
+  if (a.action === 'decision') result = decide(app, a.itemId, { decision: a.decision, notes: a.notes, boxIds: a.boxIds });
   else if (a.action === 'note') result = addReviewNote(app, a.versionId, a.notes);
   else if (a.action === 'lesson_add') result = addLesson(app, a.text);
   else result = updateLesson(app, a.lessonId, { text: a.text });
@@ -108,6 +113,7 @@ export async function processReasonQueue(app: AppContext): Promise<{ applied: nu
         continue;
       }
       if (v.status === 'refused') {
+        if (a.action === 'decision' && a.boxIds?.length) discardBoxes(app, a.boxIds);
         app.db.run("UPDATE reason_queue SET status = 'refused', attempts = attempts + 1, message = ?, finished_at = ? WHERE id = ?", v.message, now(), r.id);
         out.refused += 1;
         continue;

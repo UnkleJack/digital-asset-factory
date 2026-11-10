@@ -12,6 +12,7 @@ import { conflict, notFound, validation } from '../../core/errors.ts';
 import { audit, type AuditActor } from '../../logging/logger.ts';
 import { onProductFinished } from '../packing/service.ts';
 import { completeTasksForVersion } from '../arcade/workspace.ts';
+import { attachBoxes, boxesText, boxesForDecision } from './reviewBoxes.ts';
 
 export type Decision = 'approved' | 'rejected' | 'revision_requested' | 'regenerate_requested';
 
@@ -39,7 +40,8 @@ export function itemDetail(app: AppContext, itemId: string) {
   const score = product.opportunity_id ? app.db.get<Record<string, unknown>>('SELECT score, confidence, outcome, factors, created_at FROM opportunity_scores WHERE opportunity_id = ? ORDER BY created_at DESC LIMIT 1', product.opportunity_id) : undefined;
   const cost = app.db.get<{ total: number | null; unknown: number; runs: number }>("SELECT sum(cost_usd) AS total, sum(CASE WHEN cost_basis = 'unknown' AND status = 'succeeded' THEN 1 ELSE 0 END) AS unknown, count(*) AS runs FROM generation_runs WHERE version_id = ?", version.id)!;
   const listings = listingsForVersion(app.db, version.id).map((l) => ({ ...l, approval: activeApproval(app, l), fingerprint: fingerprintFor(version.deliverable_hash, l) }));
-  const decisions = app.db.all('SELECT id, decision, marketplace, listing_id, notes, decided_by, decided_at, invalidated_at, invalidated_reason FROM approval_decisions WHERE version_id = ? ORDER BY decided_at DESC', version.id);
+  const decisions = app.db.all<{ id: string; decision: string; marketplace: string | null; listing_id: string | null; notes: string; decided_by: string; decided_at: string; invalidated_at: string | null; invalidated_reason: string | null }>('SELECT id, decision, marketplace, listing_id, notes, decided_by, decided_at, invalidated_at, invalidated_reason FROM approval_decisions WHERE version_id = ? ORDER BY decided_at DESC', version.id)
+    .map((d) => ({ ...d, boxes: boxesForDecision(app, d.id) }));
   const members = product.product_type === 'bundle' ? (json<{ members?: unknown[] }>(app.db.value<string>('SELECT params FROM product_specs WHERE id = ?', version.spec_id), {}).members ?? []) : [];
   return {
     item,
@@ -70,7 +72,7 @@ export function batchDetail(app: AppContext, batchId: string) {
   return { batch, items: items.map((i) => itemDetail(app, i.id)) };
 }
 
-export function decide(app: AppContext, itemId: string, input: { decision: Decision; marketplaces?: string[]; notes?: string; acceptWarnings?: boolean; warningNote?: string }, actor: AuditActor = 'user'): { decisionIds: string[]; newVersionId?: string } {
+export function decide(app: AppContext, itemId: string, input: { decision: Decision; marketplaces?: string[]; notes?: string; acceptWarnings?: boolean; warningNote?: string; boxIds?: string[] }, actor: AuditActor = 'user'): { decisionIds: string[]; newVersionId?: string } {
   const item = app.db.get<{ id: string; batch_id: string; product_id: string; version_id: string }>('SELECT * FROM approval_items WHERE id = ?', itemId);
   if (!item) throw notFound('Batch item', itemId);
   const product = getProduct(app.db, item.product_id);
@@ -120,6 +122,7 @@ export function decide(app: AppContext, itemId: string, input: { decision: Decis
     const id = newId('apd');
     app.db.tx(() => {
       app.db.insert('approval_decisions', { id, item_id: item.id, version_id: version.id, decision: 'rejected', notes, decided_by: actor, decided_at: now });
+      attachBoxes(app, input.boxIds ?? [], id, version.id);
       app.db.run("UPDATE approval_decisions SET invalidated_at = ?, invalidated_reason = 'Version rejected' WHERE version_id = ? AND decision = 'approved' AND invalidated_at IS NULL", now, version.id);
       updateVersion(app.db, version.id, { status: 'rejected' });
       audit(app.db, actor, 'approval.rejected', 'version', version.id, { notes });
@@ -131,10 +134,14 @@ export function decide(app: AppContext, itemId: string, input: { decision: Decis
   if (input.decision === 'revision_requested' && notes.length < 3) throw validation('Describe what should change so the next version can address it.');
   const id = newId('apd');
   app.db.insert('approval_decisions', { id, item_id: item.id, version_id: version.id, decision: input.decision, notes, decided_by: actor, decided_at: now });
+  attachBoxes(app, input.boxIds ?? [], id, version.id);
+  // What the picture-reading AI saw in each box (or just where the box is, while it waits) goes to the next version too.
+  const boxed = boxesText(app, input.boxIds ?? []);
+  const withBoxes = boxed ? `${notes}${notes ? '\n' : ''}${boxed}` : notes;
   const markets = listingsForVersion(app.db, version.id).map((l) => l.marketplace);
   const next = input.decision === 'revision_requested'
-    ? createVersion(app, { origin: 'revision', fromVersionId: version.id, revisionNotes: notes, changeNote: 'Returned for revision' }, actor)
-    : createVersion(app, { origin: 'regenerate', fromVersionId: version.id, changeNote: notes || 'Regenerated', specChanges: { newSeed: true } }, actor);
+    ? createVersion(app, { origin: 'revision', fromVersionId: version.id, revisionNotes: withBoxes, changeNote: 'Returned for revision' }, actor)
+    : createVersion(app, { origin: 'regenerate', fromVersionId: version.id, changeNote: withBoxes || 'Regenerated', specChanges: { newSeed: true } }, actor);
   startPipeline(app, next.id, { marketplaces: markets });
   for (const b of new Set([item.batch_id, ...batchesContaining(app, version.id)])) addToBatch(app, b, next.id);
   return { decisionIds: [id], newVersionId: next.id };
