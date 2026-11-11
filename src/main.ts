@@ -99,7 +99,15 @@ app.log.info(`${SUITE_NAME} is running at http://127.0.0.1:${port}`, { dataDir: 
 if (!app.renderer.available()) app.log.warn('Google Chrome or Microsoft Edge was not found; rendering jobs will fail until one is installed or Settings → Rendering → Chrome path is set.');
 
 let stopping = false;
+let shutdownTimer: ReturnType<typeof setTimeout> | null = null;
+const GRACE_MS = 10_000;
 async function shutdown(signal: string) {
+  if (shutdownTimer) {
+    // Second signal: exit immediately.
+    clearTimeout(shutdownTimer);
+    app.log.warn('Second shutdown signal received; exiting immediately', { signal });
+    process.exit(1);
+  }
   if (stopping) return;
   stopping = true;
   app.log.info('Shutting down', { signal });
@@ -109,7 +117,20 @@ async function shutdown(signal: string) {
   clearInterval(reasonTimer);
   scheduler.stop();
   await server.close().catch(() => undefined);
-  await worker.stop(20_000);
+  // Wait for worker to finish up to GRACE_MS, then proceed regardless.
+  const workerStopped = worker.stop(GRACE_MS);
+  shutdownTimer = setTimeout(() => {
+    app.log.warn('Shutdown grace period exceeded; forcing exit');
+    process.exit(1);
+  }, GRACE_MS);
+  try {
+    await workerStopped;
+  } finally {
+    if (shutdownTimer) {
+      clearTimeout(shutdownTimer);
+      shutdownTimer = null;
+    }
+  }
   await app.close();
   release();
   process.exit(0);
