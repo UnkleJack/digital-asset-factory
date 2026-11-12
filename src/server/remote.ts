@@ -153,7 +153,11 @@ ${msg ? `<p class="err">${msg}</p>` : ''}<label>Access token<input name="token" 
 export function registerRemoteRoutes(server: FastifyInstance, app: App, gate: RemoteGate): void {
   server.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string' }, (_req, body, done) => done(null, Object.fromEntries(new URLSearchParams(String(body)))));
   server.get('/login', async (_req, reply) => reply.type('text/html').send(LOGIN_PAGE()));
-  server.post('/api/login', async (req, reply) => {
+  server.post('/api/login', {
+    config: {
+      rateLimit: { max: 20, timeWindow: '1 minute' },
+    },
+  }, async (req, reply) => {
     const ip = gate.clientAddress(req);
     if (gate.tooManyFailures(ip)) return reply.code(429).type('text/html').send(LOGIN_PAGE('Too many wrong tokens. Wait 10 minutes.'));
     const token = String((req.body as Record<string, unknown> | null)?.token ?? '').trim();
