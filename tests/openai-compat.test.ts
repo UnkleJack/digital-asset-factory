@@ -288,6 +288,42 @@ test('when every model at a provider fails, the router moves on to the next prov
   assert.equal(nv.calls.length, 2);
 });
 
+test('when every provider fails, the error names each one and why, not just the last backup', async () => {
+  const nv = await mockServer(() => ({ status: 429, json: { error: { message: 'Too many requests' } } }));
+  const gq = await mockServer(() => ({ status: 404, json: { error: { message: 'The model `llama-3.3-70b-versatile` does not exist' } } }));
+  const hf = await mockServer(() => ({ status: 402, json: { error: 'Purchase pre-paid credits to continue using Inference Providers.' } }));
+  servers.push(nv, gq, hf);
+  const router = new RoutedTextProvider(
+    {
+      nvidia: new OpenAICompatibleTextProvider('nvidia', async () => KEY, () => cfg(nv.url, { maxRetries: 0 }), async () => {}),
+      groq: new OpenAICompatibleTextProvider('groq', async () => KEY, () => cfg(gq.url, { maxRetries: 0 }), async () => {}),
+      huggingface: new OpenAICompatibleTextProvider('huggingface', async () => KEY, () => cfg(hf.url, { maxRetries: 0 }), async () => {}),
+    },
+    () => 'nvidia',
+    () => ['groq', 'huggingface'],
+  );
+  await assert.rejects(router.generateStructured({ schema: Schema, system: 's', prompt: 'p' }), (e: unknown) => {
+    assert.ok(e instanceof ProviderError);
+    assert.equal(e.kind, 'bad_request', 'keeps the last error kind so job handling is unchanged');
+    assert.match(e.message, /AI: None of the 3 providers could answer/);
+    assert.match(e.message, /NVIDIA NIM: Too many requests/);
+    assert.match(e.message, /Groq: The model `llama-3.3-70b-versatile` does not exist/);
+    assert.match(e.message, /Hugging Face: Purchase pre-paid credits/);
+    return true;
+  });
+});
+
+test('a reply cut off at max_tokens says so even when the content came back empty', async () => {
+  const srv = await mockServer(() => ({ json: { choices: [{ message: { content: '' }, finish_reason: 'length' }], model: 'm' } }));
+  servers.push(srv);
+  const p = new OpenAICompatibleTextProvider('nvidia', async () => KEY, () => cfg(srv.url, { maxRetries: 0 }), async () => {});
+  await assert.rejects(p.generateStructured({ schema: Schema, system: 's', prompt: 'p' }), /cut off at the max_tokens limit/);
+});
+
+test('Groq default is the replacement Groq names for the retired llama-3.3-70b-versatile', () => {
+  assert.equal(SettingsSchema.parse({}).generation.groq.model, 'openai/gpt-oss-120b');
+});
+
 test('which failures try the next model at the same provider', () => {
   const next = (kind: ConstructorParameters<typeof ProviderError>[1]) => shouldTryNextModel(new ProviderError('nvidia', kind, 'x'));
   for (const k of ['bad_request', 'timeout', 'server', 'refusal'] as const) assert.equal(next(k), true, k);

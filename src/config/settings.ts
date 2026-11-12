@@ -105,7 +105,9 @@ export const SettingsSchema = z.object({
       maxRetries: z.number().int().min(0).max(6).default(2),
     }).prefault({}),
     groq: z.object({
-      model: z.string().min(1).default('llama-3.3-70b-versatile'),
+      // llama-3.3-70b-versatile was shut down on 2026-08-16; Groq's deprecations page names
+      // openai/gpt-oss-120b as its replacement (checked 2026-11-12).
+      model: z.string().min(1).default('openai/gpt-oss-120b'),
       backupModels,
       baseUrl: z.url().default('https://api.groq.com/openai/v1'),
       timeoutMs: z.number().int().min(5000).max(600000).default(120000),
