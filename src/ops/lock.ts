@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { SUITE_NAME } from '../core/brand.ts';
 
 export function alive(pid: number): boolean {
@@ -11,11 +12,21 @@ export function alive(pid: number): boolean {
   }
 }
 
+function isOurNodeProcess(pid: number): boolean {
+  try {
+    const { stdout } = spawnSync('ps', ['-o', 'command=', '-p', String(pid)], { encoding: 'utf8' });
+    const cmd = stdout?.trim() ?? '';
+    return cmd.includes('main.ts') && cmd.includes('node');
+  } catch {
+    return false;
+  }
+}
+
 export function lockHolder(dataDir: string): number | null {
   const file = join(dataDir, 'daf.lock');
   if (!existsSync(file)) return null;
   const pid = Number(readFileSync(file, 'utf8').trim());
-  return Number.isInteger(pid) && pid > 0 && pid !== process.pid && alive(pid) ? pid : null;
+  return Number.isInteger(pid) && pid > 0 && pid !== process.pid && alive(pid) && isOurNodeProcess(pid) ? pid : null;
 }
 
 export function acquireLock(dataDir: string): () => void {
