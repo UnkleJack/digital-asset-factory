@@ -7,7 +7,7 @@ export function Dashboard() {
   const state = useApi<any>('/dashboard', { poll: 5000 });
   return (
     <div className="page">
-      <PageHead title="Dashboard" sub="What the factory is doing right now. Updates every few seconds." actions={<Link className="btn primary" to="/library?new=1">New product</Link>} />
+      <PageHead title="Dashboard" sub="Factory status at a glance. Updates every few seconds." actions={<Link className="btn primary" to="/library?new=1">New product</Link>} />
       <Async state={state}>{(d) => (
         <>
           {d.providers.text.mode !== 'ai' && (
@@ -16,16 +16,48 @@ export function Dashboard() {
           {!d.providers.chrome && <div className="banner bad"><b>Google Chrome was not found.</b> PDF rendering will fail until it is installed or its path is set in <Link to="/settings?tab=rendering">Settings → Rendering</Link>.</div>}
           {d.counts.needsReconciliation > 0 && <div className="banner warn"><b>{d.counts.needsReconciliation} listing(s) need reconciliation:</b> a publish attempt has an unknown outcome. <Link to="/publishing">Resolve in Publishing</Link></div>}
 
+          {/* Production Pipeline Metrics */}
           <div className="grid g4">
-            <Stat value={d.counts.products} label="Active products" to="/library" />
+            <Stat value={d.counts.products} label="Total products" to="/library" />
             <Stat value={d.counts.inProduction} label="In production" to="/jobs" />
-            <Stat value={d.counts.awaitingReview} label="Awaiting review" to="/batches" />
+            <Stat value={d.counts.awaitingReview} label="Pending review" to="/batches" />
             <Stat value={d.counts.approved} label="Approved" to="/library?versionStatus=approved" />
-            <Stat value={d.counts.publishedManual} label="Published — recorded manually (unverified)" to="/publishing" />
-            <Stat value={d.counts.publishedVerified} label="Published — verified by API" to="/publishing" />
-            <Stat value={d.counts.qaFailed} label="Failed or QA-failed" to="/qa" />
-            <Stat value={d.counts.openOpportunities} label="Open opportunities" to="/research" />
+            <Stat value={d.counts.publishedVerified} label="Published" to="/publishing" />
+            <Stat value={d.counts.qaFailed} label="Failed/Rejected" to="/qa" />
+            <Stat value={d.counts.packingBacklog} label="In packaging queue" to="/packing" />
+            <Stat value={d.counts.openOpportunities} label="Untried ideas" to="/research" />
           </div>
+
+          {/* Untried Ideas List (clears only after made+approved+packaged) */}
+          <Card title="Ideas to try" actions={<Link to="/research">All opportunities</Link>}>
+            {d.research?.opportunities?.length ? (
+              <div className="small">
+                {d.research.opportunities.slice(0, 5).map((o: any) => (
+                  <div key={o.id} className="small" style={{ marginBottom: 8 }}>
+                    <b>{o.title}</b> — {o.category} · <Pill value={o.status} />
+                  </div>
+                ))}
+                {d.research.opportunities.length > 5 && (
+                  <p className="muted">+{d.research.opportunities.length - 5} more ideas...</p>
+                )}
+              </div>
+            ) : <Empty title="No untried ideas">Add research opportunities to start building.</Empty>}
+          </Card>
+
+          {/* Recent Traction (top 5 products by engagement) */}
+          <Card title="Recent traction" actions={<Link to="/analytics">Full analytics</Link>}>
+            {d.analytics?.recent?.length ? (
+              <table className="t"><tbody>
+                {d.analytics.recent.map((p: any) => (
+                  <tr key={p.id}><td><Link to={`/products/${p.id}`}>{p.title}</Link></td><td className="right">
+                    {p.views ? <span>{p.views} views</span> : null}
+                    {p.sales ? <span> · {p.sales} sales</span> : null}
+                    {p.revenue ? <span> · {usd(p.revenue, 2)}</span> : null}
+                  </td></tr>
+                ))}
+              </tbody></table>
+            ) : <Empty title="No traction data">Published products will appear here once they get views/sales.</Empty>}
+          </Card>
 
           <div className="grid g2" style={{ marginTop: 14 }}>
             <Card title="Ready for review" actions={<Link to="/batches">All batches</Link>}>

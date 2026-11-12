@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router';
+import React from 'react';
 import '@fontsource/inter/400.css';
 import '@fontsource/inter/600.css';
 import '@fontsource/inter/700.css';
@@ -59,19 +60,49 @@ const NAV_HINTS: Record<string, string> = {
 function Nav() {
   const { data } = useApi<any>('/dashboard', { poll: 10000 });
   const c = data?.counts ?? {};
+  const [collapsed, setCollapsed] = React.useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('sidebar:collapsed') === 'true';
+    }
+    return false;
+  });
+  React.useEffect(() => {
+    localStorage.setItem('sidebar:collapsed', String(collapsed));
+  }, [collapsed]);
+
   const link = (to: string, text: string, count?: number) => (
     <NavLink to={to} end={to === '/'} className={({ isActive }) => (isActive ? 'active' : '')} title={NAV_HINTS[to]}>
-      <span className="ico" aria-hidden="true">{NAV_ICONS[to] ?? '•'}</span><span className="lbl">{text}</span>{count ? <span className="count">{count}</span> : null}
+      <span className="ico" aria-hidden="true">{NAV_ICONS[to] ?? '•'}</span>
+      {!collapsed && <span className="lbl">{text}</span>}
+      {count ? <span className="count">{count}</span> : null}
     </NavLink>
   );
+
   return (
-    <nav className="sidebar nav" aria-label="Main">
-      <div className="brand">{SUITE_NAME}<small>{data ? (data.providers.text.mode === 'ai' ? `AI: ${data.providers.text.model}` : 'AI not configured') : ' '}</small></div>
+    <nav className={`sidebar nav ${collapsed ? 'collapsed' : ''}`} aria-label="Main">
+      <div className="brand">
+        {collapsed ? (
+          <span className="ico" aria-hidden="true" style={{fontSize: 20}}>🏭</span>
+        ) : (
+          <>
+            {SUITE_NAME}
+            <small>{data ? (data.providers.text.mode === 'ai' ? `AI: ${data.providers.text.model}` : 'AI not configured') : ' '}</small>
+          </>
+        )}
+        <button
+          className="collapse-toggle"
+          onClick={() => setCollapsed(!collapsed)}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {collapsed ? '▶' : '◀'}
+        </button>
+      </div>
       {link('/arcade', `${ARCADE_GAME_NAME} arcade`)}
       {link('/missions', 'Missions')}
       {link('/', 'Dashboard')}
       {link('/calendar', 'Production calendar')}
-      <div className="nav-section">Make</div>
+      <div className="nav-section">{collapsed ? '' : 'Make'}</div>
       {link('/digest', 'Research digest')}
       {link('/research', 'Research & opportunities', c.openOpportunities)}
       {link('/library', 'Product library')}
@@ -80,14 +111,14 @@ function Nav() {
       {link('/templates', 'Templates')}
       {link('/jobs', 'Production jobs', data?.jobs?.running?.length)}
       {link('/qa', 'QA results', c.qaFailed)}
-      <div className="nav-section">Sell</div>
+      <div className="nav-section">{collapsed ? '' : 'Sell'}</div>
       {link('/batches', 'Batch approval', c.awaitingReview)}
       {link('/rework', 'Rework', c.rework)}
       {link('/ai-notes', 'Notes for the AI')}
       {link('/listings', 'Marketplace listings')}
       {link('/publishing', 'Publishing status', c.needsReconciliation)}
       {link('/analytics', 'Analytics')}
-      <div className="nav-section">System</div>
+      <div className="nav-section">{collapsed ? '' : 'System'}</div>
       {link('/settings', 'Settings & integrations')}
     </nav>
   );
