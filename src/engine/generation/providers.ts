@@ -296,8 +296,10 @@ export class OpenAICompatibleTextProvider implements TextProvider {
     }
     const choice = body.choices?.[0];
     const content = choice?.message?.content;
-    if (!content) throw new ProviderError(this.id, 'invalid_output', 'The response had no message content.');
+    // Check the cut-off first: a reasoning model can spend the whole max_tokens budget thinking and
+    // return empty content, and "no message content" alone hid that.
     if (choice?.finish_reason === 'length') throw new ProviderError(this.id, 'invalid_output', 'The response was cut off at the max_tokens limit.');
+    if (!content) throw new ProviderError(this.id, 'invalid_output', 'The response had no message content.');
     let parsed: unknown;
     try {
       parsed = JSON.parse(stripCodeFence(content));
@@ -360,6 +362,23 @@ function stripCodeFence(s: string): string {
 /** Providers billed per call with no free tier. They are never an automatic backup unless allowed. */
 export const PAID_TEXT_PROVIDERS: readonly AiTextProviderId[] = ['anthropic'];
 
+/**
+ * Every provider in the chain failed. Thrown in place of the last provider's error alone, which
+ * named only the final backup (say, Hugging Face out of credits) and hid why the main provider and
+ * the other backups failed. The kind is the last error's, so retry and job handling are unchanged.
+ */
+export function allProvidersFailed(failures: { id: string; err: unknown }[], lastErr: unknown): ProviderError {
+  const label = (id: string) => (id === 'anthropic' ? 'Anthropic' : (TEXT_PROVIDER_META as Record<string, { label: string }>)[id]?.label ?? id);
+  const reason = (id: string, err: unknown) => {
+    const msg = err instanceof Error ? err.message : String(err);
+    const own = msg.startsWith(`${id}: `) ? msg.slice(id.length + 2) : msg;
+    return own.length > 160 ? `${own.slice(0, 157)}...` : own;
+  };
+  const lines = failures.map((f) => `${label(f.id)}: ${reason(f.id, f.err)}`);
+  const last = lastErr instanceof ProviderError ? lastErr : null;
+  return new ProviderError('AI', last?.kind ?? 'server', `None of the ${failures.length} providers could answer. ${lines.join(' | ')}`, lastErr);
+}
+
 export class RoutedTextProvider implements TextProvider {
   private providers: Partial<Record<AiTextProviderId, TextProvider>>;
   private activeId: () => AiTextProviderId;
@@ -407,12 +426,14 @@ export class RoutedTextProvider implements TextProvider {
   async generateStructured<T>(req: StructuredRequest<T>): Promise<StructuredResult<T>> {
     let lastErr: unknown = null;
     let tried = 0;
+    const failures: { id: string; err: unknown }[] = [];
     for (const p of this.chain()) {
       if (!(await p.isConfigured())) continue;
       tried++;
       const held = this.pacer?.blocked(p.id);
       if (held) {
         lastErr = new ProviderError(p.id, 'rate_limit', `skipped: ${held}`);
+        failures.push({ id: p.id, err: lastErr });
         this.onFallback(p.id, lastErr);
         continue;
       }
@@ -424,9 +445,11 @@ export class RoutedTextProvider implements TextProvider {
         if (err instanceof ProviderError && err.kind === 'invalid_output') throw err;
         if (err instanceof ProviderError && err.kind === 'rate_limit') this.pacer?.rateLimited(p.id);
         lastErr = err;
+        failures.push({ id: p.id, err });
         this.onFallback(p.id, err);
       }
     }
+    if (failures.length > 1) throw allProvidersFailed(failures, lastErr);
     if (lastErr) throw lastErr;
     throw new ProviderError(this.activeId(), 'unconfigured', tried ? 'No text provider answered.' : 'No AI text provider has an API key (Settings → AI providers).');
   }
@@ -1218,12 +1241,14 @@ export class RoutedImageProvider implements ImageProvider {
   async generateImage(req: { prompt: string; size: 'portrait' | 'square' | 'landscape' }): Promise<ImageResult> {
     let lastErr: unknown = null;
     let tried = 0;
+    const failures: { id: string; err: unknown }[] = [];
     for (const p of this.chain()) {
       if (!(await p.isConfigured())) continue;
       tried++;
       const held = this.pacer?.blocked(p.id);
       if (held) {
         lastErr = new ProviderError(p.id, 'rate_limit', `skipped: ${held}`);
+        failures.push({ id: p.id, err: lastErr });
         this.onFallback(p.id, lastErr);
         continue;
       }
@@ -1236,9 +1261,11 @@ export class RoutedImageProvider implements ImageProvider {
           this.pacer?.rateLimited(p.id);
         }
         lastErr = err;
+        failures.push({ id: p.id, err });
         this.onFallback(p.id, err);
       }
     }
+    if (failures.length > 1) throw allProvidersFailed(failures, lastErr);
     if (lastErr) throw lastErr;
     throw new ProviderError(this.activeId(), 'unconfigured', tried ? 'No image provider answered.' : 'No AI image provider is configured (Settings → AI providers).');
   }
