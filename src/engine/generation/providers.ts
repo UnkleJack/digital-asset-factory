@@ -681,6 +681,17 @@ export class ReplicateImageProvider implements ImageProvider {
 
 const FAL_SIZES = { portrait: 'portrait_4:5', square: 'square_hd', landscape: 'landscape_16:9' } as const;
 
+/** Fal puts its reason in `detail` (a string, or a list of validation errors), not in `error.message`. */
+function falErrorDetail(body: { error?: { message?: string }; detail?: unknown }): string | null {
+  if (body.error?.message) return body.error.message;
+  if (typeof body.detail === 'string') return body.detail;
+  if (Array.isArray(body.detail)) {
+    const parts = body.detail.map((d) => (d && typeof d === 'object' && 'msg' in d ? String((d as { msg: unknown }).msg) : String(d)));
+    return parts.length ? parts.join('; ') : null;
+  }
+  return null;
+}
+
 export class FalImageProvider implements ImageProvider {
   readonly id = 'fal';
   private getKey: () => Promise<string | null>;
@@ -719,7 +730,7 @@ export class FalImageProvider implements ImageProvider {
   }
 
   private async once(key: string, cfg: Settings['generation']['fal'], req: { prompt: string; size: keyof typeof FAL_SIZES }): Promise<ImageResult> {
-    const modelUrl = `https://fal.run/fal-ai/${cfg.model}`;
+    const modelUrl = `${cfg.baseUrl.replace(/\/+$/, '')}/${cfg.model}`;
     let res: Response;
     try {
       res = await fetch(modelUrl, {
@@ -740,14 +751,17 @@ export class FalImageProvider implements ImageProvider {
       throw new ProviderError('fal', 'connection', 'Could not reach the Fal.ai API.', err);
     }
     const text = await res.text();
-    let body: { images?: { url: string }[]; error?: { message?: string } } = {};
+    let body: { images?: { url: string }[]; error?: { message?: string }; detail?: unknown } = {};
     try {
       body = JSON.parse(text);
     } catch {
       if (res.ok) throw new ProviderError('fal', 'invalid_output', 'The Fal.ai API returned a non-JSON response.');
     }
     if (!res.ok) {
-      const msg = body.error?.message?.slice(0, 200) ?? `HTTP ${res.status}`;
+      const msg = (falErrorDetail(body) ?? `HTTP ${res.status}`).slice(0, 200);
+      // Fal answers 403 both for a bad key and for an account that has run out of balance.
+      // The second is not a key problem, so it is reported as out of credit and the router moves on.
+      if (res.status === 403 && /balance|locked|billing/i.test(msg)) throw new ProviderError('fal', 'budget_exceeded', `Out of credit on the Fal.ai account: ${msg}`);
       if (res.status === 401 || res.status === 403) throw new ProviderError('fal', 'auth', `Key rejected: ${msg}`);
       if (res.status === 429) throw new ProviderError('fal', 'rate_limit', msg);
       if (res.status >= 500) throw new ProviderError('fal', 'server', msg);
