@@ -1175,8 +1175,154 @@ export class PollinationsImageProvider implements ImageProvider {
   }
 }
 
+const OPENROUTER_IMAGE_SIZES = { portrait: '1024x1536', square: '1024x1024', landscape: '1536x1024' } as const;
+
+export class OpenRouterImageProvider implements ImageProvider {
+  readonly id = 'openrouter';
+  private getKey: () => Promise<string | null>;
+  private cfg: () => Settings['generation']['openrouter'];
+  private sleep: (ms: number) => Promise<void>;
+
+  constructor(getKey: () => Promise<string | null>, cfg: () => Settings['generation']['openrouter'], sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))) {
+    this.getKey = getKey;
+    this.cfg = cfg;
+    this.sleep = sleep;
+  }
+
+  async isConfigured(): Promise<boolean> {
+    return !!(await this.getKey());
+  }
+
+  model(): string {
+    return this.cfg().imageModel ?? 'google/gemini-2.5-flash-image';
+  }
+
+  async generateImage(req: { prompt: string; size: 'portrait' | 'square' | 'landscape' }): Promise<ImageResult> {
+    const key = await this.getKey();
+    if (!key) throw new ProviderError('openrouter', 'unconfigured', 'No OpenRouter API key is configured (Settings → AI providers).');
+    const cfg = this.cfg();
+    let lastErr: ProviderError | null = null;
+    for (let attempt = 0; attempt <= cfg.maxRetries; attempt++) {
+      if (attempt > 0) await this.sleep(Math.min(60_000, 2000 * 2 ** attempt));
+      try {
+        return await this.once(key, cfg, req);
+      } catch (err) {
+        lastErr = err instanceof ProviderError ? err : new ProviderError('openrouter', 'server', String(err), err);
+        if (lastErr.errorClass !== 'transient' || lastErr.kind === 'invalid_output') break;
+      }
+    }
+    throw lastErr!;
+  }
+
+  private async once(key: string, cfg: Settings['generation']['openrouter'], req: { prompt: string; size: keyof typeof OPENROUTER_IMAGE_SIZES }): Promise<ImageResult> {
+    const modelUrl = `${cfg.baseUrl.replace(/\/$/, '')}/images/generations`;
+    let res: Response;
+    try {
+      res = await fetch(modelUrl, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: cfg.imageModel ?? 'google/gemini-2.5-flash-image',
+          prompt: req.prompt,
+          size: OPENROUTER_IMAGE_SIZES[req.size],
+          n: 1,
+          response_format: 'b64_json',
+        }),
+        signal: AbortSignal.timeout(cfg.timeoutMs),
+      });
+    } catch (err) {
+      const name = (err as Error)?.name;
+      if (name === 'TimeoutError' || name === 'AbortError') throw new ProviderError('openrouter', 'timeout', 'The image request timed out.', err);
+      throw new ProviderError('openrouter', 'connection', 'Could not reach the OpenRouter API.', err);
+    }
+    const text = await res.text();
+    let body: { data?: { b64_json?: string }[]; error?: { message?: string } } = {};
+    try {
+      body = JSON.parse(text);
+    } catch {
+      if (res.ok) throw new ProviderError('openrouter', 'invalid_output', 'The OpenRouter API returned a non-JSON response.');
+    }
+    if (!res.ok) {
+      const msg = body.error?.message?.slice(0, 200) ?? `HTTP ${res.status}`;
+      if (res.status === 401 || res.status === 403) throw new ProviderError('openrouter', 'auth', `Key rejected: ${msg}`);
+      if (res.status === 429) throw new ProviderError('openrouter', 'rate_limit', msg);
+      if (res.status >= 500) throw new ProviderError('openrouter', 'server', msg);
+      throw new ProviderError('openrouter', 'bad_request', msg);
+    }
+    const b64 = body.data?.[0]?.b64_json;
+    if (!b64) throw new ProviderError('openrouter', 'invalid_output', 'The OpenRouter API response contained no image data.');
+    const png = Buffer.from(b64, 'base64');
+    const dims = pngSize(png);
+    if (!dims) throw new ProviderError('openrouter', 'invalid_output', 'The returned image is not a valid PNG.');
+    return { png, widthPx: dims.width, heightPx: dims.height, usage: { inputTokens: null, outputTokens: null, images: 1 }, model: cfg.imageModel ?? 'google/gemini-2.5-flash-image' };
+  }
+}
+
+const LOCAL_IMAGE_SIZES = { portrait: { width: 768, height: 1024 }, square: { width: 1024, height: 1024 }, landscape: { width: 1024, height: 768 } } as const;
+
+export class LocalImageProvider implements ImageProvider {
+  readonly id = 'local';
+  private baseUrl: string;
+
+  constructor(baseUrl = 'http://127.0.0.1:7861') {
+    this.baseUrl = baseUrl.replace(/\/$/, '');
+  }
+
+  async isConfigured(): Promise<boolean> {
+    try {
+      const res = await fetch(`${this.baseUrl}/health`, { signal: AbortSignal.timeout(3000) });
+      if (!res.ok) return false;
+      const body = await res.json();
+      return !!body.model_loaded;
+    } catch {
+      return false;
+    }
+  }
+
+  model(): string {
+    return 'sdxl-base-local';
+  }
+
+  async generateImage(req: { prompt: string; size: 'portrait' | 'square' | 'landscape' }): Promise<ImageResult> {
+    const dims = LOCAL_IMAGE_SIZES[req.size];
+    let res: Response;
+    try {
+      res = await fetch(`${this.baseUrl}/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: req.prompt,
+          width: dims.width,
+          height: dims.height,
+          steps: 30,
+          guidance_scale: 7.5,
+        }),
+        signal: AbortSignal.timeout(300000),
+      });
+    } catch (err) {
+      const name = (err as Error)?.name;
+      if (name === 'TimeoutError' || name === 'AbortError') throw new ProviderError('local', 'timeout', 'Local image request timed out.', err);
+      throw new ProviderError('local', 'connection', 'Could not reach local image server at ' + this.baseUrl, err);
+    }
+    if (!res.ok) {
+      const text = await res.text();
+      throw new ProviderError('local', 'bad_request', `Local server returned HTTP ${res.status}: ${text.slice(0, 200)}`);
+    }
+    const body = await res.json();
+    if (!body.image_url) throw new ProviderError('local', 'invalid_output', 'Local server returned no image URL.');
+    const dataUrl = body.image_url;
+    const commaIdx = dataUrl.indexOf(',');
+    if (commaIdx === -1) throw new ProviderError('local', 'invalid_output', 'Local server returned malformed image URL.');
+    const b64 = dataUrl.slice(commaIdx + 1);
+    const png = Buffer.from(b64, 'base64');
+    const measured = imageSize(png);
+    if (!measured) throw new ProviderError('local', 'invalid_output', 'The returned image is not valid.');
+    return { png, widthPx: measured.width, heightPx: measured.height, usage: { inputTokens: null, outputTokens: null, images: 1 }, model: body.model ?? 'sdxl-base-local' };
+  }
+}
+
 export const IMAGE_PROVIDER_IDS = [
-  'openai', 'gemini', 'together', 'huggingface', 'pollinations', 'replicate', 'fal', 'grok'
+  'openai', 'gemini', 'together', 'huggingface', 'pollinations', 'replicate', 'fal', 'grok', 'openrouter', 'local'
 ] as const;
 export type AiImageProviderId = (typeof IMAGE_PROVIDER_IDS)[number];
 

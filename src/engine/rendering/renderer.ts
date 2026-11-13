@@ -295,6 +295,39 @@ export class Renderer {
     });
   }
 
+  /**
+   * The middle square of a picture as 8-bit grey, `size` pixels on a side, on white (so transparent parts read
+   * as paper). Takes anything Chrome can decode, SVG included. Used to read a mandala's repeat count off a
+   * picture; the picture is cropped to its middle square because mandalas are drawn around the centre.
+   */
+  async greySquare(data: Buffer, mime: string, size: number): Promise<{ grey: Buffer; widthPx: number; heightPx: number }> {
+    return this.withPage(async (page) => {
+      await page.setContent('<!doctype html><html><body></body></html>');
+      const r = await page.evaluate(async (b64: string, type: string, n: number) => {
+        const img = new Image();
+        img.src = `data:${type};base64,${b64}`;
+        await img.decode();
+        const w = img.naturalWidth || n, h = img.naturalHeight || n;
+        const side = Math.min(w, h);
+        const c = document.createElement('canvas');
+        c.width = n;
+        c.height = n;
+        const ctx = c.getContext('2d', { willReadFrequently: true })!;
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, n, n);
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, (w - side) / 2, (h - side) / 2, side, side, 0, 0, n, n);
+        const d = ctx.getImageData(0, 0, n, n).data;
+        const grey = new Uint8Array(n * n);
+        for (let i = 0; i < n * n; i++) grey[i] = Math.round(0.2126 * d[i * 4] + 0.7152 * d[i * 4 + 1] + 0.0722 * d[i * 4 + 2]);
+        let bin = '';
+        for (let i = 0; i < grey.length; i += 8192) bin += String.fromCharCode(...grey.subarray(i, i + 8192));
+        return { b64: btoa(bin), w, h };
+      }, data.toString('base64'), mime, size);
+      return { grey: Buffer.from(r.b64, 'base64'), widthPx: r.w, heightPx: r.h };
+    });
+  }
+
   async analyzePng(png: Buffer): Promise<ImageAnalysis> {
     return this.withPage(async (page) => {
       await page.setContent('<!doctype html><html><body></body></html>');
