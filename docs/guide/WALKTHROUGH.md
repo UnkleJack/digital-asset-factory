@@ -786,6 +786,18 @@ Ticked boxes are on/off settings. A box marked "one per line" takes a list. Boxe
 
 **The mission.** The HAPPY DAFFY mission for this chapter is cleared by a report, not by **Mark done**. Make a product with a Brief you wrote, then press **Report**, pick that product and write how the wording came out and whether the AI followed your Brief. Your report is also saved as a note for the AI on that product, so it shows up in [Notes for the AI](#14-notes-for-the-ai) and feeds what the factory learns.
 
+**The shelf missions.** Five more missions take you along every shelf of the factory, one part for each kind of product:
+
+| Mission | Parts |
+| --- | --- |
+| Shelf: trackers & lists | Habit tracker, To-do checklist, Cleaning schedule, Home inventory, Reading log, Assignment tracker |
+| Shelf: calendars & planners | Monthly calendar, Weekly planner, Daily planner, Class timetable |
+| Shelf: goal & journal sheets | Goal planner, Guided journal |
+| Shelf: money sheets | Budget planner, Invoice |
+| Shelf: coloring & activities | Mandala coloring pages, Maze activity, Word search, Illustrated coloring pages, Geometric pattern art |
+
+Each part has **Try it** and **Report**. **Try it** opens **New product** with that part's preset already filled in, or an empty form when the part has no preset. You can always start from scratch instead. Make one product of that kind, then press **Report**, pick it and write how it came out. The list only offers products of the right kind. Each report is saved as a note for the AI on that product too. A shelf mission clears when every part has its report. Illustrated coloring pages need an image key in Settings, because the AI draws their pictures.
+
 ---
 
 # Part 2: HAPPY DAFFY
@@ -872,7 +884,7 @@ Each world card shows its rank, a progress bar towards the next milestone, **TAS
 
 ## MISSIONS
 
-Want to learn the whole Foundry? Here's your quest log. There's one mission for every chapter of this guide, from the arcade menu link down to Presets and the Brief box, plus one for the arcade itself. The bar up top shows how many you've cleared.
+Want to learn the whole Foundry? Here's your quest log. There's one mission for every chapter of this guide, from the arcade menu link down to Presets and the Brief box, plus one for the arcade itself and five shelf missions that have you make one of every kind of product. The bar up top shows how many you've cleared.
 - **INSTRUCTIONS** pops up that chapter of this guide as plain text, right there in the cabinet, so you can read up on a screen without loading it. Arrow keys scroll it. **CLOSE**, Esc or B shuts it.
 - **GO** opens the screen the mission is about.
 - **MARK DONE** clears a mission and puts a **✓ DONE** beside it. **UNDO** takes it back.

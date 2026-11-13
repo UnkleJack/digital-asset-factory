@@ -17,6 +17,8 @@ export interface MissionDef {
   id: string;
   /** The chapter heading in the guide, without its number. Tests check every one is found. */
   chapter: string;
+  /** The mission's name on the list, when it differs from its guide chapter (several missions can share one chapter). */
+  title?: string;
   /** The screen the mission is about. */
   route: string;
   /**
@@ -81,6 +83,69 @@ export const MISSIONS: readonly MissionDef[] = [
     chapter: 'Presets and the Brief box',
     route: '/library?new=1',
     report: { ask: 'Which product did you write a Brief for, and how did the wording come out? Did the AI follow it?', needsBrief: true },
+  },
+  // Owner, 2026-11-10: the shelf tour. One mission per shelf (F), one part per kind of product, each
+  // cleared by making that kind and reporting back. TRY IT opens the part's preset when there is one;
+  // any part can also be made from scratch (G: both). Coloring and activities get a shelf too (H).
+  {
+    id: 'shelf-trackers',
+    title: 'Shelf: trackers & lists',
+    chapter: 'Presets and the Brief box',
+    route: '/library?new=1',
+    parts: [
+      { id: 'habit', title: 'Habit tracker', productType: 'habit-tracker', presetId: 'student-habit' },
+      { id: 'todo', title: 'To-do checklist', productType: 'todo-checklist', presetId: 'student-checklist' },
+      { id: 'cleaning', title: 'Cleaning schedule', productType: 'cleaning-schedule', presetId: 'weekly-cleaning' },
+      { id: 'inventory', title: 'Home inventory', productType: 'home-inventory', presetId: 'home-inventory' },
+      { id: 'reading', title: 'Reading log', productType: 'reading-log', presetId: 'student-reading-log' },
+      { id: 'assignments', title: 'Assignment tracker', productType: 'assignment-tracker', presetId: 'student-assignments' },
+    ],
+  },
+  {
+    id: 'shelf-calendars',
+    title: 'Shelf: calendars & planners',
+    chapter: 'Presets and the Brief box',
+    route: '/library?new=1',
+    parts: [
+      { id: 'monthly', title: 'Monthly calendar', productType: 'monthly-calendar', presetId: 'monday-calendar' },
+      { id: 'weekly', title: 'Weekly planner', productType: 'weekly-planner', presetId: 'parent-weekly' },
+      { id: 'daily', title: 'Daily planner', productType: 'daily-planner', presetId: 'undated-daily' },
+      { id: 'timetable', title: 'Class timetable', productType: 'timetable', presetId: 'student-timetable' },
+    ],
+  },
+  {
+    id: 'shelf-goals',
+    title: 'Shelf: goal & journal sheets',
+    chapter: 'Presets and the Brief box',
+    route: '/library?new=1',
+    parts: [
+      { id: 'goals', title: 'Goal planner', productType: 'goal-planner', presetId: 'student-goals' },
+      { id: 'journal', title: 'Guided journal', productType: 'guided-journal', presetId: 'gratitude-journal' },
+    ],
+  },
+  {
+    id: 'shelf-money',
+    title: 'Shelf: money sheets',
+    chapter: 'Presets and the Brief box',
+    route: '/library?new=1',
+    parts: [
+      { id: 'budget', title: 'Budget planner', productType: 'budget-planner', presetId: 'student-budget' },
+      { id: 'invoice', title: 'Invoice', productType: 'invoice-template', presetId: 'business-invoice' },
+    ],
+  },
+  {
+    id: 'shelf-activities',
+    title: 'Shelf: coloring & activities',
+    chapter: 'Presets and the Brief box',
+    route: '/library?new=1',
+    parts: [
+      { id: 'mandala', title: 'Mandala coloring pages', productType: 'mandala-coloring' },
+      { id: 'maze', title: 'Maze activity', productType: 'maze-activity' },
+      { id: 'word-search', title: 'Word search', productType: 'word-search' },
+      // Needs an image key: its pictures are drawn by the AI.
+      { id: 'illustrated', title: 'Illustrated coloring pages', productType: 'illustrated-coloring' },
+      { id: 'geometric', title: 'Geometric pattern art', productType: 'geometric-pattern-art', presetId: 'geometric-coloring' },
+    ],
   },
   { id: 'imports', chapter: 'Imports', route: '/imports' },
   { id: 'factory-floor', chapter: 'Factory floor', route: '/packing' },
@@ -203,7 +268,7 @@ export function listMissions(app: AppContext): { missions: Mission[]; guideFound
       return {
       id: m.id,
       number: i + 1,
-      title: m.chapter,
+      title: m.title ?? m.chapter,
       route: m.route,
       done: done.has(m.id),
       completedAt: done.get(m.id) ?? null,
@@ -234,7 +299,7 @@ function allReports(app: AppContext): Map<string, MissionReport> {
 }
 
 function unmet(m: MissionDef, done: Map<string, string> | Set<string>): string[] {
-  return (m.requires ?? []).filter((id) => !done.has(id)).map((id) => MISSIONS.find((x) => x.id === id)?.chapter ?? id);
+  return (m.requires ?? []).filter((id) => !done.has(id)).map((id) => { const x = MISSIONS.find((y) => y.id === id); return x ? x.title ?? x.chapter : id; });
 }
 
 function mission(id: string): MissionDef {
@@ -248,12 +313,12 @@ export function missionInstructions(id: string): { id: string; title: string; te
   if (m.locked) return { id: m.id, title: m.chapter, text: m.locked, source: 'TASKS.md (build list)' };
   const text = chapters?.get(m.chapter);
   if (!text) throw notFound('Instructions for mission', id);
-  return { id: m.id, title: m.chapter, text, source: GUIDE_REL };
+  return { id: m.id, title: m.title ?? m.chapter, text, source: GUIDE_REL };
 }
 
 export function setMissionDone(app: AppContext, id: string, done: boolean): void {
   const m = mission(id);
-  if (done && rule(m)) throw validation(`"${m.chapter}" is cleared by writing a report on what you made, not by MARK DONE.`);
+  if (done && rule(m)) throw validation(`"${m.title ?? m.chapter}" is cleared by writing a report on what you made, not by MARK DONE.`);
   if (done) assertUnlocked(app, m);
   if (done) app.db.run('INSERT OR IGNORE INTO arcade_missions_done (mission_id, completed_at) VALUES (?, ?)', id, iso());
   else {
@@ -264,10 +329,10 @@ export function setMissionDone(app: AppContext, id: string, done: boolean): void
 }
 
 function assertUnlocked(app: AppContext, m: MissionDef): void {
-  if (m.locked) throw validation(`"${m.chapter}" is locked until it's built, so it can't be marked done yet.`);
+  if (m.locked) throw validation(`"${m.title ?? m.chapter}" is locked until it's built, so it can't be marked done yet.`);
   const finished = new Set(app.db.all<{ mission_id: string }>('SELECT mission_id FROM arcade_missions_done').map((r) => r.mission_id));
   const needs = unmet(m, finished);
-  if (needs.length) throw validation(`"${m.chapter}" unlocks after you clear: ${needs.join(', ')}.`);
+  if (needs.length) throw validation(`"${m.title ?? m.chapter}" unlocks after you clear: ${needs.join(', ')}.`);
 }
 
 /**
@@ -279,7 +344,7 @@ function assertUnlocked(app: AppContext, m: MissionDef): void {
 export function reportMission(app: AppContext, id: string, input: { partId?: string; productId: string; report: string }): { done: boolean; noteId: string } {
   const m = mission(id);
   const r = rule(m);
-  if (!r) throw validation(`"${m.chapter}" is cleared with MARK DONE; it has no report.`);
+  if (!r) throw validation(`"${m.title ?? m.chapter}" is cleared with MARK DONE; it has no report.`);
   assertUnlocked(app, m);
   const text = input.report.trim();
   if (text.length < REPORT_MIN) throw validation(`Write at least ${REPORT_MIN} characters: which product, and how it came out.`);
@@ -288,7 +353,7 @@ export function reportMission(app: AppContext, id: string, input: { partId?: str
   let part: MissionPartDef | undefined;
   if (m.parts?.length) {
     part = m.parts.find((p) => p.id === input.partId);
-    if (!part) throw validation(`Pick which part of "${m.chapter}" this report is for.`);
+    if (!part) throw validation(`Pick which part of "${m.title ?? m.chapter}" this report is for.`);
     partId = part.id;
   }
   const product = app.db.get<{ id: string; title: string; product_type: string; version_id: string | null; brief: string | null }>(
@@ -300,7 +365,7 @@ export function reportMission(app: AppContext, id: string, input: { partId?: str
   if (!product.version_id) throw validation(`"${product.title}" has no version yet, so there's nothing to report on.`);
   if (part && product.product_type !== part.productType) throw validation(`"${product.title}" isn't a ${part.title}. Pick a product of that type.`);
   if (r.needsBrief && !product.brief?.trim()) throw validation(`"${product.title}" has no Brief for the AI. Pick a product you wrote a Brief for.`);
-  const label = part ? `${m.chapter}: ${part.title}` : m.chapter;
+  const label = part ? `${m.title ?? m.chapter}: ${part.title}` : m.title ?? m.chapter;
   const note = addReviewNote(app, product.version_id, `Mission report (${label}): ${text}`);
   app.db.run(
     'INSERT OR REPLACE INTO arcade_mission_reports (mission_id, part_id, product_id, report, note_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
@@ -318,7 +383,7 @@ export function reportCandidates(app: AppContext, id: string, partId?: string): 
   const r = rule(m);
   if (!r) return [];
   const part = m.parts?.find((p) => p.id === partId);
-  if (m.parts?.length && !part) throw validation(`Pick which part of "${m.chapter}" this report is for.`);
+  if (m.parts?.length && !part) throw validation(`Pick which part of "${m.title ?? m.chapter}" this report is for.`);
   const where = ['p.current_version_id IS NOT NULL'];
   const args: unknown[] = [];
   if (part) { where.push('p.product_type = ?'); args.push(part.productType); }

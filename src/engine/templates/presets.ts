@@ -64,4 +64,12 @@ export const PRESETS: ProductPreset[] = [
     params: { pages: 4, family: 'girih', mode: 'print', density: 'medium', cover: false } },
   { id: 'undated-daily', name: 'Undated daily planner page', group: 'Everyone', productType: 'daily-planner', audience: 'General adults', designSystem: 'Minimal Mono',
     params: { dated: false, days: 1, priorities: 3 } },
+  { id: 'weekly-cleaning', name: 'Room-by-room cleaning schedule', group: 'Home and family', productType: 'cleaning-schedule', audience: 'Busy parents', designSystem: 'Botanical Sage',
+    params: { rooms: ['Kitchen', 'Bathroom', 'Bedroom', 'Living room', 'Laundry'] }, brief: 'Short, doable tasks a busy family can tick off. No product or brand names.' },
+  { id: 'home-inventory', name: 'Home inventory for insurance', group: 'Home and family', productType: 'home-inventory', audience: 'General adults', designSystem: 'Minimal Mono',
+    params: { rowsPerRoom: 16 }, brief: 'Tips about photographing items and keeping receipts together. No legal or insurance advice.' },
+  { id: 'gratitude-journal', name: 'Gratitude journal (30 days)', group: 'Everyone', productType: 'guided-journal', audience: 'General adults', designSystem: 'Warm Neutral',
+    params: { pages: 30, promptsPerPage: 1, focus: 'gratitude' }, brief: 'Gentle, specific prompts about small everyday things. No therapy or medical claims.' },
+  { id: 'business-invoice', name: 'Small business invoice', group: 'Work', productType: 'invoice-template', audience: 'Small business owners', designSystem: 'Bold Modern',
+    params: { currencySymbol: '$', taxLabel: 'Sales tax', lineRows: 12 }, brief: 'Plain, friendly payment terms. No legal or tax advice.' },
 ];
