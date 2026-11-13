@@ -73,8 +73,8 @@ export const SettingsSchema = z.object({
     // production. Free-tier providers first; Anthropic last since it's pay-per-use.
     // Owner's order (2026-11-04): NVIDIA first, and Groq is a late backup, never the first one.
     fallbackOrder: z.array(z.enum(['anthropic', 'openrouter', 'groq', 'nvidia', 'cerebras', 'together', 'gemini', 'mistral', 'github', 'huggingface'])).default(['nvidia', 'gemini', 'openrouter', 'cerebras', 'mistral', 'github', 'together', 'groq', 'huggingface', 'anthropic']),
-    imageProvider: z.enum(['openai', 'gemini', 'together', 'huggingface', 'pollinations', 'replicate', 'fal', 'grok', 'none']).default('openai'),
-    imageFallbackOrder: z.array(z.enum(['openai', 'gemini', 'together', 'huggingface', 'pollinations', 'replicate', 'fal', 'grok'])).default(['gemini', 'together', 'huggingface', 'pollinations', 'openai', 'replicate', 'fal', 'grok']),
+    imageProvider: z.enum(['openai', 'gemini', 'together', 'huggingface', 'pollinations', 'replicate', 'fal', 'grok', 'openrouter', 'local', 'none']).default('openai'),
+    imageFallbackOrder: z.array(z.enum(['openai', 'gemini', 'together', 'huggingface', 'pollinations', 'replicate', 'fal', 'grok', 'openrouter', 'local'])).default(['gemini', 'together', 'huggingface', 'pollinations', 'openai', 'replicate', 'fal', 'grok', 'local']),
     allowPaidFallback: z.boolean().default(false),
     // Spreads calls out to stay inside free-tier limits. dailyCallLimits: per provider, 0 or absent = no app limit.
     // Defaults sit just under what the free tiers allowed when checked (Groq ~1,000/day per model, OpenRouter free models ~50/day without credit).
@@ -103,6 +103,7 @@ export const SettingsSchema = z.object({
       baseUrl: z.url().default('https://openrouter.ai/api/v1'),
       timeoutMs: z.number().int().min(5000).max(600000).default(180000),
       maxRetries: z.number().int().min(0).max(6).default(2),
+      imageModel: z.string().min(1).default('google/gemini-2.5-flash-image'),
     }).prefault({}),
     groq: z.object({
       model: z.string().min(1).default('llama-3.3-70b-versatile'),

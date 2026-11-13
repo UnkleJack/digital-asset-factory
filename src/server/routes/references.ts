@@ -12,6 +12,7 @@ import { createBatch, addToBatch } from '../../engine/approval/batches.ts';
 import { startPipeline } from '../../jobs/pipeline.ts';
 import { parse, type P, type Q } from './util.ts';
 import { fetchImage } from '../../engine/references/fetchImage.ts';
+import { readMandalaFromReference } from '../../engine/references/service.ts';
 
 const Tags = z.array(z.string().max(40)).max(20).optional();
 
@@ -93,6 +94,9 @@ export function registerReferenceRoutes(s: FastifyInstance, { app }: ServerDeps)
     reply.header('Cache-Control', 'private, max-age=300');
     return reply.send(createReadStream(app.assets.resolve(r.rel_path)));
   });
+
+  // Reads a mandala picture's repeat count and rough detail level, to fill in New product's settings. Nothing is stored.
+  s.post('/api/references/:id/read-mandala', async (req) => readMandalaFromReference(app, (req.params as P).id));
 
   s.post('/api/references/images', async (req) => {
     const b = parse(ImageBody, req.body, 'image');
