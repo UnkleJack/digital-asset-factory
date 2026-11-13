@@ -7,6 +7,7 @@ import { audit, type AuditActor } from '../../logging/logger.ts';
 import { localDay, safeSegment } from '../../storage/assetStore.ts';
 import { createProduct } from '../specification/service.ts';
 import { sniffImage } from './images.ts';
+import { readMandala, type MandalaReading } from './mandalaMatch.ts';
 export { referenceImageAsPng } from './load.ts';
 
 /**
@@ -311,4 +312,17 @@ export function createProductFromReferences(app: AppContext, input: { referenceI
   const subject = labels.length === 1 ? labels[0].replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : '';
   const title = input.title?.trim() || `${subject ? `${subject} ` : ''}Coloring Pages`;
   return createProduct(app, { productType: 'imported-coloring', title, params: { references: ids, cover: input.cover ?? true }, designSystemId: input.designSystemId }, actor);
+}
+
+// ---- Reading a mandala picture ----
+
+/** The picture is shrunk to this many pixels a side before it is read (see mandalaMatch.ts). */
+const READ_SIZE = 256;
+
+/** Reads an imported picture as a mandala: its repeat count and rough detail level. Nothing is changed or stored. */
+export async function readMandalaFromReference(app: AppContext, id: string): Promise<MandalaReading & { referenceId: string }> {
+  const r = getReference(app, id);
+  if (r.kind !== 'image' || !r.rel_path || !existsSync(app.assets.resolve(r.rel_path))) throw validation('Only a picture can be read as a mandala.');
+  const { grey } = await app.renderer.greySquare(app.assets.readRaw(r.rel_path), r.mime ?? 'image/png', READ_SIZE);
+  return { referenceId: r.id, ...readMandala(grey, READ_SIZE) };
 }

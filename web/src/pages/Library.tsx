@@ -5,6 +5,7 @@ import { CompactList, CompactRow, PreviewButton, PreviewPane, usePreview } from 
 import { AssetImg, Async, Empty, Modal, PageHead, Pill, useToast } from '../ui.tsx';
 import { ago, label } from '../format.ts';
 import { PackBuilder } from './PackBuilder.tsx';
+import { SamplePanel, newSeed } from './SamplePanel.tsx';
 
 export function Library() {
   const [sp, setSp] = useSearchParams();
@@ -143,6 +144,8 @@ function NewProductModal({ onClose, startPreset = '' }: { onClose: () => void; s
   const [params, setParams] = useState<Record<string, any>>({});
   const [f, setF] = useState({ title: '', designSystemId: '', audienceId: '', themeId: '', size: 'letter', orientation: 'portrait', grayscale: false, marketplaces: ['etsy'] as string[], brief: '' });
   const [presetId, setPresetId] = useState('');
+  // The seed shown in Try it first. Creating the product with the same seed gives it the designs that were previewed.
+  const [seed, setSeed] = useState(newSeed);
   const [pairing, setPairing] = useState('');
   const [custom, setCustom] = useState<Fonts>({ heading: 'playfair-display', body: 'lora', accent: 'playfair-display' });
   const [axis, setAxis] = useState('');
@@ -208,7 +211,7 @@ function NewProductModal({ onClose, startPreset = '' }: { onClose: () => void; s
     setBusy(true);
     setErr(null);
     try {
-      const r = await api('/products', { body: { productType: typeId, title: f.title || undefined, params, designSystemId: f.designSystemId || undefined, audienceId: f.audienceId || null, themeId: f.themeId || null, paper: { size: f.size, orientation: f.orientation, grayscale: f.grayscale }, marketplaces: f.marketplaces, ...(f.brief.trim() && { brief: f.brief.trim() }), ...(fonts && { fonts }) } });
+      const r = await api('/products', { body: { productType: typeId, title: f.title || undefined, params, designSystemId: f.designSystemId || undefined, audienceId: f.audienceId || null, themeId: f.themeId || null, paper: { size: f.size, orientation: f.orientation, grayscale: f.grayscale }, marketplaces: f.marketplaces, ...(f.brief.trim() && { brief: f.brief.trim() }), ...(fonts && { fonts }), seed } });
       const bodies = axis === 'seed' ? Array.from({ length: extraCount }, () => ({ newSeed: true })) : chosen.map((v) => v.body);
       let made = 0;
       const failures: string[] = [];
@@ -312,6 +315,7 @@ function NewProductModal({ onClose, startPreset = '' }: { onClose: () => void; s
               </div>}
               <h3>4. Settings for {type.name}</h3>
               <ParamsEditor defaults={type.defaultParams} fields={type.paramFields} value={params} onChange={setParams} />
+              <SamplePanel type={type} form={f} seed={seed} setSeed={setSeed} params={params} setParams={setParams} />
               {axes.length > 0 && <>
                 <h3>5. Also make variations (optional)</h3>
                 <p className="small muted" style={{ margin: 0 }}>Each variation is its own product, made from the same settings with one thing changed. They all go to batch review like any other product.</p>

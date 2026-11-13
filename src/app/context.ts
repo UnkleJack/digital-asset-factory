@@ -28,6 +28,7 @@ export interface AppContext {
     imageTogether?: ImageProvider;
     imageHuggingFace?: ImageProvider;
     imagePollinations?: ImageProvider;
+    imageLocal?: ImageProvider;
     /** The picture-reading AI for review boxes. Off until set in Settings. */
     vision?: VisionProvider;
   };

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import type { ServerDeps } from '../app.ts';
 import { createProduct, resolveParams } from '../../engine/specification/service.ts';
+import { sampleProduct } from '../../engine/specification/sample.ts';
 import { startPipeline } from '../../jobs/pipeline.ts';
 import { createBatch, addToBatch } from '../../engine/approval/batches.ts';
 import { editVersion } from '../../engine/approval/service.ts';
@@ -38,6 +39,21 @@ const CreateBody = z.object({
   batchId: z.string().optional(),
   fonts: FontChoiceSchema.optional(),
   brief: z.string().max(BRIEF_MAX).optional(),
+  /** The seed shown in the New product sample, so the product gets the designs that were previewed. */
+  seed: z.number().int().min(0).max(2 ** 31 - 1).optional(),
+});
+
+const SampleBody = z.object({
+  productType: z.string(),
+  title: z.string().max(120).optional(),
+  params: z.record(z.string(), z.unknown()).optional(),
+  paper: PaperSchema.partial().optional(),
+  designSystemId: z.string().optional(),
+  audienceId: z.string().nullable().optional(),
+  themeId: z.string().nullable().optional(),
+  seed: z.number().int().min(0).max(2 ** 31 - 1),
+  /** Also draw the first two pages with Chrome (slower). */
+  pages: z.boolean().optional(),
 });
 
 const previewCache = new Map<string, Buffer>();
@@ -78,6 +94,12 @@ export function registerProductRoutes(s: FastifyInstance, { app }: ServerDeps): 
           (SELECT a.id FROM assets a WHERE a.version_id = v.id AND a.role = 'preview' ORDER BY a.page_index LIMIT 1) AS thumb
         ${base} AND p.product_type = ? ORDER BY v.created_at DESC LIMIT ?`, l.product_type, per),
     }));
+  });
+
+  // "Try it first": draws a sample from the New product form's settings. Creates nothing (engine/specification/sample.ts).
+  s.post('/api/products/sample', async (req) => {
+    const { pages, ...b } = parse(SampleBody, req.body, 'sample');
+    return sampleProduct(app, b, pages === true);
   });
 
   s.post('/api/products', async (req) => {
