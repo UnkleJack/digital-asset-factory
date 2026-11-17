@@ -19,7 +19,7 @@ const KEY = 'test-openrouter-key-1234567890';
 const Schema = z.object({ title: z.string(), items: z.array(z.string()).min(2) });
 
 function cfg(url: string, over: Partial<Settings['generation']['openrouter']> = {}): Settings['generation']['openrouter'] {
-  return { model: 'meta-llama/llama-3.3-70b-instruct:free', backupModels: [], baseUrl: url, timeoutMs: 5000, maxRetries: 0, ...over };
+  return { model: 'meta-llama/llama-3.3-70b-instruct:free', imageModel: 'google/gemini-2.5-flash-image', backupModels: [], baseUrl: url, timeoutMs: 5000, maxRetries: 0, ...over };
 }
 
 function chatCompletion(content: string, extra: Record<string, unknown> = {}) {
