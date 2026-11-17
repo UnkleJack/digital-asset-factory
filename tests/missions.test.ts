@@ -137,6 +137,45 @@ test('missions: the Brief mission is cleared by a report, which is also a note f
   assert.equal((await call('POST', '/api/arcade/missions/dashboard/report', { productId: withBrief.productId, report })).status, 422);
 });
 
+test('missions: shelf missions have one part per kind and clear when every part has a report', async () => {
+  const { PRESETS } = await import('../src/engine/templates/presets.ts');
+  const types = new Set((await server.inject({ method: 'GET', url: '/api/product-types', headers: { host: HOST, 'x-daf-client': '1' } })).json().map((t: any) => t.id));
+  const shelves = MISSIONS.filter((m) => m.id.startsWith('shelf-'));
+  assert.equal(shelves.length, 5);
+  for (const m of shelves) for (const p of m.parts ?? []) {
+    assert.ok(types.has(p.productType), `${m.id}/${p.id}: unknown type ${p.productType}`);
+    if (p.presetId) assert.equal(PRESETS.find((x) => x.id === p.presetId)?.productType, p.productType, `${m.id}/${p.id}: preset of the wrong kind`);
+  }
+  // The four kinds that had no preset have one now (owner, 2026-11-10).
+  for (const t of ['cleaning-schedule', 'home-inventory', 'guided-journal', 'invoice-template']) assert.ok(PRESETS.some((p) => p.productType === t), `no preset for ${t}`);
+
+  const money = (await call('GET', '/api/arcade/missions')).body.missions.find((m: any) => m.id === 'shelf-money');
+  assert.equal(money.title, 'Shelf: money sheets');
+  assert.deepEqual(money.parts.map((p: any) => p.id), ['budget', 'invoice']);
+  assert.equal((await call('PUT', '/api/arcade/missions/shelf-money/done')).status, 422);
+
+  const budget = (await call('POST', '/api/products', { productType: 'budget-planner', marketplaces: ['etsy'] })).body;
+  const invoice = (await call('POST', '/api/products', { productType: 'invoice-template', marketplaces: ['etsy'] })).body;
+  const offered = (await call('GET', '/api/arcade/missions/shelf-money/report-products?part=budget')).body.map((p: any) => p.id);
+  assert.ok(offered.includes(budget.productId));
+  assert.ok(!offered.includes(invoice.productId), 'only budget planners for the budget part');
+  const report = 'The categories made sense and the totals rows fit.';
+  assert.equal((await call('POST', '/api/arcade/missions/shelf-money/report', { productId: budget.productId, report })).status, 422, 'no part named');
+  assert.equal((await call('POST', '/api/arcade/missions/shelf-money/report', { partId: 'budget', productId: invoice.productId, report })).status, 422, 'wrong kind');
+  const one = await call('POST', '/api/arcade/missions/shelf-money/report', { partId: 'budget', productId: budget.productId, report });
+  assert.equal(one.status, 200);
+  assert.equal(one.body.done, false, 'one part of two');
+  assert.match(app.db.value<string>('SELECT notes FROM review_notes WHERE id = ?', one.body.noteId) ?? '', /^Mission report \(Shelf: money sheets: Budget planner\): /);
+  const two = await call('POST', '/api/arcade/missions/shelf-money/report', { partId: 'invoice', productId: invoice.productId, report: 'Clean layout, the terms line read well.' });
+  assert.equal(two.body.done, true);
+  const after = (await call('GET', '/api/arcade/missions')).body.missions.find((m: any) => m.id === 'shelf-money');
+  assert.equal(after.done, true);
+  assert.deepEqual(after.parts.map((p: any) => p.done), [true, true]);
+  assert.equal(after.parts[0].report.productId, budget.productId);
+  await call('DELETE', '/api/arcade/missions/shelf-money/done');
+  assert.deepEqual((await call('GET', '/api/arcade/missions')).body.missions.find((m: any) => m.id === 'shelf-money').parts.map((p: any) => p.done), [false, false]);
+});
+
 test('parseGuide: numbered chapters end at the next heading; Part 2 keeps its sections', () => {
   const c = parseGuide('# Part 1: Back\n\n## 1. One\nA\n![pic](x.png)\nSee [two](#2-two).\n\n---\n\n## 2. Two\nB\n\n# Part 2: HAPPY DAFFY\n## SECTION\nC\n## MORE\nD\n');
   assert.equal(c.get('One'), 'A\nSee two.');

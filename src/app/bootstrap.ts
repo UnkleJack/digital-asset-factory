@@ -16,6 +16,8 @@ import {
   TogetherImageProvider,
   HuggingFaceImageProvider,
   PollinationsImageProvider,
+  OpenRouterImageProvider,
+  LocalImageProvider,
   RoutedImageProvider,
   ImagePacer,
   OpenAICompatibleTextProvider,
@@ -94,6 +96,8 @@ export function bootstrap(opts: BootstrapOptions = {}): App {
       const togetherImage = new TogetherImageProvider(() => secrets.get('together_api_key'), () => settings.get('generation').togetherImage);
       const hfImage = new HuggingFaceImageProvider(() => secrets.get('huggingface_token'), () => settings.get('generation').huggingfaceImage);
       const pollinationsImage = new PollinationsImageProvider(() => settings.get('generation').pollinations);
+      const openRouterImage = new OpenRouterImageProvider(() => secrets.get('openrouter_api_key'), () => settings.get('generation').openrouter);
+      const localImage = new LocalImageProvider();
 
       const imageProviders: Partial<Record<AiImageProviderId, ImageProvider>> = {
         openai: openAiImage,
@@ -104,6 +108,8 @@ export function bootstrap(opts: BootstrapOptions = {}): App {
         together: togetherImage,
         huggingface: hfImage,
         pollinations: pollinationsImage,
+        openrouter: openRouterImage,
+        local: localImage,
       };
 
       const imagePacer = new ImagePacer();
@@ -159,6 +165,8 @@ export function bootstrap(opts: BootstrapOptions = {}): App {
         imageTogether: togetherImage,
         imageHuggingFace: hfImage,
         imagePollinations: pollinationsImage,
+        imageOpenRouter: openRouterImage,
+        imageLocal: localImage,
       };
     })(),
     async rebuildRenderer() {

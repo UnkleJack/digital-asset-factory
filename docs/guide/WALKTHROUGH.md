@@ -328,6 +328,7 @@ This tab explains the maths. Each factor is a 0–10 value. The score is the wei
    - **License.** Personal use (the original), Classroom use or Commercial use. It decides which license text goes into the download, and the listing says which one it is. The wording of each is in Settings → License text. The classroom and commercial wording starts as a draft nobody has reviewed, and QA warns until you edit it.
    - **Who it is for**, **The problem it solves** and **What makes it different.** Three short answers (200 characters each) that go to the AI with the Brief box, so the product and its listing are written to them. All optional.
 4. **Settings for (type).** These fields change with the type: pages, cover, week start and so on. The monthly calendar, weekly planner and dated daily planner have **Month tabs**: a row of month tabs along the top of every page that are links inside the PDF, so on a tablet or computer you tap a month to jump to it. On paper they are just a month guide. It is off by default, and QA checks the finished PDF to make sure every link is in the file and lands on a page. Mandala coloring pages, for example, have **Detail** (simple, medium, detailed or intricate: 3, 5, 7 or 10 rings), **Symmetry** (how many times the design repeats around its centre; Auto lets each page choose) and **Motif set** (classic, botanical, geometric or celestial shapes).
+   **Try it first** sits under these settings, marked SAMPLE. For mandalas, patterns and mazes it shows the first six designs and redraws when you change a setting. **Different designs** gives another set, and pressing Create keeps the set you see. **Show the first pages** draws the cover and first inside page on your paper (any kind except those drawn by an AI image provider). The words in that sample come from the built-in library, so an AI may word the real pages differently. For mandalas, **Compare with one of my pictures** lets you pick an imported picture and press **Read repeat count and detail**: the app counts how many times it repeats around its centre and guesses how detailed it is, and **Use these settings** fills those two in. The app can't copy a picture's shapes and never guesses the motif set. The detail is a rough guess, and the neighbouring level is possible.
 
    ![A calendar page with month tabs](images/05h-month-tabs.png)
 5. **Also make variations (optional).** Pick something to **Vary by** (design system, font pairing, audience, theme, paper size, new random artwork, or one of the type's own settings), then tick the values you want, up to 12. Each variation becomes its own product, the same as the first in every way except that one thing.
@@ -804,6 +805,18 @@ Ticked boxes are on/off settings. A box marked "one per line" takes a list. Boxe
 
 **The mission.** The HAPPY DAFFY mission for this chapter is cleared by a report, not by **Mark done**. Make a product with a Brief you wrote, then press **Report**, pick that product and write how the wording came out and whether the AI followed your Brief. Your report is also saved as a note for the AI on that product, so it shows up in [Notes for the AI](#14-notes-for-the-ai) and feeds what the factory learns.
 
+**The shelf missions.** Five more missions take you along every shelf of the factory, one part for each kind of product:
+
+| Mission | Parts |
+| --- | --- |
+| Shelf: trackers & lists | Habit tracker, To-do checklist, Cleaning schedule, Home inventory, Reading log, Assignment tracker |
+| Shelf: calendars & planners | Monthly calendar, Weekly planner, Daily planner, Class timetable |
+| Shelf: goal & journal sheets | Goal planner, Guided journal |
+| Shelf: money sheets | Budget planner, Invoice |
+| Shelf: coloring & activities | Mandala coloring pages, Maze activity, Word search, Illustrated coloring pages, Geometric pattern art |
+
+Each part has **Try it** and **Report**. **Try it** opens **New product** with that part's preset already filled in, or an empty form when the part has no preset. You can always start from scratch instead. Make one product of that kind, then press **Report**, pick it and write how it came out. The list only offers products of the right kind. Each report is saved as a note for the AI on that product too. A shelf mission clears when every part has its report. Illustrated coloring pages need an image key in Settings, because the AI draws their pictures.
+
 ---
 
 # Part 2: HAPPY DAFFY
@@ -890,7 +903,7 @@ Each world card shows its rank, a progress bar towards the next milestone, **TAS
 
 ## MISSIONS
 
-Want to learn the whole Foundry? Here's your quest log. There's one mission for every chapter of this guide, from the arcade menu link down to Presets and the Brief box, plus one for the arcade itself. The bar up top shows how many you've cleared.
+Want to learn the whole Foundry? Here's your quest log. There's one mission for every chapter of this guide, from the arcade menu link down to Presets and the Brief box, plus one for the arcade itself and five shelf missions that have you make one of every kind of product. The bar up top shows how many you've cleared.
 - **INSTRUCTIONS** pops up that chapter of this guide as plain text, right there in the cabinet, so you can read up on a screen without loading it. Arrow keys scroll it. **CLOSE**, Esc or B shuts it.
 - **GO** opens the screen the mission is about.
 - **MARK DONE** clears a mission and puts a **✓ DONE** beside it. **UNDO** takes it back.
