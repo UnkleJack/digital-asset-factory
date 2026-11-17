@@ -4,6 +4,7 @@ import { api, errorText, useApi, usePagedApi } from '../api.ts';
 import { CompactList } from '../compact.tsx';
 import { Async, Card, ClearViewControls, Empty, Modal, PageHead, Pill, useClearView, useToast } from '../ui.tsx';
 import { ago, generatorLabel, label, money } from '../format.ts';
+import { ProfitLine } from '../profit.tsx';
 
 export function Listings() {
   const [sp, setSp] = useSearchParams();
@@ -73,6 +74,7 @@ function ListingEditor({ id, onClose }: { id: string; onClose: () => void }) {
             <div className="row"><b>{label(l.marketplace)}</b><Pill value={l.status} />{d.approval ? <Pill value="approved" text="Approved — saving changes withdraws this approval" /> : <Pill value="pending" text="Not approved" />}</div>
             <label className="f">Title <span className={rules && f.title.length > rules.titleMax ? 'pill bad' : 'muted'}>{f.title.length}{rules ? ` / ${rules.titleMax}` : ''}</span><input value={f.title} onChange={(e) => setDraft({ ...f, title: e.target.value })} /></label>
             <label className="f">Price ({l.currency})<input type="number" step="0.01" min={0} value={f.price} onChange={(e) => setDraft({ ...f, price: e.target.value })} /></label>
+            <ProfitLine profit={l.profit} />
             <label className="f">Tags (comma separated) <span className="muted">{tags.length}{rules ? ` / ${rules.tagsMax}, each ≤ ${rules.tagMaxLen} chars` : ''}</span><input value={f.tags} onChange={(e) => setDraft({ ...f, tags: e.target.value })} /></label>
             {rules && tags.some((t: string) => t.length > rules.tagMaxLen) && <div className="small" style={{ color: 'var(--bad)' }}>Too long: {tags.filter((t: string) => t.length > rules.tagMaxLen).join(', ')}</div>}
             <label className="f">Description <span className="muted">{f.description.length} chars</span><textarea rows={14} value={f.description} onChange={(e) => setDraft({ ...f, description: e.target.value })} /></label>

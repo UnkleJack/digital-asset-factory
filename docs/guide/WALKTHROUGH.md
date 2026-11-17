@@ -156,6 +156,10 @@ Every back-office screen also has a round **? Instructions** button in the botto
 - **‹ Prev** and **Next ›** move a month at a time. **Today** jumps back to this month. The header shows how many things were made in the month on screen.
 - Each day shows how many things were made ("3 made") and up to four events. Green is a finished run, yellow a missed run, red a failed run, blue a run in progress and grey a run that's coming up. Click a run to open its batch. "+N more" means there are more events that day, and hovering over it lists them.
 
+**Due for a new edition card** (only appears when something is due). It lists approved dated products (monthly calendar, weekly planner, dated daily planner) whose dates end within the window in Settings → New editions (90 days to begin with), or have already ended. Each row shows the dates it covers and how many days are left. **Make next edition** makes the same product with its dates moved on by exactly what it covered (a 2027 calendar becomes 2028, a 52-week planner starts the day after its last week), with a year in the title moved on too, in its own review batch. It can only be made once per product. **Never expires** takes a product off the list, for products whose dates don't matter; **Track its end date again** on the product page puts it back. A product's own page shows the same reminder.
+
+![Due for a new edition](images/02b-new-edition.png)
+
 **Production plans card**
 
 Each row shows the plan's name, product types and marketplaces, whether it's enabled, its time and days, its quota, its cost limit, the next run and the last three runs (with a **batch** link for each).
@@ -214,7 +218,8 @@ At the bottom: **Save plan**, **Cancel**, and on an existing plan **Delete**. De
 - **Searches per platform** and **Monthly search cap.** These control how much search it uses.
 - **Platforms to scan.** Click a chip to add or remove it. Up to 15 can be on.
 - **Your taste.** Write what you like, want more of or never want. The critique scores ideas against this.
-- **Competitor shops to watch.** Type the platform, the shop's web address (it has to start with http) and an optional name, then press **Add**. **Remove** takes a shop off the list. Adding and removing save straight away.
+- **Competitor shops to watch.** Type the platform, the shop's web address (it has to start with http), an optional name and an optional **Family** (what the shop competes in, for example "Student planners"), then press **Add**. **Remove** takes a shop off the list. Adding and removing save straight away. Chips above the list count the shops in each family against the 12 per family the owner asked for ("Student planners: 5 of 12").
+  - Each digest looks at 10 shops, then moves on through the list the next time, so every shop gets a turn without using up the monthly search cap. The family shows in each digest next to the shop.
 
 **Past digests card.** One row per digest, with its date, what started it, how many searches it used and its status (sent, failed or running). **Open** shows the digest and **Hide** folds it away again. An opened digest has:
 1. **What's selling:** findings per platform. Each finding is marked "number checked", "cited" or "AI inference", and has source links where there are any. Gaps are listed underneath.
@@ -320,8 +325,12 @@ This tab explains the maths. Each factor is a 0–10 value. The score is the wei
    - **Design system** sets colours, fonts and layout. The **Make your own design system** link opens Templates.
    - **Fonts.** Leave it on the design system's default, pick a pairing (grouped into everyday, bold display, hollow outline and decorative), or choose **Pick fonts myself…** to set the heading, body and accent fonts one by one. A sample underneath shows the fonts in use.
    - **Audience**, **Theme**, **Paper size**, **Orientation** and **Ink-saver grayscale**.
-4. **Settings for (type).** These fields change with the type: pages, cover, week start and so on. Mandala coloring pages, for example, have **Detail** (simple, medium, detailed or intricate: 3, 5, 7 or 10 rings), **Symmetry** (how many times the design repeats around its centre; Auto lets each page choose) and **Motif set** (classic, botanical, geometric or celestial shapes).
+   - **License.** Personal use (the original), Classroom use or Commercial use. It decides which license text goes into the download, and the listing says which one it is. The wording of each is in Settings → License text. The classroom and commercial wording starts as a draft nobody has reviewed, and QA warns until you edit it.
+   - **Who it is for**, **The problem it solves** and **What makes it different.** Three short answers (200 characters each) that go to the AI with the Brief box, so the product and its listing are written to them. All optional.
+4. **Settings for (type).** These fields change with the type: pages, cover, week start and so on. The monthly calendar, weekly planner and dated daily planner have **Month tabs**: a row of month tabs along the top of every page that are links inside the PDF, so on a tablet or computer you tap a month to jump to it. On paper they are just a month guide. It is off by default, and QA checks the finished PDF to make sure every link is in the file and lands on a page. Mandala coloring pages, for example, have **Detail** (simple, medium, detailed or intricate: 3, 5, 7 or 10 rings), **Symmetry** (how many times the design repeats around its centre; Auto lets each page choose) and **Motif set** (classic, botanical, geometric or celestial shapes).
    **Try it first** sits under these settings, marked SAMPLE. For mandalas, patterns and mazes it shows the first six designs and redraws when you change a setting. **Different designs** gives another set, and pressing Create keeps the set you see. **Show the first pages** draws the cover and first inside page on your paper (any kind except those drawn by an AI image provider). The words in that sample come from the built-in library, so an AI may word the real pages differently. For mandalas, **Compare with one of my pictures** lets you pick an imported picture and press **Read repeat count and detail**: the app counts how many times it repeats around its centre and guesses how detailed it is, and **Use these settings** fills those two in. The app can't copy a picture's shapes and never guesses the motif set. The detail is a rough guess, and the neighbouring level is possible.
+
+   ![A calendar page with month tabs](images/05h-month-tabs.png)
 5. **Also make variations (optional).** Pick something to **Vary by** (design system, font pairing, audience, theme, paper size, new random artwork, or one of the type's own settings), then tick the values you want, up to 12. Each variation becomes its own product, the same as the first in every way except that one thing.
 6. **Prepare listings for.** Tick Etsy, Gumroad and/or Generic.
 
@@ -345,7 +354,7 @@ Click any product title anywhere in the app to open its page.
 
 ![Product page](images/05e-product-detail.png)
 
-**The line under the title** shows the type, category, audience, theme and status. If the product came from an idea, a link to that idea sits underneath.
+**The line under the title** shows the type, category, audience, theme and status. The product page also shows the **License** and the **Brief** answers, and, for a dated product, a **new edition** banner with the dates it covers. If the product came from an idea, a link to that idea sits underneath.
 
 **Buttons along the top**
 - **Edit content** opens the product's content as raw JSON text that you can change. **Save as new version** makes a new version, draws it again and re-runs QA. Any approval of the current version is withdrawn. You can add a change note.
@@ -367,7 +376,10 @@ Click any product title anywhere in the app to open its page.
 
   ![Product QA tab](images/05f-product-qa.png)
 
-- **Listings.** One card per marketplace with its title, price, tags and who wrote the copy. **Edit listing** opens the listing editor ([chapter 15](#15-marketplace-listings)).
+- **Listings.** One card per marketplace with its title, price, tags, who wrote the copy and the "what you keep after the marketplace's fees" line. **Edit listing** opens the listing editor ([chapter 15](#15-marketplace-listings)).
+- **Marketing kit** card (on Overview, once the product is packaged). Three Pinterest pins (1000 × 1500) made from the product's real pages, plus three text files: pin copy, a launch email, and social captions with a 20-second video script. Each text includes a tracking ending to add to your listing link so your shop stats show which post brought the visit. It makes no claims about sales, reviews or discounts, none of it goes into the customer's download, and it uses no AI. **Show N Pinterest pins** previews the images.
+
+  ![Marketing kit](images/05g-marketing-kit.png)
 - **Provenance & cost.** Who or what wrote the content, every AI call with its tokens and estimated cost, and where each file came from. Cost is estimated from the price table in Settings, not from an invoice.
 - **History & related.** Every version with its notes, related products, very similar products ("consider merging"), products in the same category and the review batches the product has been in.
 
@@ -516,6 +528,10 @@ Jobs that fail for a passing reason retry by themselves, waiting a little longer
 - Each production-plan run makes one batch. Each product you make by hand gets its own batch named "Manual — (title)".
 - Click a batch name to review it.
 
+**"N items on hold for research"** lists everything parked with Hold for research, with the note, how long ago, **Open** and **Release**. The batch list's "Awaiting decision" column leaves held items out and says "· N on hold" beside the count.
+
+![On hold for research](images/11e-on-hold.png)
+
 **"N approved items with warnings you haven't accepted"** only appears if some products were approved before the warning gate existed and still have yellow flags. They stay approved, but they can't be packed or published until you accept the warnings. **Review** opens that item.
 
 ### Reviewing a batch
@@ -529,13 +545,14 @@ Each item is one slim line with its version, type, any decision so far, and stat
 - Category, audience and theme, what wrote the content, the opportunity score, the estimated AI cost, the files (each one downloads when you click it), what's inside if it's a pack, and the version history.
 - **QA failures,** if any, opened up.
 - **Warnings to review,** if any (see below).
-- **Listings — choose where to approve.** One card per marketplace with the title, price, tags and a **Description** you can open. Tick the marketplaces you're approving for. A listing with problems is shown in red and its box can't be ticked until you fix it. **Edit** opens it in Marketplace listings.
+- **Listings — choose where to approve.** One card per marketplace with the title, price, tags, a **What you keep after the marketplace's fees** line and a **Description** you can open. Tick the marketplaces you're approving for. A listing with problems is shown in red and its box can't be ticked until you fix it. **Edit** opens it in Marketplace listings.
 
 **The buttons**
 - **Approve for (marketplaces)** records your approval for this version and the ticked listings. It's greyed out if QA failed, if no marketplace is ticked, or if there are warnings you haven't accepted. Hover over it to see why. After you approve, the product goes onto the Factory floor (if that's switched on), and if you turned on "Post automatically when I approve" for Gumroad, it gets posted.
 - **Return for revision** opens a box: "What should change?" Your notes go to the generator for the next version. Press **Send back with notes**.
 - **Regenerate** opens a box for optional notes. A fresh version is made with new random artwork. Press **Regenerate**.
 - **Reject** opens a box for your reason (it has to say which part is wrong and what is wrong with it). The version is marked rejected and can never be published. Press **Reject version**.
+- **Hold for research** (next to Reject) parks the item with a note about what you are waiting to find out, for example "check what the top 5 sellers charge". It is not a decision: nothing is approved or rejected, nothing about the product changes, and the Factory learns nothing from it. The item stays in its batch with a blue "On hold for research" banner and a **Release** button. Approving, rejecting, returning or regenerating it also ends the hold. Only a finished version waiting for review can be held. The note box on the button says **Change hold note** while it's on hold.
 - **Edit…** opens the product page.
 
 **Draw a box on a page.** The Reject, Return for revision and Regenerate boxes all have a **Draw a box on a page** button. It shows the page previews (pick one with the **Page** buttons) and you drag across the part that is wrong. You can draw up to 6 boxes, on any pages, and **Remove** takes one off.
@@ -617,7 +634,7 @@ Each row shows the title, which version out of how many, why it's here, when, ty
 **The listing editor**
 - At the top: the marketplace, the status, and whether it's approved. If it's approved, it warns that saving changes withdraws the approval.
 - **Title,** with a counter against the marketplace's maximum (it turns red when you're over).
-- **Price.**
+- **Price.** Under it, a **What you keep after the marketplace's fees** line shows the money left per sale (Etsy: one figure; Gumroad: through your own link and through Gumroad Discover), and hovering a figure shows each fee. Advertising, tax, refunds and the cost of making the product are not included, and a price in a currency other than US dollars gets "not available" instead of a guess. The fee numbers are in Settings → Marketplaces → fees. If a price would leave nothing after fees, the listing's notes say so.
 - **Tags,** comma separated, with a counter. Any tag that's too long is named in red.
 - **Description,** with a character count.
 - Any rule problems are listed in red. Limits that couldn't be confirmed from the marketplace's own pages are mentioned, and you can change them in Settings → Marketplaces.
@@ -689,7 +706,7 @@ Ticked boxes are on/off settings. A box marked "one per line" takes a list. Boxe
 | **Rendering** | Chrome's path, how many pages render at once, preview resolution and pages, and the page timeout. Changing these restarts the renderer. |
 | **QA** | Near-duplicate thresholds, spelling on or off, the spelling allowlist (one word per line), minimum image DPI, the line-art limit and the margin tolerance. |
 | **Scoring** | The weight of each score factor, plus the minimum score and confidence. |
-| **Marketplaces** | Each marketplace on or off, its listing rules (title, description and tag limits, images, files and minimum price), Gumroad's posting options, and the default price per product type in cents. |
+| **Marketplaces** | Each marketplace on or off, its listing rules (title, description and tag limits, images, files and minimum price), Gumroad's posting options, and the default price per product type in cents. **fees** holds the marketplace fee numbers behind the "what you keep" line (Etsy and Gumroad were read from their own pages on 2026-11-17; fees change, so check them before relying on them). |
 | **Scheduler** | How often it checks plans, the catch-up window for missed runs, retries, how many jobs run at once, and the weekly clean-up of old test copies. |
 | **Packing** | Automatic feeding, how many carts can be open at once, target and minimum pack size, how closely tags must match (and the looser match used for the backlog), how many carts and packs one product can be in, the cooldown, how long a cart can sit before a break deals with it, whether full carts pack themselves, and the marketplaces packs get listings for. |
 
@@ -697,7 +714,8 @@ Ticked boxes are on/off settings. A box marked "one per line" takes a list. Boxe
 
 | Tab | What's in it |
 | --- | --- |
-| **License text** | The license that goes in every download. `{{shopName}}` and `{{year}}` are filled in for you. |
+| **License text** | The license that goes in a download, one text each for personal, classroom and commercial use, matching the license picked on the product. `{{shopName}}` and `{{year}}` are filled in for you. The classroom and commercial texts start as unreviewed drafts, and QA warns on any product that ships one until you edit it. |
+| **New editions** | How many days before a dated product's last date it appears under "Due for a new edition" on the Production calendar (90 to begin with). |
 | **Compliance** | Terms that block a product or listing in QA (trademarks, licensed characters, brands), one per line. |
 | **Analytics** | How much evidence is needed before a recommendation is made, plus the alert levels. |
 

@@ -12,6 +12,8 @@ import { validation, conflict } from '../../core/errors.ts';
 import { audit, type AuditActor } from '../../logging/logger.ts';
 import type { AssetRecord } from '../../storage/assetStore.ts';
 import { TEXT_PROVIDER_IDS, IMAGE_PROVIDER_IDS } from '../generation/providers.ts';
+import { estimateProfit, profitWarning } from './profit.ts';
+import type { LicenseTier } from '../producttypes/types.ts';
 
 export const MARKETPLACES = ['etsy', 'gumroad', 'generic'] as const;
 export type Marketplace = (typeof MARKETPLACES)[number];
@@ -141,7 +143,14 @@ const ListingCopy = z.object({
   tags: z.array(z.string().min(2).max(60)).min(3).max(25),
 });
 
-export function deterministicCopy(title: string, hints: ReturnType<ReturnType<typeof productType>['listingHints']>, rules: ListingRules, typeName: string): z.infer<typeof ListingCopy> {
+/** The "please note" line about what the buyer may do, which depends on the product's license. */
+export function licenseNote(tier: LicenseTier | undefined): string {
+  if (tier === 'classroom') return '• Classroom use license: for the teacher who buys it and the students in their own classroom. See the license file included with your download.';
+  if (tier === 'commercial') return '• Commercial use license: you may use it in your own business as the license file describes. See the license file included with your download.';
+  return '• For personal use. See the license file included with your download.';
+}
+
+export function deterministicCopy(title: string, hints: ReturnType<ReturnType<typeof productType>['listingHints']>, rules: ListingRules, typeName: string, tier?: LicenseTier): z.infer<typeof ListingCopy> {
   const kw = hints.keywords.map((k) => k.replace(/\b\w/g, (m) => m.toUpperCase()));
   const description = [
     `${title} — printable ${typeName.toLowerCase()}, ready to download and use today.`, '',
@@ -151,7 +160,7 @@ export function deterministicCopy(title: string, hints: ReturnType<ReturnType<ty
     'PLEASE NOTE',
     '• This is a digital download. No physical item will be shipped.',
     '• Colors may look slightly different depending on your screen and printer.',
-    '• For personal use. See the license file included with your download.',
+    licenseNote(tier),
   ].join('\n');
   return { title: fitTitle([title, ...kw.slice(0, 4)], rules.titleMax), description, tags: hints.keywords };
 }
@@ -177,7 +186,7 @@ export async function prepareListings(app: AppContext, versionId: string, market
       const r = await structuredCall(app, {
         purpose: `listing:${m}`,
         schema: ListingCopy,
-        system: `${AI_SYSTEM_BASE}\n- Describe the product honestly. Never claim it is a bestseller, popular, award-winning, or guaranteed to produce results.\n- State clearly that it is a digital download and no physical item ships.\n- Do not mention AI or how the item was made.`,
+        system: `${AI_SYSTEM_BASE}\n- Describe the product honestly. Never claim it is a bestseller, popular, award-winning, or guaranteed to produce results.\n- State clearly that it is a digital download and no physical item ships.${ctx.licenseTier && ctx.licenseTier !== 'personal' ? `\n- Say plainly that it comes with a ${ctx.licenseTier} use license (the license file is included in the download). Do not describe what the license allows beyond that.` : ''}\n- Do not mention AI or how the item was made.`,
         prompt: `Write a ${m === 'generic' ? 'web shop' : m} listing for a digital product.
 Product title: ${product.title}
 Type: ${def.name}. Paper: ${ctx.paper.size} ${ctx.paper.orientation}.
@@ -193,7 +202,7 @@ Constraints: title at most ${rules.titleMax} characters and front-loaded with th
       copy = r.data;
       provenance = r.provenance;
     } else {
-      copy = deterministicCopy(product.title, hints, rules, def.name);
+      copy = deterministicCopy(product.title, hints, rules, def.name, ctx.licenseTier);
       provenance = { generator: 'deterministic', library: 'listing-template@1', note: mode.reason };
     }
     const notes: string[] = [];
@@ -209,6 +218,8 @@ Constraints: title at most ${rules.titleMax} characters and front-loaded with th
     const draft: ListingDraft = { title, description: withAiDisclosure(copy.description.trim(), disclosure), tags: nt.tags, price_cents: price, image_asset_ids: images.slice(0, rules.imagesMax).map((i) => i.id), file_asset_ids: files.map((f) => f.id) };
     const attributes = { listingType: 'digital download', whoMade: 'I did', whatIsIt: 'A finished product', category: def.category, paper: `${ctx.paper.size} ${ctx.paper.orientation}`, ...(disclosure && { aiDisclosure: disclosure }) };
     const issues = validateListing(rules, draft, files, images.slice(0, rules.imagesMax));
+    const lowProfit = profitWarning(app, { marketplace: m, price_cents: price, currency: s.general.currency });
+    if (lowProfit) notes.push(lowProfit);
     const hash = listingHashOf({ ...draft, currency: s.general.currency, attributes });
     const now = new Date().toISOString();
     const existing = app.db.get<{ id: string; listing_hash: string }>('SELECT id, listing_hash FROM listings WHERE version_id = ? AND marketplace = ?', versionId, m);
@@ -278,6 +289,8 @@ export function updateListing(app: AppContext, listingId: string, patchInput: un
     if (l.marketplace === 'etsy') issues.push({ field: 'description', message: `${msg} Etsy requires it.` });
     else notes.push(msg);
   }
+  const lowProfit = profitWarning(app, { marketplace: l.marketplace, price_cents: draft.price_cents, currency: l.currency });
+  if (lowProfit) notes.push(lowProfit);
   const hash = listingHashOf({ ...draft, currency: l.currency, attributes: l.attributes });
   if (hash === l.listing_hash) return l;
   const published = l.status === 'published_manual' || l.status === 'published_verified';
@@ -290,6 +303,11 @@ export function updateListing(app: AppContext, listingId: string, patchInput: un
   invalidateApprovals(app, listingId, 'Listing edited after approval', actor);
   audit(app.db, actor, 'listing.edited', 'listing', listingId, { fields: Object.keys(p) });
   return getListing(app.db, listingId);
+}
+
+/** A listing with what it would earn after the marketplace's fees. */
+export function withProfit<T extends { marketplace: string; price_cents: number; currency: string }>(app: AppContext, l: T): T & { profit: ReturnType<typeof estimateProfit> } {
+  return { ...l, profit: estimateProfit(app, l) };
 }
 
 export { listingsForVersion };

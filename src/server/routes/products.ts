@@ -23,7 +23,9 @@ import { makeThumbnail } from '../../storage/thumbnail.ts';
 import { validation, notFound, conflict } from '../../core/errors.ts';
 import { audit } from '../../logging/logger.ts';
 import { PRESETS } from '../../engine/templates/presets.ts';
-import { BRIEF_MAX } from '../../engine/producttypes/types.ts';
+import { BRIEF_MAX, BRIEF_FIELD_MAX } from '../../engine/producttypes/types.ts';
+import { withProfit } from '../../engine/listing/service.ts';
+import { refreshList, makeNextEdition, setEvergreen, productLifecycle } from '../../engine/lifecycle/refresh.ts';
 import { int, parse, LIST_MAX, type Q, type P } from './util.ts';
 
 const CreateBody = z.object({
@@ -39,6 +41,8 @@ const CreateBody = z.object({
   batchId: z.string().optional(),
   fonts: FontChoiceSchema.optional(),
   brief: z.string().max(BRIEF_MAX).optional(),
+  briefFields: z.object({ customer: z.string().max(BRIEF_FIELD_MAX).optional(), problem: z.string().max(BRIEF_FIELD_MAX).optional(), differentiation: z.string().max(BRIEF_FIELD_MAX).optional() }).optional(),
+  licenseTier: z.enum(['personal', 'classroom', 'commercial']).optional(),
   /** The seed shown in the New product sample, so the product gets the designs that were previewed. */
   seed: z.number().int().min(0).max(2 ** 31 - 1).optional(),
 });
@@ -117,6 +121,7 @@ export function registerProductRoutes(s: FastifyInstance, { app }: ServerDeps): 
     return {
       product: { ...product, category: nameOf(app.db, 'categories', product.category_id), audience: nameOf(app.db, 'audiences', product.audience_id), theme: nameOf(app.db, 'themes', product.theme_id), opportunity: product.opportunity_id ? app.db.get('SELECT id, title, status FROM opportunities WHERE id = ?', product.opportunity_id) : null },
       versions,
+      lifecycle: productLifecycle(app, product.id),
       related: relatedProducts(app, product.id),
       batches: app.db.all('SELECT DISTINCT b.id, b.name, b.status FROM approval_items i JOIN approval_batches b ON b.id = i.batch_id WHERE i.product_id = ? ORDER BY b.created_at DESC', product.id),
     };
@@ -131,11 +136,20 @@ export function registerProductRoutes(s: FastifyInstance, { app }: ServerDeps): 
   s.get('/api/products/:id/related', async (req) => relatedProducts(app, (req.params as P).id));
 
   s.post('/api/products/:id/variations', async (req) => {
-    const b = parse(z.object({ title: z.string().max(120).optional(), designSystemId: z.string().optional(), audienceId: z.string().nullable().optional(), themeId: z.string().nullable().optional(), paper: PaperSchema.partial().optional(), params: z.record(z.string(), z.unknown()).optional(), marketplaces: z.array(z.string()).optional(), fonts: FontChoiceSchema.optional(), newSeed: z.boolean().optional() }), req.body, 'variation');
-    const r = createVariation(app, (req.params as P).id, { title: b.title, marketplaces: b.marketplaces, fonts: b.fonts, axes: { designSystemId: b.designSystemId, audienceId: b.audienceId, themeId: b.themeId, paper: b.paper, params: b.params, newSeed: b.newSeed } });
+    const b = parse(z.object({ title: z.string().max(120).optional(), designSystemId: z.string().optional(), audienceId: z.string().nullable().optional(), themeId: z.string().nullable().optional(), paper: PaperSchema.partial().optional(), params: z.record(z.string(), z.unknown()).optional(), marketplaces: z.array(z.string()).optional(), fonts: FontChoiceSchema.optional(), newSeed: z.boolean().optional(), licenseTier: z.enum(['personal', 'classroom', 'commercial']).optional() }), req.body, 'variation');
+    const r = createVariation(app, (req.params as P).id, { title: b.title, marketplaces: b.marketplaces, fonts: b.fonts, axes: { designSystemId: b.designSystemId, audienceId: b.audienceId, themeId: b.themeId, paper: b.paper, params: b.params, newSeed: b.newSeed, licenseTier: b.licenseTier } });
     const batch = createBatch(app, `Variation — ${getProduct(app.db, r.productId).title}`.slice(0, 120), 'manual');
     addToBatch(app, batch, r.versionId);
     return { ...r, batchId: batch };
+  });
+
+  // Yearly refresh: dated products whose dates are over or ending soon, and the button that makes the next edition.
+  s.get('/api/lifecycle/refresh', async () => refreshList(app));
+  s.post('/api/products/:id/next-edition', async (req) => makeNextEdition(app, (req.params as P).id));
+  s.put('/api/products/:id/evergreen', async (req) => {
+    const b = parse(z.object({ evergreen: z.boolean() }), req.body, 'evergreen');
+    setEvergreen(app, (req.params as P).id, b.evergreen);
+    return { ok: true };
   });
 
   s.post('/api/bundles/suggest-copy', async (req) => suggestBundleCopy(app, parse(z.object({ productIds: z.array(z.string()).min(2).max(20), theme: z.string().max(200).optional() }), req.body, 'bundle')));
@@ -159,7 +173,7 @@ export function registerProductRoutes(s: FastifyInstance, { app }: ServerDeps): 
       spec: { ...spec, designSystem: nameOf(app.db, 'design_systems', spec.design_system_id), audience: nameOf(app.db, 'audiences', spec.audience_id), theme: nameOf(app.db, 'themes', spec.theme_id) },
       assets: assets.map((a) => ({ id: a.id, kind: a.kind, role: a.role, name: basename(a.rel_path), mime: a.mime, bytes: a.size_bytes, pages: a.page_count, pageIndex: a.page_index, widthPx: a.width_px, heightPx: a.height_px, provenance: a.provenance })),
       qa: qaReport(app, version.id),
-      listings: listingsForVersion(app.db, version.id),
+      listings: listingsForVersion(app.db, version.id).map((l) => withProfit(app, l)),
       generationRuns: app.db.all('SELECT id, purpose, provider, model, input_tokens, output_tokens, image_count, cost_usd, cost_basis, status, error, started_at FROM generation_runs WHERE version_id = ? ORDER BY started_at', version.id),
       jobs: app.db.all('SELECT id, type, status, attempts, max_attempts, last_error, error_class, created_at, finished_at FROM jobs WHERE version_id = ? ORDER BY created_at', version.id),
       contentSchemaHint: productType(product.product_type).id,

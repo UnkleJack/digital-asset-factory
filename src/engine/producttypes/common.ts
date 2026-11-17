@@ -2,8 +2,8 @@ import { html, type SafeHtml } from '../rendering/html.ts';
 import { page, footer, ornament } from '../rendering/components.ts';
 import type { TypeContext, ListingHints } from './types.ts';
 
-export function coverPage(ctx: TypeContext<unknown>, title: string, subtitle: string, detail?: SafeHtml | string): SafeHtml {
-  return page(html`<div class="cover">${ornament(ctx.tokens)}<div class="h1" style="font-size:calc(var(--base)*3.2)">${title}</div>${subtitle ? html`<div class="h3" style="color:var(--muted);font-weight:400">${subtitle}</div>` : ''}${detail ?? ''}${ornament(ctx.tokens)}</div>${footer(ctx.shopName, '')}`);
+export function coverPage(ctx: TypeContext<unknown>, title: string, subtitle: string, detail?: SafeHtml | string, top?: SafeHtml | string): SafeHtml {
+  return page(html`${top ?? ''}<div class="cover">${ornament(ctx.tokens)}<div class="h1" style="font-size:calc(var(--base)*3.2)">${title}</div>${subtitle ? html`<div class="h3" style="color:var(--muted);font-weight:400">${subtitle}</div>` : ''}${detail ?? ''}${ornament(ctx.tokens)}</div>${footer(ctx.shopName, '')}`);
 }
 
 export function stdFooter(ctx: TypeContext<unknown>, right = ''): SafeHtml {
@@ -26,7 +26,16 @@ export function baseHints(ctx: TypeContext<unknown>, typeWords: string[], featur
   if (ctx.theme) kw.push(...ctx.theme.keywords.slice(0, 3));
   if (ctx.audience) kw.push(audienceLabel(ctx).toLowerCase());
   kw.push('printable', 'instant download', ctx.paper.size === 'a4' ? 'a4 printable' : ctx.paper.size === 'letter' ? 'us letter' : `${ctx.paper.size} printable`);
-  return { keywords: [...new Set(kw.map((k) => k.toLowerCase()))], features, included, usage };
+  return { keywords: [...new Set(kw.map((k) => k.toLowerCase()))], features, included, usage: usageForLicense(usage, ctx.licenseTier) };
+}
+
+const PERSONAL_PRINT_SENTENCE = 'Print as many copies as you need for personal use.';
+const LICENSE_PRINT_SENTENCE = { classroom: 'Print copies for the students in your own classroom or group.', commercial: 'See the license for how you may use it in your business.' } as const;
+
+/** The usage text with its personal-use sentence swapped for the one that fits the product's license. */
+export function usageForLicense(usage: string, tier: TypeContext<unknown>['licenseTier']): string {
+  if (!tier || tier === 'personal') return usage;
+  return usage.replace(PERSONAL_PRINT_SENTENCE, LICENSE_PRINT_SENTENCE[tier]);
 }
 
 export const PRINT_USAGE = 'Download the PDF, open it in any PDF reader, and print at 100% scale (actual size) on your chosen paper. Print as many copies as you need for personal use.';

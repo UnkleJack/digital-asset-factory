@@ -58,6 +58,31 @@ sell printed copies; or use it in products for sale.
 
 All designs are copyright {{year}} {{shopName}}. Fonts are licensed under the SIL Open Font License.`;
 
+/*
+ * DRAFT wording for the two extra license tiers (2026-11-17). The owner has not written or approved these, and a
+ * license decides what a buyer is allowed to do, so QA raises a warning ("license_draft") on any product that ships
+ * one of these unchanged. Edit the text in Settings → License text, and the warning goes away.
+ */
+export const LICENSE_CLASSROOM_DRAFT = `CLASSROOM USE LICENSE
+
+Thank you for your purchase from {{shopName}}.
+
+You may: print and copy this product for the students in your own classroom or tutoring group, and use it in your own lessons.
+You may not: share it with other teachers or schools, post it where others can download it, resell or redistribute it,
+or claim it (or any modified version of it) as your own.
+
+All designs are copyright {{year}} {{shopName}}. Fonts are licensed under the SIL Open Font License.`;
+
+export const LICENSE_COMMERCIAL_DRAFT = `COMMERCIAL USE LICENSE
+
+Thank you for your purchase from {{shopName}}.
+
+You may: use this product in your own business, including printing it and selling or giving the finished printed items to your customers.
+You may not: resell, share or redistribute the original files (or any editable or modified version of them) as they are,
+or claim the files as your own.
+
+All designs are copyright {{year}} {{shopName}}. Fonts are licensed under the SIL Open Font License.`;
+
 export const SettingsSchema = z.object({
   general: z.object({
     shopName: z.string().min(1).max(80).default('My Printables Shop'),
@@ -336,9 +361,40 @@ export const SettingsSchema = z.object({
     // "created with the use of AI"). art_only: only when AI-made pictures are part of the product.
     // art_and_text: also when AI wrote the text printed on the pages. Other marketplaces never get one.
     aiDisclosure: z.enum(['art_only', 'art_and_text']).default('art_only'),
+    // What each marketplace takes from a sale, used for the "what you keep" line on listings. The defaults were
+    // read from the marketplaces' own help pages on 2026-11-17: Etsy (help.etsy.com, listing fee $0.20, transaction
+    // fee 6.5%, US Etsy Payments 3% + $0.25 per order) and Gumroad (gumroad.com/pricing, 10% + $0.50 on direct sales,
+    // 30% on Discover sales). Fees change: check them again before relying on the numbers. Advertising is not included.
+    fees: z.object({
+      etsy: z.object({
+        listingFeeCents: z.number().int().min(0).default(20),
+        transactionPercent: z.number().min(0).max(100).default(6.5),
+        processingPercent: z.number().min(0).max(100).default(3),
+        processingFixedCents: z.number().int().min(0).default(25),
+      }).prefault({}),
+      gumroad: z.object({
+        directPercent: z.number().min(0).max(100).default(10),
+        directFixedCents: z.number().int().min(0).default(50),
+        discoverPercent: z.number().min(0).max(100).default(30),
+      }).prefault({}),
+      // For the generic web shop: tick "known" once you have typed in your own shop's fees.
+      generic: z.object({
+        known: z.boolean().default(false),
+        percent: z.number().min(0).max(100).default(0),
+        fixedCents: z.number().int().min(0).default(0),
+      }).prefault({}),
+    }).prefault({}),
   }).prefault({}),
   licensing: z.object({
+    // The license a product ships with is chosen per product: personal (this text), classroom or commercial.
     licenseText: z.string().min(20).default(LICENSE_PERSONAL),
+    classroomLicenseText: z.string().min(20).default(LICENSE_CLASSROOM_DRAFT),
+    commercialLicenseText: z.string().min(20).default(LICENSE_COMMERCIAL_DRAFT),
+  }).prefault({}),
+  lifecycle: z.object({
+    // A dated product (calendar, weekly or daily planner) is listed for a new edition once the dates it covers end
+    // within this many days, or have already ended.
+    refreshLeadDays: z.number().int().min(0).max(365).default(90),
   }).prefault({}),
   analytics: z.object({
     minListingsPerCategory: z.number().int().min(1).default(3),
@@ -368,7 +424,10 @@ export const SettingsSchema = z.object({
       monthlySearchBudget: z.number().int().min(10).max(100000).default(900),
       searchesPerPlatform: z.number().int().min(1).max(10).default(3),
     }).prefault({}),
-    competitorShops: z.array(z.object({ platform: z.string().min(1).max(40), shopUrl: z.url(), label: z.string().max(80).optional() })).max(30).default([]),
+    // family: which kind of product the shop competes in ("Student planners"); the digest looks at 10 shops a time, rotating through the list.
+    competitorShops: z.array(z.object({ platform: z.string().min(1).max(40), shopUrl: z.url(), label: z.string().max(80).optional(), family: z.string().trim().max(60).optional() })).max(80).default([]),
+    // How many competitors to track per product family before the family counts as covered.
+    competitorsPerFamily: z.number().int().min(1).max(30).default(12),
   }).prefault({}),
   packing: z.object({
     // Approved products go to the packer automatically. Nothing unapproved passes the packaging gate.

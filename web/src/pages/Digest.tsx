@@ -41,13 +41,19 @@ export function Digest() {
   );
 }
 
+const SHOPS_PER_DIGEST = 10;
+// The five families from the owner's ChatGPT review (2026-11-17). Anything else can be typed.
+const FAMILY_SUGGESTIONS = ['Finance and budget trackers', 'Student planners', 'Goal-setting and habit trackers', 'Calendars and scheduling', 'General productivity systems'];
+
 function DigestSettings({ value, onSaved }: { value: any; onSaved: () => void }) {
   const [v, setV] = useState<any>(value);
-  const [shop, setShop] = useState({ platform: 'etsy', shopUrl: '', label: '' });
+  const [shop, setShop] = useState({ platform: 'etsy', shopUrl: '', label: '', family: '' });
   const [err, setErr] = useState<string | null>(null);
   const toast = useToast();
   useEffect(() => setV(value), [value]);
   const d = v.digest;
+  // How many shops are listed per family, most-filled first, so it is clear which families still need more.
+  const families = Object.entries((v.competitorShops as any[]).reduce((acc: Record<string, number>, s: any) => ({ ...acc, [s.family ?? '']: (acc[s.family ?? ''] ?? 0) + 1 }), {})).sort((a, b) => (b[1] as number) - (a[1] as number)) as [string, number][];
   const set = (patch: any) => setV({ ...v, digest: { ...d, ...patch } });
   const save = async (next = v) => {
     setErr(null);
@@ -70,14 +76,18 @@ function DigestSettings({ value, onSaved }: { value: any; onSaved: () => void })
         </div>
         <label className="f">Your taste — what you like, want more of, or never want (the critique scores ideas against this)<textarea rows={4} value={d.tastePreferences} placeholder="e.g. I love retro gaming, dark fantasy and practical tools for parents. No baby-shower stuff." onChange={(e) => set({ tastePreferences: e.target.value })} /></label>
         <div>
-          <div className="small muted" style={{ marginBottom: 4 }}>Competitor shops to watch</div>
+          <div className="small muted" style={{ marginBottom: 4 }}>Competitor shops to watch, grouped by what they compete in</div>
+          <p className="small muted" style={{ margin: '0 0 6px' }}>Aim for about {v.competitorsPerFamily} credible competitors in each product family, so the digest can tell you what that part of the market is missing. Each digest looks at {SHOPS_PER_DIGEST} shops, moving on through the list each time it is sent, and each shop costs about two web searches from the monthly cap.</p>
+          <div className="chips" style={{ marginBottom: 6 }}>{families.map(([f, n]) => <span key={f} className={`chip${n >= v.competitorsPerFamily ? ' on' : ''}`} title={n >= v.competitorsPerFamily ? 'Covered' : `${v.competitorsPerFamily - n} more to go`}>{f || 'No family set'}: {n} of {v.competitorsPerFamily}</span>)}</div>
           {v.competitorShops.length === 0 && <p className="small muted" style={{ margin: 0 }}>None yet. Add the shops you compete with most directly.</p>}
-          {v.competitorShops.map((s: any, i: number) => <div key={i} className="spread small"><span><b>{s.label || s.shopUrl}</b> <span className="muted">({s.platform}) {s.shopUrl}</span></span><button className="small danger" onClick={() => save({ ...v, competitorShops: v.competitorShops.filter((_: any, j: number) => j !== i) })}>Remove</button></div>)}
-          <div className="row" style={{ marginTop: 6 }}>
+          {v.competitorShops.map((s: any, i: number) => <div key={i} className="spread small"><span><b>{s.label || s.shopUrl}</b> <span className="muted">({s.platform}{s.family ? `, ${s.family}` : ''}) {s.shopUrl}</span></span><button className="small danger" onClick={() => save({ ...v, competitorShops: v.competitorShops.filter((_: any, j: number) => j !== i) })}>Remove</button></div>)}
+          <div className="row" style={{ marginTop: 6, flexWrap: 'wrap' }}>
             <input placeholder="Platform" value={shop.platform} onChange={(e) => setShop({ ...shop, platform: e.target.value })} style={{ width: 110 }} />
-            <input placeholder="https://www.etsy.com/shop/..." value={shop.shopUrl} onChange={(e) => setShop({ ...shop, shopUrl: e.target.value })} style={{ flex: 1 }} />
+            <input placeholder="https://www.etsy.com/shop/..." value={shop.shopUrl} onChange={(e) => setShop({ ...shop, shopUrl: e.target.value })} style={{ flex: 1, minWidth: 220 }} />
             <input placeholder="Name (optional)" value={shop.label} onChange={(e) => setShop({ ...shop, label: e.target.value })} style={{ width: 140 }} />
-            <button className="small" disabled={!/^https?:\/\//.test(shop.shopUrl)} onClick={() => { save({ ...v, competitorShops: [...v.competitorShops, { platform: shop.platform, shopUrl: shop.shopUrl, ...(shop.label && { label: shop.label }) }] }); setShop({ ...shop, shopUrl: '', label: '' }); }}>Add</button>
+            <input placeholder="Family, e.g. Student planners" list="competitor-families" maxLength={60} value={shop.family} onChange={(e) => setShop({ ...shop, family: e.target.value })} style={{ width: 200 }} />
+            <datalist id="competitor-families">{FAMILY_SUGGESTIONS.map((f) => <option key={f} value={f} />)}</datalist>
+            <button className="small" disabled={!/^https?:\/\//.test(shop.shopUrl)} onClick={() => { save({ ...v, competitorShops: [...v.competitorShops, { platform: shop.platform, shopUrl: shop.shopUrl, ...(shop.label && { label: shop.label }), ...(shop.family.trim() && { family: shop.family.trim() }) }] }); setShop({ ...shop, shopUrl: '', label: '' }); }}>Add</button>
           </div>
         </div>
         {err && <div className="err">{err}</div>}
@@ -101,7 +111,7 @@ function RunDetail({ run }: { run: any }) {
       ))}
       <h3>2. Competitors</h3>
       {run.competitors.length === 0 ? <p className="small muted">No competitor shops were listed.</p> : run.competitors.map((s: any) => (
-        <div key={s.url}><b>{s.shop}</b> <span className="small muted">({s.platform})</span>
+        <div key={s.url}><b>{s.shop}</b> <span className="small muted">({s.platform}{s.family ? `, ${s.family}` : ''})</span>
           <ul className="small">{s.strengths.map((f: any, i: number) => <li key={i}>+ {f.item} — {f.detail}{f.number && <b> [{f.number}]</b>} {ev(f)}</li>)}{s.gaps.map((g: any, i: number) => <li key={`g${i}`}>− {g.gap}</li>)}</ul>
         </div>
       ))}

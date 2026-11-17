@@ -7,6 +7,7 @@ import { BoxDrawer, SavedBoxes, type DraftBox } from '../reviewBoxes.tsx';
 import { WaitingNotes, sentText } from '../waitingNotes.tsx';
 import { ReasonPicks } from '../reasons.tsx';
 import { ago, bytes, fmtDate, generatorLabel, label, money, pct, usd } from '../format.ts';
+import { ProfitLine } from '../profit.tsx';
 
 export function Batches() {
   const [status, setStatus] = useState('');
@@ -18,12 +19,13 @@ export function Batches() {
       <div className="row" style={{ marginBottom: 12 }}><select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status"><option value="">All batches</option><option value="ready_for_review">Ready for review</option><option value="collecting">Still producing</option><option value="closed">Closed</option></select>{!status && <ShowDone value={done} onChange={setDone} text="Show closed batches" />}</div>
       <WaitingNotes />
       <WarningsToAccept />
+      <OnHold />
       <Card>
         <Async state={st}>{(list) => list.length === 0 ? <Empty title={status || done ? 'No batches yet' : 'Nothing waiting for review'}>{status || done ? 'Production plans create a batch per run; manually created products get their own batch.' : 'Closed batches are hidden. Tick “Show closed batches” to see them.'}</Empty> : (
           <CompactList total={st.total} shown={list.length} onMore={st.more} noun="batches">
           <table className="t">
             <thead><tr><th>Batch</th><th>Status</th><th>Items</th><th>Awaiting decision</th><th>Created</th></tr></thead>
-            <tbody>{list.map((b) => <tr key={b.id}><td><Link to={`/batches/${b.id}`}><b>{b.name}</b></Link><div className="small muted">{b.origin === 'scheduler' ? 'From a production plan' : 'Manual'}</div></td><td><Pill value={b.status} /></td><td>{b.items}</td><td>{b.awaiting}</td><td className="small">{ago(b.created_at)}</td></tr>)}</tbody>
+            <tbody>{list.map((b) => <tr key={b.id}><td><Link to={`/batches/${b.id}`}><b>{b.name}</b></Link><div className="small muted">{b.origin === 'scheduler' ? 'From a production plan' : 'Manual'}</div></td><td><Pill value={b.status} /></td><td>{b.items}</td><td>{b.awaiting}{b.held > 0 && <span className="small muted"> · {b.held} on hold</span>}</td><td className="small">{ago(b.created_at)}</td></tr>)}</tbody>
           </table>
           </CompactList>
         )}</Async>
@@ -44,6 +46,26 @@ function WarningsToAccept() {
         {list.map((r) => (
           <CompactRow key={r.versionId} main={<><Link to={`/products/${r.productId}`}><b>{r.title}</b></Link> <span className="muted small">v{r.versionNo}</span></>} sub={`${r.warnings || 'Some'} warning${r.warnings === 1 ? '' : 's'}`}
             actions={r.batchId ? <Link className="btn small primary" to={`/batches/${r.batchId}?item=${r.itemId}`}>Review</Link> : <span className="small muted">Not in a batch</span>} />
+        ))}
+      </CompactList>
+    </Card>
+  );
+}
+
+/** Items parked with "Hold for research". Not decided, not rejected: they wait here until you release or decide them. */
+function OnHold() {
+  const st = useApi<any[]>('/holds', { poll: 15000 });
+  const toast = useToast();
+  const list = st.data ?? [];
+  if (!list.length) return null;
+  const release = async (itemId: string) => { await api(`/batch-items/${itemId}/hold`, { method: 'DELETE' }); toast('Taken off hold'); st.reload(); };
+  return (
+    <Card title={`${list.length} item${list.length === 1 ? '' : 's'} on hold for research`}>
+      <p className="small muted" style={{ marginTop: 0 }}>Held items are not approved and not rejected, and nothing about them changes. Approving, rejecting or sending one back also ends the hold.</p>
+      <CompactList total={list.length} shown={list.length} noun="items" height={240}>
+        {list.map((r) => (
+          <CompactRow key={r.item_id} main={<><Link to={`/products/${r.product_id}`}><b>{r.title}</b></Link> <span className="muted small">{r.batch_name}</span></>} sub={<>Waiting to find out: {r.note} <span className="muted">· held {ago(r.held_at)}</span></>}
+            actions={<><Link className="btn small" to={`/batches/${r.batch_id}?item=${r.item_id}`}>Open</Link> <ActionButton className="small" onClick={() => release(r.item_id)}>Release</ActionButton></>} />
         ))}
       </CompactList>
     </Card>
@@ -146,7 +168,7 @@ function WarningRow({ versionId, w }: { versionId: string; w: any }) {
 function ItemCard({ it, reload }: { it: any; reload: () => void }) {
   const toast = useToast();
   const [markets, setMarkets] = useState<string[]>(it.listings.filter((l: any) => !l.validation.issues.length).map((l: any) => l.marketplace));
-  const [modal, setModal] = useState<null | 'revise' | 'reject' | 'regen'>(null);
+  const [modal, setModal] = useState<null | 'revise' | 'reject' | 'regen' | 'hold'>(null);
   const [notes, setNotes] = useState('');
   const [boxes, setBoxes] = useState<DraftBox[]>([]);
   const v = it.version;
@@ -166,9 +188,18 @@ function ItemCard({ it, reload }: { it: any; reload: () => void }) {
     setBoxes([]);
     reload();
   };
+  const hold = async () => {
+    await api(`/batch-items/${it.item.id}/hold`, { body: { note: notes } });
+    toast('Put on hold');
+    setModal(null);
+    setNotes('');
+    reload();
+  };
+  const release = async () => { await api(`/batch-items/${it.item.id}/hold`, { method: 'DELETE' }); toast('Taken off hold'); reload(); };
   return (
     <Card title={<><Link to={`/products/${it.product.id}`}>{it.product.title}</Link> <span className="muted small">v{v.version_no}</span></>} actions={<><Pill value={v.status} /><Pill value={it.qa.status} text={`QA ${label(it.qa.status)}`} /></>}>
       {!it.current && <div className="banner info">A newer version exists — review that one instead.</div>}
+      {it.hold && <div className="banner info"><div className="spread"><span><b>On hold for research</b> {ago(it.hold.heldAt)}. Waiting to find out: {it.hold.note}</span><ActionButton className="small" onClick={release}>Release</ActionButton></div></div>}
       <div className="item-card">
         <div className="stack">
           <ItemPreviews it={it} />
@@ -202,6 +233,7 @@ function ItemCard({ it, reload }: { it: any; reload: () => void }) {
                 </div>
                 <div className="small" style={{ marginTop: 6 }}><b>{l.title}</b> · {money(l.price_cents, l.currency)}</div>
                 <div className="small muted">{l.tags.join(', ')}</div>
+                <ProfitLine profit={l.profit} />
                 <details><summary className="small">Description</summary><pre style={{ marginTop: 6 }}>{l.description}</pre></details>
                 {l.validation.issues.length > 0 && <div className="err small" style={{ marginTop: 6 }}>{l.validation.issues.map((i: any) => `${i.field}: ${i.message}`).join('; ')}</div>}
               </div>
@@ -215,6 +247,7 @@ function ItemCard({ it, reload }: { it: any; reload: () => void }) {
             <ActionButton className="primary" disabled={!canApprove || !markets.length || qaBlocked || warnBlocked} title={qaBlocked ? 'QA failed — this version cannot be approved' : warnBlocked ? 'Review the warnings and tick "I accept these warnings" first' : !markets.length ? 'Choose at least one marketplace' : ''} onClick={() => decide('approved', { marketplaces: markets, ...(hasWarnings && { acceptWarnings: accept, warningNote }) })}>Approve {markets.length ? `for ${markets.map(label).join(' & ')}` : ''}</ActionButton>
             <button disabled={!it.current || busy} onClick={() => setModal('revise')}>Return for revision</button>
             <button disabled={!it.current || busy} onClick={() => setModal('regen')}>Regenerate</button>
+            <button disabled={!it.current || v.status !== 'ready'} title={v.status !== 'ready' ? 'Only a finished version waiting for review can be held' : 'Park it with a note until you have found something out. Not a decision.'} onClick={() => { setNotes(it.hold?.note ?? ''); setModal('hold'); }}>{it.hold ? 'Change hold note' : 'Hold for research'}</button>
             <button className="danger" disabled={!it.current || busy || v.status === 'rejected'} onClick={() => setModal('reject')}>Reject</button>
             <Link className="btn" to={`/products/${it.product.id}`}>Edit…</Link>
           </div>
@@ -222,7 +255,13 @@ function ItemCard({ it, reload }: { it: any; reload: () => void }) {
           {!qaBlocked && warnBlocked && canApprove && <p className="small" style={{ color: 'var(--warn)', margin: 0 }}>Approve unlocks once you tick "I accept these warnings" above.</p>}
         </div>
       </div>
-      {modal && (
+      {modal === 'hold' && (
+        <Modal title="Hold for research" onClose={() => setModal(null)} footer={<><button onClick={() => setModal(null)}>Cancel</button><ActionButton className="primary" disabled={notes.trim().length < 3} title={notes.trim().length < 3 ? 'Write what you are waiting to find out' : ''} onClick={hold}>Put on hold</ActionButton></>}>
+          <p className="small muted" style={{ marginTop: 0 }}>This is not a decision. It isn't approved or rejected, nothing about the product changes, and the Factory learns nothing from it. It just sits in the "on hold" list on Batch approval until you release it or decide it.</p>
+          <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={1000} placeholder='What are you waiting to find out? e.g. "check what the top 5 sellers charge for this"' />
+        </Modal>
+      )}
+      {modal && modal !== 'hold' && (
         <Modal title={modal === 'revise' ? 'Return for revision' : modal === 'regen' ? 'Regenerate' : 'Reject'} onClose={() => setModal(null)} footer={<><button onClick={() => setModal(null)}>Cancel</button><ActionButton className={modal === 'reject' ? 'danger' : 'primary'} disabled={modal !== 'regen' && notes.trim().length < 3} title={modal !== 'regen' && notes.trim().length < 3 ? 'Write a reason first' : ''} onClick={() => decide(modal === 'revise' ? 'revision_requested' : modal === 'regen' ? 'regenerate_requested' : 'rejected', { notes, ...(boxes.length && { boxes: boxes.map(({ previewId, x, y, w, h }) => ({ previewId, x, y, w, h })) }) })}>{modal === 'revise' ? 'Send back with notes' : modal === 'regen' ? 'Regenerate' : 'Reject version'}</ActionButton></>}>
           <p className="small muted" style={{ marginTop: 0 }}>{modal === 'revise' ? 'Your notes are given to the generator for the next version.' : modal === 'regen' ? 'A fresh version is produced with a new random seed.' : 'The version is marked rejected and can never be published.'}</p>
           <BoxDrawer previews={it.previews} boxes={boxes} setBoxes={setBoxes} />

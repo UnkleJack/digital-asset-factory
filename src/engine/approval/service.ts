@@ -13,6 +13,10 @@ import { audit, type AuditActor } from '../../logging/logger.ts';
 import { onProductFinished } from '../packing/service.ts';
 import { completeTasksForVersion } from '../arcade/workspace.ts';
 import { attachBoxes, boxesText, boxesForDecision } from './reviewBoxes.ts';
+import { withProfit } from '../listing/service.ts';
+import { holdFor, clearHold } from './holds.ts';
+
+export { holdForResearch, releaseHold, listHolds } from './holds.ts';
 
 export type Decision = 'approved' | 'rejected' | 'revision_requested' | 'regenerate_requested';
 
@@ -22,7 +26,8 @@ export function listBatches(app: AppContext, opts: { status?: string; open?: boo
   const args = opts.status ? [opts.status] : [];
   const total = app.db.value<number>(`SELECT count(*) FROM approval_batches b ${where}`, ...args) ?? 0;
   const rows = app.db.all<Record<string, unknown>>(`SELECT b.*, (SELECT count(*) FROM approval_items i WHERE i.batch_id = b.id) AS items,
-      (SELECT count(*) FROM approval_items i JOIN product_versions v ON v.id = i.version_id WHERE i.batch_id = b.id AND v.status = 'ready') AS awaiting
+      (SELECT count(*) FROM approval_items i JOIN product_versions v ON v.id = i.version_id WHERE i.batch_id = b.id AND v.status = 'ready' AND NOT EXISTS (SELECT 1 FROM research_holds h WHERE h.version_id = v.id)) AS awaiting,
+      (SELECT count(*) FROM approval_items i JOIN product_versions v ON v.id = i.version_id WHERE i.batch_id = b.id AND v.status = 'ready' AND EXISTS (SELECT 1 FROM research_holds h WHERE h.version_id = v.id)) AS held
     FROM approval_batches b ${where} ORDER BY b.created_at DESC LIMIT ?`, ...args, opts.limit ?? 200);
   return { rows, total };
 }
@@ -39,7 +44,7 @@ export function itemDetail(app: AppContext, itemId: string) {
   const qaResults = latestQaResults(app, version.id);
   const score = product.opportunity_id ? app.db.get<Record<string, unknown>>('SELECT score, confidence, outcome, factors, created_at FROM opportunity_scores WHERE opportunity_id = ? ORDER BY created_at DESC LIMIT 1', product.opportunity_id) : undefined;
   const cost = app.db.get<{ total: number | null; unknown: number; runs: number }>("SELECT sum(cost_usd) AS total, sum(CASE WHEN cost_basis = 'unknown' AND status = 'succeeded' THEN 1 ELSE 0 END) AS unknown, count(*) AS runs FROM generation_runs WHERE version_id = ?", version.id)!;
-  const listings = listingsForVersion(app.db, version.id).map((l) => ({ ...l, approval: activeApproval(app, l), fingerprint: fingerprintFor(version.deliverable_hash, l) }));
+  const listings = listingsForVersion(app.db, version.id).map((l) => ({ ...withProfit(app, l), approval: activeApproval(app, l), fingerprint: fingerprintFor(version.deliverable_hash, l) }));
   const decisions = app.db.all<{ id: string; decision: string; marketplace: string | null; listing_id: string | null; notes: string; decided_by: string; decided_at: string; invalidated_at: string | null; invalidated_reason: string | null }>('SELECT id, decision, marketplace, listing_id, notes, decided_by, decided_at, invalidated_at, invalidated_reason FROM approval_decisions WHERE version_id = ? ORDER BY decided_at DESC', version.id)
     .map((d) => ({ ...d, boxes: boxesForDecision(app, d.id) }));
   const members = product.product_type === 'bundle' ? (json<{ members?: unknown[] }>(app.db.value<string>('SELECT params FROM product_specs WHERE id = ?', version.spec_id), {}).members ?? []) : [];
@@ -57,6 +62,7 @@ export function itemDetail(app: AppContext, itemId: string) {
     cost: { estimatedUsd: cost.total, runs: cost.runs, unknownCostRuns: cost.unknown, basis: 'Estimated from the price table in Settings; not a provider invoice.' },
     provenance: version.content_provenance,
     listings,
+    hold: holdFor(app, version.id),
     decisions,
     warningsCleared: warningsCleared(app, version.id),
     acceptedWarnings: app.db.all<{ at: string; details: string }>("SELECT at, details FROM audit_events WHERE action = 'approval.warnings_accepted' AND entity_id = ? ORDER BY at DESC", version.id)
@@ -72,7 +78,17 @@ export function batchDetail(app: AppContext, batchId: string) {
   return { batch, items: items.map((i) => itemDetail(app, i.id)) };
 }
 
-export function decide(app: AppContext, itemId: string, input: { decision: Decision; marketplaces?: string[]; notes?: string; acceptWarnings?: boolean; warningNote?: string; boxIds?: string[] }, actor: AuditActor = 'user'): { decisionIds: string[]; newVersionId?: string } {
+type DecideInput = { decision: Decision; marketplaces?: string[]; notes?: string; acceptWarnings?: boolean; warningNote?: string; boxIds?: string[] };
+
+/** Any decision ends a "Hold for research" on the item. If the decision is refused, the hold stays. */
+export function decide(app: AppContext, itemId: string, input: DecideInput, actor: AuditActor = 'user'): { decisionIds: string[]; newVersionId?: string } {
+  const result = decideNow(app, itemId, input, actor);
+  const versionId = app.db.value<string>('SELECT version_id FROM approval_items WHERE id = ?', itemId);
+  if (versionId) clearHold(app, versionId, actor, 'decided');
+  return result;
+}
+
+function decideNow(app: AppContext, itemId: string, input: DecideInput, actor: AuditActor): { decisionIds: string[]; newVersionId?: string } {
   const item = app.db.get<{ id: string; batch_id: string; product_id: string; version_id: string }>('SELECT * FROM approval_items WHERE id = ?', itemId);
   if (!item) throw notFound('Batch item', itemId);
   const product = getProduct(app.db, item.product_id);

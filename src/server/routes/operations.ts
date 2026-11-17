@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import type { ServerDeps } from '../app.ts';
 import { getJob, retryJob, cancelJob, mapJob } from '../../jobs/queue.ts';
-import { listBatches, batchDetail, decide, itemDetail } from '../../engine/approval/service.ts';
+import { listBatches, batchDetail, decide, itemDetail, holdForResearch, releaseHold, listHolds } from '../../engine/approval/service.ts';
 import { createBatch, addToBatch } from '../../engine/approval/batches.ts';
 import { reworkList, reworkCount, markFixed } from '../../engine/approval/rework.ts';
 import { warningHelp } from '../../engine/approval/warningHelp.ts';
@@ -182,6 +182,13 @@ export function registerOperationsRoutes(s: FastifyInstance, deps: ServerDeps): 
     const b = parse(z.object({ check: z.string().min(1).max(200) }), req.body, 'warning');
     return warningHelp(app, (req.params as P).id, b.check);
   });
+  // "Hold for research": parks a finished item with a note. Not a decision; deciding or releasing it ends the hold.
+  s.get('/api/holds', async () => listHolds(app));
+  s.post('/api/batch-items/:id/hold', async (req) => {
+    const b = parse(z.object({ note: z.string().max(1000) }), req.body, 'hold');
+    return holdForResearch(app, (req.params as P).id, b.note);
+  });
+  s.delete('/api/batch-items/:id/hold', async (req) => ({ released: releaseHold(app, (req.params as P).id) }));
   s.post('/api/batch-items/:id/decision', async (req) => {
     const b = parse(z.object({ decision: z.enum(['approved', 'rejected', 'revision_requested', 'regenerate_requested']), marketplaces: z.array(z.string()).optional(), notes: z.string().max(4000).optional(), acceptWarnings: z.boolean().optional(), warningNote: z.string().max(2000).optional(), boxes: z.array(BoxSchema).max(MAX_BOXES).optional() }), req.body, 'decision');
     const itemId = (req.params as P).id;

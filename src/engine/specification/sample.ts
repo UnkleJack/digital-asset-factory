@@ -63,7 +63,7 @@ export async function sampleProduct(app: AppContext, input: SampleInput, withPag
   for (const [table, id] of [['audiences', input.audienceId], ['themes', input.themeId]] as const) {
     if (id && !app.db.get(`SELECT 1 FROM ${table} WHERE id = ?`, id)) throw validation(`Unknown ${table.slice(0, -1)} ${id}`);
   }
-  const spec: SpecRow = { id: 'sample', product_id: 'sample', product_type: def.id, params, design_system_id: designSystemId, audience_id: input.audienceId ?? null, theme_id: input.themeId ?? null, paper: paper.data, seed: input.seed, brief: '', created_at: new Date().toISOString() };
+  const spec: SpecRow = { id: 'sample', product_id: 'sample', product_type: def.id, params, design_system_id: designSystemId, audience_id: input.audienceId ?? null, theme_id: input.themeId ?? null, paper: paper.data, seed: input.seed, brief: '', brief_fields: {}, license_tier: 'personal', created_at: new Date().toISOString() };
   const title = input.title?.trim() || def.defaultTitle({ ...buildContextFromSpec(app, spec, ''), title: undefined } as never);
   const ctx = buildContextFromSpec(app, spec, title);
   const content = def.contentSchema.parse(def.deterministicContent(ctx, seededRandom(ctx.seed)));

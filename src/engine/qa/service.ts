@@ -1,5 +1,5 @@
 import { basename } from 'node:path';
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, PDFName, PDFDict, PDFArray, PDFString, PDFHexString } from 'pdf-lib';
 import { unzipSync, strFromU8 } from 'fflate';
 import type { AppContext } from '../../app/context.ts';
 import { productType } from '../producttypes/registry.ts';
@@ -15,10 +15,39 @@ import { newId } from '../../core/ids.ts';
 import { errorMessage } from '../../core/errors.ts';
 import type { AssetRecord } from '../../storage/assetStore.ts';
 import type { RenderDiagnostics } from '../rendering/renderer.ts';
+import { LICENSE_CLASSROOM_DRAFT, LICENSE_COMMERCIAL_DRAFT } from '../../config/settings.ts';
+import { getSpec } from '../../db/repos.ts';
 
 export type CheckResult = QaFinding;
 
 const PLACEHOLDER = /lorem ipsum|\bTBD\b|\bTODO\b|\[insert|\{\{|\}\}|\bXXX+\b|\bundefined\b|\bNaN\b|\[object Object\]|\bplaceholder\b|your text here/i;
+
+/**
+ * Counts the clickable links inside a PDF that jump to another place in the same PDF, and how many of them land
+ * somewhere that exists. Chrome drops a link whose target is missing when it writes the PDF, so a broken link
+ * shows up as a link that is simply not there: compare `total` with the number the product meant to put in.
+ */
+export function countInternalLinks(doc: PDFDocument): { total: number; resolved: number } {
+  const dests = doc.catalog.lookup(PDFName.of('Dests'));
+  const names = new Set<string>();
+  if (dests instanceof PDFDict) for (const k of dests.keys()) names.add(k.decodeText());
+  let total = 0, resolved = 0;
+  for (const page of doc.getPages()) {
+    const annots = page.node.Annots();
+    if (!annots) continue;
+    for (let i = 0; i < annots.size(); i++) {
+      const a = doc.context.lookup(annots.get(i));
+      if (!(a instanceof PDFDict) || a.get(PDFName.of('Subtype')) !== PDFName.of('Link')) continue;
+      const d = a.get(PDFName.of('Dest'));
+      if (d === undefined) continue;
+      total++;
+      if (d instanceof PDFArray) resolved++;
+      else if (d instanceof PDFName) { if (names.has(d.decodeText())) resolved++; }
+      else if (d instanceof PDFString || d instanceof PDFHexString) { if (names.has(d.decodeText())) resolved++; }
+    }
+  }
+  return { total, resolved };
+}
 
 export function findPlaceholders(texts: string[]): string[] {
   return texts.filter((t) => PLACEHOLDER.test(t)).map((t) => t.slice(0, 80));
@@ -98,6 +127,12 @@ export async function runDeliverableQa(app: AppContext, versionId: string): Prom
       const [ew, eh] = [mmToPt(w), mmToPt(h)];
       const wrong = doc.getPages().map((p, i) => ({ i, ...p.getSize() })).filter((p) => Math.abs(p.width - ew) > 1.5 || Math.abs(p.height - eh) > 1.5);
       add('pdf_valid', 'hard', doc.getPageCount() === expected && wrong.length === 0, `PDF opens; ${doc.getPageCount()} pages (expected ${expected}); ${wrong.length ? `${wrong.length} pages with wrong size` : `all pages ${spec.paper.size} ${spec.paper.orientation}`}`, { pages: doc.getPageCount(), expected, wrongSizes: wrong.slice(0, 5) });
+      // Clickable planners: every link the layout meant to add must be in the file and must land on a page.
+      const wantLinks = version.content ? def.expectedLinks?.(ctx, version.content) : undefined;
+      if (wantLinks !== undefined) {
+        const got = countInternalLinks(doc);
+        add('pdf_links', 'hard', got.total === wantLinks && got.resolved === got.total, `Clickable links: ${got.total} in the PDF (expected ${wantLinks}); ${got.resolved} land on a page`, { expected: wantLinks, ...got });
+      }
     } catch (err) {
       add('pdf_valid', 'hard', false, `PDF could not be opened: ${errorMessage(err)}`);
     }
@@ -228,6 +263,13 @@ export async function runReleaseQa(app: AppContext, versionId: string): Promise<
   const zip = assets.find((a) => a.kind === 'package_zip');
   const license = assets.find((a) => a.kind === 'license');
   add('license_present', 'hard', !!license && app.assets.exists(license), license ? 'License file included' : 'No license file');
+  // The classroom and commercial licenses ship with draft wording nobody has approved. Edit it in Settings → License text.
+  const tier = getSpec(app.db, getVersion(app.db, versionId).spec_id).license_tier;
+  if (tier !== 'personal') {
+    const draft = tier === 'classroom' ? LICENSE_CLASSROOM_DRAFT : LICENSE_COMMERCIAL_DRAFT;
+    const current = tier === 'classroom' ? s.licensing.classroomLicenseText : s.licensing.commercialLicenseText;
+    add('license_draft', 'warning', current !== draft, current !== draft ? `The ${tier} license text has been edited in Settings` : `This product ships the ${tier} license, and its wording in Settings → License text is still the unreviewed draft. Read it and change it to what you want buyers to be allowed to do.`);
+  }
   if (!zip || !app.assets.exists(zip)) add('package_zip', 'hard', false, 'No customer ZIP package');
   else {
     try {

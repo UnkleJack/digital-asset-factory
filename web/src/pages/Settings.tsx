@@ -9,7 +9,7 @@ import { ARCADE_GAME_NAME } from '../../../src/core/brand.ts';
 const TABS = [
   { id: 'general', label: 'General' }, { id: 'ai', label: 'AI providers' }, { id: 'integrations', label: 'Integrations' }, { id: 'generation', label: 'Generation' }, { id: 'rendering', label: 'Rendering' },
   { id: 'qa', label: 'QA' }, { id: 'scoring', label: 'Scoring' }, { id: 'marketplaces', label: 'Marketplaces' }, { id: 'scheduler', label: 'Scheduler' }, { id: 'packing', label: 'Packing' },
-  { id: 'licensing', label: 'License text' }, { id: 'compliance', label: 'Compliance' }, { id: 'analytics', label: 'Analytics' }, { id: 'arcade', label: 'Arcade' }, { id: 'backups', label: 'Backups' },
+  { id: 'licensing', label: 'License text' }, { id: 'lifecycle', label: 'New editions' }, { id: 'compliance', label: 'Compliance' }, { id: 'analytics', label: 'Analytics' }, { id: 'arcade', label: 'Arcade' }, { id: 'backups', label: 'Backups' },
   { id: 'logs', label: 'Logs & audit' }, { id: 'system', label: 'System' },
 ];
 
@@ -20,9 +20,10 @@ const HELP: Record<string, string> = {
   rendering: 'Chrome is used to render PDFs and previews. Changing these restarts the renderer.',
   qa: 'Thresholds for near-duplicate detection, spelling and image checks. Add words the spell-checker should accept to the allowlist (one per line).',
   scoring: 'Factor weights and the score/confidence thresholds. These thresholds are starting points — tune them as you learn what sells.',
-  marketplaces: 'The AI disclosure setting controls when Etsy listings get an AI DISCLOSURE paragraph (Etsy requires one for items created with AI). Listing rules per marketplace and default prices per product type (in cents). Rules marked unverified could not be confirmed from official pages; check them against the marketplace.',
+  marketplaces: 'Fees: the numbers behind the "what you keep" line on listings. Etsy and Gumroad were read from their own pages on 2026-11-17; fees change, so check them again before relying on them, and advertising is not included. The AI disclosure setting controls when Etsy listings get an AI DISCLOSURE paragraph (Etsy requires one for items created with AI). Listing rules per marketplace and default prices per product type (in cents). Rules marked unverified could not be confirmed from official pages; check them against the marketplace.',
   scheduler: 'How often the scheduler checks plans, the catch-up window for runs missed while the app was off, retry policy and concurrency.',
-  licensing: 'The license included in every download. {{shopName}} and {{year}} are filled in automatically.',
+  licensing: 'The license included in a download depends on the license chosen for the product: personal, classroom or commercial. {{shopName}} and {{year}} are filled in automatically. The classroom and commercial texts start as DRAFTS nobody has reviewed. QA warns on any product that ships a draft unchanged, so read them and write what you want buyers to be allowed to do.',
+  lifecycle: 'Dated products (monthly calendar, weekly planner, dated daily planner) are listed on the Production calendar for a new edition once the dates they cover end within this many days, or have already ended.',
   compliance: 'Terms that block a product or listing in QA (trademarks, licensed characters, brands). One per line.',
   analytics: 'Minimum evidence before a recommendation is made.',
 };
@@ -77,7 +78,7 @@ function ObjectFields({ value, onChange, path }: { value: any; onChange: (v: any
   const set = (k: string, v: any) => onChange({ ...value, [k]: v });
   return (
     <div className="stack">
-      {prims.length > 0 && <div className="form">{prims.map(([k, v]) => <Field key={k} name={k} value={v} onChange={(nv) => set(k, nv)} long={k === 'licenseText'} />)}</div>}
+      {prims.length > 0 && <div className="form">{prims.map(([k, v]) => <Field key={k} name={k} value={v} onChange={(nv) => set(k, nv)} long={/licenseText$/i.test(k)} />)}</div>}
       {jsons.map(([k, v]) => <JsonField key={k} name={k} value={v} onChange={(nv) => set(k, nv)} />)}
       {nested.map(([k, v]) => <fieldset key={k} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 12 }}><legend className="small muted" style={{ padding: '0 6px' }}>{label(k.replace(/([A-Z])/g, ' $1').toLowerCase())}</legend><ObjectFields value={v} onChange={(nv) => set(k, nv)} path={[...path, k]} /></fieldset>)}
       {advanced.length > 0 && <details className="advanced"><summary className="small">Advanced: AI price table</summary><p className="small muted">Only used to estimate what paid AI calls cost and to enforce the budget limit. Free models are listed at 0, so you can leave this alone.</p>{advanced.map(([k, v]) => <JsonField key={k} name={k} value={v} onChange={(nv) => set(k, nv)} />)}</details>}

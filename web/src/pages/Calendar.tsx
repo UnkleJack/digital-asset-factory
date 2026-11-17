@@ -1,9 +1,38 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { api, useApi } from '../api.ts';
 import { CompactList } from '../compact.tsx';
 import { ActionButton, Async, Card, Empty, Modal, PageHead, Pill, useToast } from '../ui.tsx';
 import { fmtDate, label, usd } from '../format.ts';
+
+/** Dated products whose dates are over or ending soon, with a button that makes the next edition. */
+function RefreshCard() {
+  const st = useApi<any>('/lifecycle/refresh', { poll: 30000 });
+  const nav = useNavigate();
+  const toast = useToast();
+  const d = st.data;
+  if (!d || (!d.items.length && !d.evergreen.length)) return null;
+  return (
+    <Card title={`Due for a new edition${d.items.length ? ` (${d.items.length})` : ''}`}>
+      <p className="small muted" style={{ marginTop: 0 }}>Approved dated products whose dates end within {d.leadDays} days or have already ended. A new edition is the same product with its dates moved on by exactly what it covered, in its own review batch. Change the window in Settings → New editions.</p>
+      {d.items.length === 0 ? <p className="small muted" style={{ margin: 0 }}>Nothing is due.</p> : (
+        <table className="t"><thead><tr><th>Product</th><th>Covers</th><th>Status</th><th /></tr></thead>
+          <tbody>{d.items.map((it: any) => (
+            <tr key={it.productId}>
+              <td><Link to={`/products/${it.productId}`}><b>{it.title}</b></Link><div className="small muted">{label(it.productType)}</div></td>
+              <td className="small">{it.periodStart} to {it.periodEnd}</td>
+              <td>{it.nextEditionId ? <Pill value="approved" text="Next edition made" /> : it.state === 'ended' ? <Pill value="failed" text={`Ended ${-it.daysLeft} day${it.daysLeft === -1 ? '' : 's'} ago`} /> : <Pill value="pending" text={`${it.daysLeft} day${it.daysLeft === 1 ? '' : 's'} left`} />}</td>
+              <td className="right"><div className="row" style={{ justifyContent: 'flex-end' }}>
+                {it.nextEditionId ? <Link className="btn small" to={`/products/${it.nextEditionId}`}>Open it</Link> : <ActionButton className="small primary" onClick={async () => { const r = await api(`/products/${it.productId}/next-edition`, { body: {} }); toast('Next edition is being made'); nav(`/products/${r.productId}`); }}>Make next edition</ActionButton>}
+                <ActionButton className="small" onClick={async () => { await api(`/products/${it.productId}/evergreen`, { method: 'PUT', body: { evergreen: true } }); st.reload(); }}>Never expires</ActionButton>
+              </div></td>
+            </tr>
+          ))}</tbody></table>
+      )}
+      {d.evergreen.length > 0 && <p className="small muted" style={{ marginBottom: 0 }}>Marked as never expiring: {d.evergreen.map((e: any, i: number) => <span key={e.productId}>{i > 0 && ', '}<Link to={`/products/${e.productId}`}>{e.title}</Link></span>)}.</p>}
+    </Card>
+  );
+}
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -36,6 +65,7 @@ export function CalendarPage() {
       <Card title={<>{MONTHS[cursor.getMonth()]} {cursor.getFullYear()}{cal.data ? <span className="small muted"> · {monthMade(cal.data)} made</span> : null}</>} actions={<><button className="small" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}>‹ Prev</button><button className="small" onClick={() => setCursor(new Date(new Date().getFullYear(), new Date().getMonth(), 1))}>Today</button><button className="small" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}>Next ›</button></>}>
         <Async state={cal}>{(d) => <MonthGrid cursor={cursor} data={d} />}</Async>
       </Card>
+      <RefreshCard />
       <Card title="Production plans">
         <Async state={plans}>{(list) => list.length === 0 ? <Empty title="No production plans yet" action={<button className="primary" onClick={() => setEditing({})}>Create a plan</button>}>A plan picks eligible opportunities every day (within quotas, category rotation and a cost limit) and puts the results in a review batch.</Empty> : (
           <table className="t">

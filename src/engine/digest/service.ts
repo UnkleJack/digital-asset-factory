@@ -149,22 +149,32 @@ async function researchPlatform(app: AppContext, search: (q: string, n?: number)
   };
 }
 
-async function researchShop(app: AppContext, search: (q: string, n?: number) => Promise<SearchResult[]>, shop: { platform: string; shopUrl: string; label?: string }, runIds: string[]) {
+async function researchShop(app: AppContext, search: (q: string, n?: number) => Promise<SearchResult[]>, shop: { platform: string; shopUrl: string; label?: string; family?: string }, runIds: string[]) {
   let host = '';
   try { host = new URL(shop.shopUrl).hostname; } catch { /* validated by settings */ }
   const name = shop.label || shop.shopUrl.replace(/\/$/, '').split('/').pop() || shop.shopUrl;
   const results = dedupe([...(await search(`"${name}" ${shop.platform} shop reviews best sellers`, 6)), ...(await search(`${name} ${host} printables`, 6))]).slice(0, 14);
-  if (!results.length) return { shop: name, url: shop.shopUrl, platform: shop.platform, strengths: [], gaps: [], dataQuality: 'No search results came back.' };
+  if (!results.length) return { shop: name, url: shop.shopUrl, platform: shop.platform, family: shop.family ?? null, strengths: [], gaps: [], dataQuality: 'No search results came back.' };
   const r = await structuredCall(app, {
     purpose: 'digest:competitor',
     schema: ShopSummary,
     system: RULES,
-    prompt: `Competitor shop: ${name} on ${shop.platform} (${shop.shopUrl}). From the search results, what are they doing well (best sellers, numbers like review or sales counts if stated, pricing, presentation) and where do they come up short (complaints, missing products, weak spots another seller could fill)?\n\nSearch results:\n${resultsBlock(results)}`,
+    prompt: `Competitor shop: ${name} on ${shop.platform} (${shop.shopUrl})${shop.family ? `, competing in: ${shop.family}` : ''}. From the search results, what are they doing well (best sellers, numbers like review or sales counts if stated, pricing, presentation) and where do they come up short (complaints, missing products, weak spots another seller could fill)?\n\nSearch results:\n${resultsBlock(results)}`,
     maxTokens: 3000,
     trace: {},
   });
   runIds.push(...(r.provenance.generationRunIds ?? []));
-  return { shop: name, url: shop.shopUrl, platform: shop.platform, strengths: r.data.strengths.map((f) => verifyFinding(f, results)), gaps: r.data.gaps.map((g) => ({ ...g, sourceUrls: g.sourceUrls.filter((u) => results.some((x) => x.url === u)) })), dataQuality: r.data.dataQuality };
+  return { shop: name, url: shop.shopUrl, platform: shop.platform, family: shop.family ?? null, strengths: r.data.strengths.map((f) => verifyFinding(f, results)), gaps: r.data.gaps.map((g) => ({ ...g, sourceUrls: g.sourceUrls.filter((u) => results.some((x) => x.url === u)) })), dataQuality: r.data.dataQuality };
+}
+
+/** The most shops looked at in one digest. Each costs about two web searches, and the monthly search cap is shared with the platform scans. */
+export const SHOPS_PER_DIGEST = 10;
+
+/** Ten shops at a time: with a longer list the digest moves on by ten each time it is sent, so every shop gets its turn. */
+export function shopsForThisRun<T>(shops: T[], digestsSent: number): T[] {
+  if (shops.length <= SHOPS_PER_DIGEST) return shops;
+  const start = (digestsSent * SHOPS_PER_DIGEST) % shops.length;
+  return Array.from({ length: SHOPS_PER_DIGEST }, (_, i) => shops[(start + i) % shops.length]);
 }
 
 /** What the operator has approved and rejected lately, with their reasons — fed to the idea passes. */
@@ -237,7 +247,7 @@ function contextFor(platforms: Awaited<ReturnType<typeof researchPlatform>>[], s
     for (const g of p.gaps) lines.push(`- GAP: ${g.gap} — ${g.whyItMatters}`);
   }
   for (const s of shops) {
-    lines.push(`## Competitor ${s.shop} (${s.platform})`);
+    lines.push(`## Competitor ${s.shop} (${s.platform})${s.family ? `, ${s.family}` : ''}`);
     for (const f of s.strengths) lines.push(`- does well: ${f.item}: ${f.detail}${f.number ? ` [${f.number}]` : ''}`);
     for (const g of s.gaps) lines.push(`- GAP: ${g.gap}`);
   }
@@ -267,12 +277,12 @@ export async function runDigest(app: AppContext, opts: DigestOptions = {}): Prom
     }
     save({ bestsellers: JSON.stringify(platforms) });
     const shops = [];
-    for (const s of cfg.competitorShops.slice(0, 10)) {
+    for (const s of shopsForThisRun(cfg.competitorShops, app.db.value<number>("SELECT count(*) FROM digest_runs WHERE status = 'sent'") ?? 0)) {
       try {
         shops.push(await researchShop(app, search, s, runIds));
       } catch (err) {
         if (err instanceof AppError && err.code === 'search_budget') break;
-        shops.push({ shop: s.label ?? s.shopUrl, url: s.shopUrl, platform: s.platform, strengths: [], gaps: [], dataQuality: `Research failed: ${errorMessage(err)}` });
+        shops.push({ shop: s.label ?? s.shopUrl, url: s.shopUrl, platform: s.platform, family: s.family ?? null, strengths: [], gaps: [], dataQuality: `Research failed: ${errorMessage(err)}` });
       }
     }
     save({ competitors: JSON.stringify(shops) });
@@ -370,7 +380,7 @@ export function renderDigestEmail(d: { date: string; platforms: any[]; shops: an
     t.push('No competitor shops listed yet (Digest → Competitor shops).');
   }
   for (const s of d.shops) {
-    h.push(`<h3>${esc(s.shop)} <span style="font-weight:normal;color:#777">(${esc(s.platform)})</span></h3><p style="color:#777;font-size:13px">${esc(s.dataQuality)}</p>`);
+    h.push(`<h3>${esc(s.shop)} <span style="font-weight:normal;color:#777">(${esc(s.platform)}${s.family ? `, ${esc(s.family)}` : ''})</span></h3><p style="color:#777;font-size:13px">${esc(s.dataQuality)}</p>`);
     t.push('', `## ${s.shop} (${s.platform}) ${s.url}`);
     if (s.strengths.length) h.push(`<p><b>Doing well:</b></p><ul>${s.strengths.map((f: any) => `<li>${esc(f.item)} — ${esc(f.detail)}${f.number ? ` <b>[${esc(f.number)}]</b>` : ''} <i style="color:#777">(${badge(f.evidence, f.numberVerified)})</i></li>`).join('')}</ul>`);
     if (s.gaps.length) h.push(`<p><b>Where they come up short:</b></p><ul>${s.gaps.map((g: DigestGap) => `<li>${esc(g.gap)} — ${esc(g.whyItMatters)}</li>`).join('')}</ul>`);
