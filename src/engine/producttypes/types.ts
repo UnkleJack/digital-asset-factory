@@ -137,13 +137,24 @@ export interface BriefFields { customer?: string; problem?: string; differentiat
 export const BRIEF_FIELD_MAX = 200;
 export const BRIEF_FIELD_LABELS: Record<keyof BriefFields, string> = { customer: 'Who it is for', problem: 'The problem it solves', differentiation: 'What makes it different' };
 
+/** Control characters out, tabs and line breaks kept for the free-text brief. */
+const noControl = (s: string) => s.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '');
+
+/**
+ * A short answer as one plain line. It can't start a new line (so it can't pose as another field or as a new
+ * instruction block) and can't carry angle brackets (so it can't fake a tag such as the fence the brief sits in).
+ */
+export function oneLine(s: string, max: number): string {
+  return noControl(s).replace(/[<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
+}
+
 /** The structured fields and the free-text brief as one block of text, for the AI. Empty when there is neither. */
 export function composeBrief(brief: string | undefined, fields: BriefFields | undefined): string {
   const lines = (Object.keys(BRIEF_FIELD_LABELS) as (keyof BriefFields)[])
-    .map((k) => [BRIEF_FIELD_LABELS[k], (fields?.[k] ?? '').trim().slice(0, BRIEF_FIELD_MAX)] as const)
+    .map((k) => [BRIEF_FIELD_LABELS[k], oneLine(fields?.[k] ?? '', BRIEF_FIELD_MAX)] as const)
     .filter(([, v]) => v)
     .map(([l, v]) => `${l}: ${v}`);
-  const free = (brief ?? '').trim();
+  const free = noControl(brief ?? '').trim();
   return [...lines, ...(free ? [free] : [])].join('\n');
 }
 
