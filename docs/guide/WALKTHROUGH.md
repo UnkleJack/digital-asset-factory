@@ -507,7 +507,7 @@ Jobs that fail for a passing reason retry by themselves, waiting a little longer
 
 ## 11. QA results
 
-**What it's for:** the automatic checks on every version. A failed hard check blocks approval and publishing. Warnings are shown to you at review.
+**What it's for:** the automatic checks on every version. A failed hard check blocks approval and publishing. Warnings are shown to you at review. What QA does and doesn't test for each kind of product, and what you still need to look at yourself, is in [What to check before you approve](CHECKING_PRODUCTS.md).
 
 ![QA results](images/10-qa.png)
 
@@ -801,7 +801,7 @@ Ticked boxes are on/off settings. A box marked "one per line" takes a list. Boxe
 
 **Presets.** The row of preset buttons at the top fills in the whole form in one click: the kind, audience, theme, design, paper, the kind's own settings and a Brief. They're grouped for Students, Teachers, Home and family, Work and Everyone. A preset only fills the boxes. Change anything you like before you press **Create**. If a preset names an audience, theme or design you've since deleted, that box is left empty.
 
-**Brief for the AI.** The optional box near the bottom, up to 600 characters. Write wording instructions there, like "Keep the habits countable and kind. Nothing about weight loss." The AI follows it when it writes the words on the pages and the shop listing. It doesn't change the layout. The Brief carries over to every new version and variation of the product. A preset fills the box with its own Brief, which you can edit or clear.
+**Brief for the AI.** The optional box near the bottom, up to 600 characters. Write wording instructions there, like "Keep the habits countable and kind. Nothing about weight loss." The AI follows it when it writes the words on the pages and the shop listing. It doesn't change the layout. The Brief carries over to every new version and variation of the product. A preset fills the box with its own Brief, which you can edit or clear. Ready-made briefs for most kinds of product are in the [prompt library](PROMPT_LIBRARY.md).
 
 **The mission.** The HAPPY DAFFY mission for this chapter is cleared by a report, not by **Mark done**. Make a product with a Brief you wrote, then press **Report**, pick that product and write how the wording came out and whether the AI followed your Brief. Your report is also saved as a note for the AI on that product, so it shows up in [Notes for the AI](#14-notes-for-the-ai) and feeds what the factory learns.
 
