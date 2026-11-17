@@ -29,10 +29,24 @@ export const COMPONENT_CSS = `
 .prompt{font-family:var(--headfont);font-style:italic;color:var(--primary)}
 .cover{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:6mm;border:calc(var(--lw)*2) solid var(--primary);border-radius:calc(var(--r)*2);padding:10mm}
 .big{font-size:calc(var(--base)*4.2);line-height:1;font-weight:700;color:var(--primary)}
+.tabs{display:flex;flex-wrap:wrap;gap:.8mm;flex:none;margin-bottom:2mm}
+.tabs a{display:block;padding:.7mm 2mm;border:var(--lw) solid var(--primary);border-radius:calc(var(--r)*.6);color:var(--primary);text-decoration:none;font-size:calc(var(--base)*.7);font-weight:600;line-height:1.15;white-space:nowrap}
+.tabs a.on{background:var(--primary);color:var(--paper)}
 `;
 
-export function page(body: SafeHtml | SafeHtml[], extraClass = ''): SafeHtml {
-  return html`<section class="page ${extraClass}">${body}</section>`;
+/** `id` is the anchor a clickable tab can jump to. It has to be unique within the document. */
+export function page(body: SafeHtml | SafeHtml[], extraClass = '', id?: string): SafeHtml {
+  return id ? html`<section class="page ${extraClass}" id="${id}">${body}</section>` : html`<section class="page ${extraClass}">${body}</section>`;
+}
+
+export interface Tab { label: string; /** The id of the page this tab jumps to. */ target: string }
+
+/**
+ * A row of tabs along the top of a page; each is a link to another page of the same PDF (works in any PDF reader that
+ * follows links; on paper it is just a month guide). `current` is the tab of the page it sits on, drawn filled in.
+ */
+export function tabStrip(tabs: Tab[], current?: string): SafeHtml {
+  return html`<nav class="tabs">${tabs.map((t) => html`<a href="#${t.target}" class="${t.target === current ? 'on' : ''}">${t.label}</a>`)}</nav>`;
 }
 
 export function header(title: string, sub?: string, right?: SafeHtml | string): SafeHtml {

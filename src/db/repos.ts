@@ -2,6 +2,7 @@ import type { Db } from './sqlite.ts';
 import { json } from './sqlite.ts';
 import { notFound } from '../core/errors.ts';
 import type { Paper } from '../engine/templates/library.ts';
+import type { BriefFields, LicenseTier } from '../engine/producttypes/types.ts';
 
 export interface ProductRow {
   id: string;
@@ -31,6 +32,10 @@ export interface SpecRow {
   seed: number;
   /** Optional free-text wording instructions for the AI, written by the owner. */
   brief: string;
+  /** The short structured brief: who it is for, the problem it solves, what makes it different. */
+  brief_fields: BriefFields;
+  /** Which license ships with the product. */
+  license_tier: LicenseTier;
   created_at: string;
 }
 
@@ -84,7 +89,7 @@ export interface ListingRow {
 }
 
 export function mapSpec(r: Record<string, unknown>): SpecRow {
-  return { ...(r as unknown as SpecRow), params: json(r.params, {}), paper: json(r.paper, { size: 'letter', orientation: 'portrait', grayscale: false }) };
+  return { ...(r as unknown as SpecRow), params: json(r.params, {}), paper: json(r.paper, { size: 'letter', orientation: 'portrait', grayscale: false }), brief_fields: json(r.brief_fields, {}), license_tier: (r.license_tier as LicenseTier | undefined) ?? 'personal' };
 }
 
 export function mapVersion(r: Record<string, unknown>): VersionRow {

@@ -10,6 +10,7 @@ import { hashObject, randomSeed } from '../../core/hash.ts';
 import { validation, notFound, conflict } from '../../core/errors.ts';
 import { audit, type AuditActor } from '../../logging/logger.ts';
 import { designSystemWithFonts, type FontChoice } from '../templates/designSystems.ts';
+import { composeBrief, BRIEF_FIELD_MAX, LICENSE_TIERS, type BriefFields, type LicenseTier } from '../producttypes/types.ts';
 
 export interface CreateProductInput {
   productType: string;
@@ -26,6 +27,26 @@ export interface CreateProductInput {
   fonts?: FontChoice;
   /** Free-text wording instructions for the AI (see briefClause). */
   brief?: string;
+  /** The short structured brief (who it is for, the problem it solves, what makes it different). */
+  briefFields?: BriefFields;
+  /** Which license ships with the product. Default personal. */
+  licenseTier?: LicenseTier;
+}
+
+/** Trims the structured brief fields and drops empty ones. */
+export function cleanBriefFields(f: BriefFields | undefined): BriefFields {
+  const out: BriefFields = {};
+  for (const k of ['customer', 'problem', 'differentiation'] as const) {
+    const v = (f?.[k] ?? '').trim().slice(0, BRIEF_FIELD_MAX);
+    if (v) out[k] = v;
+  }
+  return out;
+}
+
+/** Only the three known licenses are accepted. */
+export function checkLicenseTier(tier: string): LicenseTier {
+  if (!(LICENSE_TIERS as readonly string[]).includes(tier)) throw validation(`Unknown license ${tier}`);
+  return tier as LicenseTier;
 }
 
 function zodIssues(err: { issues: { path: PropertyKey[]; message: string }[] }) {
@@ -63,7 +84,8 @@ export function buildContextFromSpec(app: AppContext, spec: SpecRow, title: stri
     shopName: app.settings.get('general').shopName,
     seed: spec.seed,
     revisionNotes,
-    brief: spec.brief,
+    brief: composeBrief(spec.brief, spec.brief_fields),
+    licenseTier: spec.license_tier,
     loadReferenceImage: (id: string) => referenceImageAsPng(app, id),
   };
 }
@@ -98,12 +120,12 @@ export function createProduct(app: AppContext, input: CreateProductInput, actor:
   const productId = newId('prd');
   const specId = newId('spc');
   const versionId = newId('ver');
-  const spec: SpecRow = { id: specId, product_id: productId, product_type: def.id, params, design_system_id: designSystemId, audience_id: input.audienceId ?? null, theme_id: input.themeId ?? null, paper: paperParsed.data, seed: input.seed ?? randomSeed(), brief: (input.brief ?? '').trim(), created_at: now };
+  const spec: SpecRow = { id: specId, product_id: productId, product_type: def.id, params, design_system_id: designSystemId, audience_id: input.audienceId ?? null, theme_id: input.themeId ?? null, paper: paperParsed.data, seed: input.seed ?? randomSeed(), brief: (input.brief ?? '').trim(), brief_fields: cleanBriefFields(input.briefFields), license_tier: checkLicenseTier(input.licenseTier ?? 'personal'), created_at: now };
   const title = (input.title?.trim() || def.defaultTitle({ ...buildContextFromSpec(app, spec, ''), title: undefined } as never)).slice(0, 120);
   const categoryId = app.db.value<string>('SELECT id FROM categories WHERE name = ?', def.category) ?? null;
   app.db.tx(() => {
     app.db.insert('products', { id: productId, slug: uniqueSlug(app, title), title, product_type: def.id, category_id: categoryId, audience_id: spec.audience_id, theme_id: spec.theme_id, opportunity_id: input.opportunityId ?? null, template_id: input.templateId ?? null, status: 'active', current_version_id: versionId, created_at: now, updated_at: now });
-    app.db.insert('product_specs', { ...spec, params: JSON.stringify(params), paper: JSON.stringify(spec.paper) });
+    app.db.insert('product_specs', { ...spec, params: JSON.stringify(params), paper: JSON.stringify(spec.paper), brief_fields: JSON.stringify(spec.brief_fields) });
     app.db.insert('product_versions', { id: versionId, product_id: productId, version_no: 1, spec_id: specId, origin: 'initial', stage: 'specified', status: 'in_progress', qa_status: 'pending', created_at: now, updated_at: now });
     audit(app.db, actor, 'product.created', 'product', productId, { productType: def.id, title });
   });
@@ -115,7 +137,7 @@ export interface NewVersionInput {
   fromVersionId: string;
   revisionNotes?: string;
   changeNote?: string;
-  specChanges?: { params?: Record<string, unknown>; paper?: Partial<Paper>; designSystemId?: string; audienceId?: string | null; themeId?: string | null; newSeed?: boolean };
+  specChanges?: { params?: Record<string, unknown>; paper?: Partial<Paper>; designSystemId?: string; audienceId?: string | null; themeId?: string | null; newSeed?: boolean; licenseTier?: LicenseTier };
   content?: unknown;
   copyContent?: boolean;
 }
@@ -128,13 +150,13 @@ export function createVersion(app: AppContext, input: NewVersionInput, actor: Au
   let spec = getSpec(app.db, from.spec_id);
   const ch = input.specChanges;
   const now = new Date().toISOString();
-  if (ch && (ch.params || ch.paper || ch.designSystemId || ch.audienceId !== undefined || ch.themeId !== undefined || ch.newSeed)) {
+  if (ch && (ch.params || ch.paper || ch.designSystemId || ch.audienceId !== undefined || ch.themeId !== undefined || ch.newSeed || ch.licenseTier)) {
     const params = ch.params ? resolveParams(def.id, spec.params, ch.params) : spec.params;
     const paperParsed = PaperSchema.safeParse({ ...spec.paper, ...(ch.paper ?? {}) });
     if (!paperParsed.success) throw validation('Invalid paper settings', zodIssues(paperParsed.error));
     if (ch.designSystemId && !app.db.get('SELECT 1 FROM design_systems WHERE id = ?', ch.designSystemId)) throw validation('Unknown design system');
-    const next: SpecRow = { ...spec, id: newId('spc'), params, paper: paperParsed.data, design_system_id: ch.designSystemId ?? spec.design_system_id, audience_id: ch.audienceId !== undefined ? ch.audienceId : spec.audience_id, theme_id: ch.themeId !== undefined ? ch.themeId : spec.theme_id, seed: ch.newSeed ? randomSeed() : spec.seed, created_at: now };
-    app.db.insert('product_specs', { ...next, params: JSON.stringify(next.params), paper: JSON.stringify(next.paper) });
+    const next: SpecRow = { ...spec, id: newId('spc'), params, paper: paperParsed.data, design_system_id: ch.designSystemId ?? spec.design_system_id, audience_id: ch.audienceId !== undefined ? ch.audienceId : spec.audience_id, theme_id: ch.themeId !== undefined ? ch.themeId : spec.theme_id, seed: ch.newSeed ? randomSeed() : spec.seed, license_tier: ch.licenseTier ? checkLicenseTier(ch.licenseTier) : spec.license_tier, created_at: now };
+    app.db.insert('product_specs', { ...next, params: JSON.stringify(next.params), paper: JSON.stringify(next.paper), brief_fields: JSON.stringify(next.brief_fields) });
     spec = next;
   }
   let contentPatch: Record<string, unknown> = {};

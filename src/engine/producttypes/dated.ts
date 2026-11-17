@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { html } from '../rendering/html.ts';
-import { page, header, monthGrid, miniMonth, lines, box, checklist, timeBlocks, monthCells, ornament } from '../rendering/components.ts';
+import { page, header, monthGrid, miniMonth, lines, box, checklist, timeBlocks, monthCells, ornament, tabStrip, type Tab } from '../rendering/components.ts';
 import { MONTH_NAMES, WEEKDAY_NAMES, daysInMonth, parseYmd, addDaysUtc, ymd } from '../../core/time.ts';
 import { US_FEDERAL_HOLIDAYS, WEEKLY_FOCUS_PROMPTS, DAILY_FOCUS_PROMPTS } from './library.ts';
 import { AI_SYSTEM_BASE, audienceLine, themeLine, revisionClause, shuffle, type ProductTypeDefinition, type QaFinding, type TypeContext } from './types.ts';
@@ -37,6 +37,40 @@ function verifyMonthCells(year: number, month0: number, weekStart: 0 | 1): strin
   return null;
 }
 
+
+// ---------------------------------------------------------------- clickable month tabs
+//
+// With "Month tabs" on, every page gets a row of month tabs along the top. Each tab is a link to that month's page in the
+// same PDF, so on a tablet or computer you can jump around; on paper the row is just a month guide. Off by default, so
+// existing products come out exactly as before. The PDF is checked afterwards: the number of links in the file must equal
+// the number the layout meant to add, and each one must land on a page (QA check "pdf_links").
+
+interface TabPlan { tabs: (Tab & { page: number })[] }
+const MS_DAY = 86_400_000;
+const tabText = (year: number, month0: number, withYear: boolean) => `${MONTH_NAMES[month0].slice(0, 3)}${withYear ? ` ${String(year).slice(2)}` : ''}`;
+
+/** The first of every month that falls inside start..end, with the page (day or week number) it lands on. */
+function monthStartsIn(start: Date, end: Date, pageOf: (offsetDays: number) => number): { year: number; month0: number; page: number }[] {
+  const out: { year: number; month0: number; page: number }[] = [];
+  let y = start.getUTCFullYear(), m = start.getUTCMonth();
+  for (;;) {
+    const first = Date.UTC(y, m, 1);
+    if (first > end.getTime()) break;
+    if (first >= start.getTime()) out.push({ year: y, month0: m, page: pageOf(Math.round((first - start.getTime()) / MS_DAY)) });
+    m++;
+    if (m > 11) { m = 0; y++; }
+  }
+  return out;
+}
+
+function planFrom(starts: { year: number; month0: number; page: number }[], idPrefix: string): TabPlan {
+  const withYear = new Set(starts.map((s) => s.year)).size > 1;
+  return { tabs: starts.map((s) => ({ label: tabText(s.year, s.month0, withYear), target: `${idPrefix}-${s.page}`, page: s.page })) };
+}
+
+/** The tab of the month a page belongs to: the last tab at or before it. */
+const currentTab = (plan: TabPlan, pageIdx: number): string | undefined => [...plan.tabs].reverse().find((t) => t.page <= pageIdx)?.target;
+
 // ---------------------------------------------------------------- monthly calendar
 
 const CalParams = z.object({
@@ -47,6 +81,7 @@ const CalParams = z.object({
   holidays: z.enum(['none', 'us-federal']).default('none'),
   cover: z.boolean().default(true),
   notesPanel: z.boolean().default(true),
+  monthTabs: z.boolean().default(false),
 });
 type CalP = z.infer<typeof CalParams>;
 const CalContent = z.object({
@@ -54,6 +89,12 @@ const CalContent = z.object({
   monthIntentions: z.array(z.string().min(3).max(80)).min(1).max(24),
 });
 type CalC = z.infer<typeof CalContent>;
+
+/** One tab per month of the calendar, each jumping to that month's page. */
+function calTabs(p: CalP): TabPlan {
+  const seq = monthSeq(p.year, p.startMonth, p.months);
+  return planFrom(seq.map((m, i) => ({ year: m.year, month0: m.month0, page: i })), 'm');
+}
 
 export const monthlyCalendar: ProductTypeDefinition<CalP, CalC> = {
   id: 'monthly-calendar',
@@ -85,7 +126,9 @@ Return coverSubtitle (one short line) and monthIntentions: exactly ${ctx.params.
   render(ctx, content) {
     const p = ctx.params;
     const pages = [];
-    if (p.cover) pages.push(coverPage(ctx, ctx.title, content.coverSubtitle, html`<div class="big">${p.year}</div>`));
+    const plan = calTabs(p);
+    const nav = (cur?: string) => (p.monthTabs ? tabStrip(plan.tabs, cur) : '');
+    if (p.cover) pages.push(coverPage(ctx, ctx.title, content.coverSubtitle, html`<div class="big">${p.year}</div>`, nav()));
     const seq = monthSeq(p.year, p.startMonth, p.months);
     const landscape = ctx.paper.orientation === 'landscape';
     seq.forEach((m, i) => {
@@ -97,11 +140,12 @@ Return coverSubtitle (one short line) and monthIntentions: exactly ${ctx.params.
         : p.notesPanel
           ? html`<div class="col fill">${grid}<div class="row" style="height:32mm;flex:none"><div class="box grow"><div class="label">Notes</div>${lines(3)}</div><div class="box" style="width:44mm;flex:none">${miniMonth(nextM.year, nextM.month0, p.weekStart)}</div></div></div>`
           : html`<div class="col fill">${grid}</div>`;
-      pages.push(page(html`${header(`${MONTH_NAMES[m.month0]} ${m.year}`, content.monthIntentions[i] ?? '', ornament(ctx.tokens))}${body}${stdFooter(ctx, ctx.title)}`));
+      pages.push(page(html`${nav(plan.tabs[i]?.target)}${header(`${MONTH_NAMES[m.month0]} ${m.year}`, content.monthIntentions[i] ?? '', ornament(ctx.tokens))}${body}${stdFooter(ctx, ctx.title)}`, '', p.monthTabs ? plan.tabs[i]?.target : undefined));
     });
     return { pages };
   },
   expectedPageCount: (ctx) => ctx.params.months + (ctx.params.cover ? 1 : 0),
+  expectedLinks: (ctx) => (ctx.params.monthTabs ? calTabs(ctx.params).tabs.length * (ctx.params.months + (ctx.params.cover ? 1 : 0)) : undefined),
   consistencyChecks(ctx, content) {
     const out: QaFinding[] = [];
     const problems = monthSeq(ctx.params.year, ctx.params.startMonth, ctx.params.months).map((m) => verifyMonthCells(m.year, m.month0, ctx.params.weekStart)).filter(Boolean);
@@ -113,7 +157,7 @@ Return coverSubtitle (one short line) and monthIntentions: exactly ${ctx.params.
   },
   qaText: (c) => [c.coverSubtitle, ...c.monthIntentions],
   listingHints: (ctx) => baseHints(ctx, ['calendar', `${ctx.params.year} calendar`, 'monthly calendar', 'wall calendar', 'desk calendar'],
-    [`${ctx.params.months} dated monthly pages`, ctx.params.weekStart === 1 ? 'Monday start weeks' : 'Sunday start weeks', ctx.params.holidays === 'us-federal' ? 'US federal holidays marked' : 'Clean dates without holidays', ctx.params.notesPanel ? 'Notes area and next-month preview on every page' : 'Large date boxes'],
+    [`${ctx.params.months} dated monthly pages`, ...(ctx.params.monthTabs ? ['Clickable month tabs on every page: tap a month to jump to it'] : []), ctx.params.weekStart === 1 ? 'Monday start weeks' : 'Sunday start weeks', ctx.params.holidays === 'us-federal' ? 'US federal holidays marked' : 'Clean dates without holidays', ctx.params.notesPanel ? 'Notes area and next-month preview on every page' : 'Large date boxes'],
     [`1 PDF (${ctx.params.months + (ctx.params.cover ? 1 : 0)} pages)`], PRINT_USAGE),
 };
 
@@ -124,6 +168,7 @@ const WeekParams = z.object({
   weeks: z.number().int().min(1).max(53).default(52),
   weekStart: z.union([z.literal(0), z.literal(1)]).default(1),
   cover: z.boolean().default(true),
+  monthTabs: z.boolean().default(false),
 });
 type WeekP = z.infer<typeof WeekParams>;
 const WeekContent = z.object({
@@ -136,6 +181,12 @@ function alignedStart(p: WeekP): Date {
   const d = parseYmd(p.startDate);
   const back = (d.getUTCDay() - p.weekStart + 7) % 7;
   return addDaysUtc(d, -back);
+}
+
+/** One tab per month whose first day falls inside the planner, each jumping to the week that holds that day. */
+function weekTabs(p: WeekP): TabPlan {
+  const start = alignedStart(p);
+  return planFrom(monthStartsIn(start, addDaysUtc(start, p.weeks * 7 - 1), (d) => Math.floor(d / 7)), 'w');
 }
 
 const fmtShort = (d: Date) => `${MONTH_NAMES[d.getUTCMonth()].slice(0, 3)} ${d.getUTCDate()}`;
@@ -166,18 +217,21 @@ Return coverSubtitle (one short line) and weeklyFocus: exactly ${ctx.params.week
   render(ctx, content) {
     const start = alignedStart(ctx.params);
     const pages = [];
-    if (ctx.params.cover) pages.push(coverPage(ctx, ctx.title, content.coverSubtitle, html`<div class="big">${start.getUTCFullYear()}</div>`));
+    const plan = weekTabs(ctx.params);
+    const nav = (cur?: string) => (ctx.params.monthTabs && plan.tabs.length ? tabStrip(plan.tabs, cur) : '');
+    if (ctx.params.cover) pages.push(coverPage(ctx, ctx.title, content.coverSubtitle, html`<div class="big">${start.getUTCFullYear()}</div>`, nav()));
     for (let w = 0; w < ctx.params.weeks; w++) {
       const ws = addDaysUtc(start, w * 7);
       const we = addDaysUtc(ws, 6);
       const days = Array.from({ length: 7 }, (_, i) => addDaysUtc(ws, i));
       const dayBox = (d: Date) => html`<div class="box grow" data-date="${ymd(d)}"><div class="row" style="gap:2mm;align-items:baseline"><span class="h3">${WEEKDAY_NAMES[d.getUTCDay()]}</span><span class="small">${fmtShort(d)}</span></div>${lines(3)}</div>`;
-      pages.push(page(html`${header(`Week of ${fmtShort(ws)} – ${fmtShort(we)}, ${we.getUTCFullYear()}`, content.weeklyFocus[w] ?? '', ornament(ctx.tokens))}
-        <div class="row fill"><div class="col grow">${days.slice(0, 4).map(dayBox)}</div><div class="col grow">${days.slice(4).map(dayBox)}<div class="box grow soft"><div class="label">Top priorities</div>${checklist([], 4)}</div></div></div>${stdFooter(ctx, `Week ${w + 1}`)}`));
+      pages.push(page(html`${nav(currentTab(plan, w))}${header(`Week of ${fmtShort(ws)} – ${fmtShort(we)}, ${we.getUTCFullYear()}`, content.weeklyFocus[w] ?? '', ornament(ctx.tokens))}
+        <div class="row fill"><div class="col grow">${days.slice(0, 4).map(dayBox)}</div><div class="col grow">${days.slice(4).map(dayBox)}<div class="box grow soft"><div class="label">Top priorities</div>${checklist([], 4)}</div></div></div>${stdFooter(ctx, `Week ${w + 1}`)}`, '', ctx.params.monthTabs ? `w-${w}` : undefined));
     }
     return { pages };
   },
   expectedPageCount: (ctx) => ctx.params.weeks + (ctx.params.cover ? 1 : 0),
+  expectedLinks: (ctx) => (ctx.params.monthTabs ? weekTabs(ctx.params).tabs.length * (ctx.params.weeks + (ctx.params.cover ? 1 : 0)) : undefined),
   consistencyChecks(ctx, content) {
     const start = alignedStart(ctx.params);
     const ok = start.getUTCDay() === ctx.params.weekStart;
@@ -188,7 +242,7 @@ Return coverSubtitle (one short line) and weeklyFocus: exactly ${ctx.params.week
   },
   qaText: (c) => [c.coverSubtitle, ...c.weeklyFocus],
   listingHints: (ctx) => baseHints(ctx, ['weekly planner', 'dated planner', 'week on one page', 'agenda'],
-    [`${ctx.params.weeks} dated weekly spreads`, `Weeks start on ${WEEKDAY_NAMES[ctx.params.weekStart]}`, 'Top priorities box every week', 'Weekly focus prompt'], [`1 PDF (${ctx.params.weeks + (ctx.params.cover ? 1 : 0)} pages)`], PRINT_USAGE),
+    [`${ctx.params.weeks} dated weekly spreads`, ...(ctx.params.monthTabs && weekTabs(ctx.params).tabs.length ? ['Clickable month tabs on every page: tap a month to jump to it'] : []), `Weeks start on ${WEEKDAY_NAMES[ctx.params.weekStart]}`, 'Top priorities box every week', 'Weekly focus prompt'], [`1 PDF (${ctx.params.weeks + (ctx.params.cover ? 1 : 0)} pages)`], PRINT_USAGE),
 };
 
 // ---------------------------------------------------------------- daily planner
@@ -201,6 +255,7 @@ const DayParams = z.object({
   endHour: z.number().int().min(14).max(24).default(21),
   hour12: z.boolean().default(true),
   priorities: z.number().int().min(1).max(5).default(3),
+  monthTabs: z.boolean().default(false),
 });
 type DayP = z.infer<typeof DayParams>;
 const DayContent = z.object({
@@ -209,6 +264,13 @@ const DayContent = z.object({
   sectionTitles: z.object({ priorities: z.string().min(2).max(30), todo: z.string().min(2).max(30), notes: z.string().min(2).max(30), wins: z.string().min(2).max(30) }),
 });
 type DayC = z.infer<typeof DayContent>;
+
+/** Only for a dated planner: one tab per month whose first day falls inside it, each jumping to that day's page. Undated pages have no months to point at. */
+function dayTabs(p: DayP): TabPlan {
+  if (!p.dated || !p.startDate) return { tabs: [] };
+  const start = parseYmd(p.startDate);
+  return planFrom(monthStartsIn(start, addDaysUtc(start, p.days - 1), (d) => d), 'd');
+}
 
 export const dailyPlanner: ProductTypeDefinition<DayP, DayC> = {
   id: 'daily-planner',
@@ -240,11 +302,13 @@ Return coverSubtitle, focusPrompts (exactly ${ctx.params.days} distinct one-line
   render(ctx, content) {
     const p = ctx.params;
     const start = p.startDate ? parseYmd(p.startDate) : null;
+    const plan = dayTabs(p);
+    const nav = (i: number) => (p.monthTabs && plan.tabs.length ? tabStrip(plan.tabs, currentTab(plan, i)) : '');
     const pages = Array.from({ length: p.days }, (_, i) => {
       const d = p.dated && start ? addDaysUtc(start, i) : null;
       const title = d ? `${WEEKDAY_NAMES[d.getUTCDay()]}, ${MONTH_NAMES[d.getUTCMonth()]} ${d.getUTCDate()}` : 'Daily Plan';
       const right = d ? html`<span class="pill">${d.getUTCFullYear()}</span>` : html`<span class="small">Date ________________</span>`;
-      return page(html`${header(title, content.focusPrompts[i] ?? '', right)}
+      return page(html`${nav(i)}${header(title, content.focusPrompts[i] ?? '', right)}
         <div class="row fill">
           <div class="col" style="width:46%;flex:none"><div class="label">Schedule</div>${timeBlocks(p.startHour, p.endHour, p.endHour - p.startHour > 12 ? 60 : 30, p.hour12)}</div>
           <div class="col grow">
@@ -253,11 +317,12 @@ Return coverSubtitle, focusPrompts (exactly ${ctx.params.days} distinct one-line
             <div class="box" style="height:30mm;flex:none"><div class="label">${content.sectionTitles.notes}</div>${lines(3)}</div>
             <div class="box" style="height:22mm;flex:none"><div class="label">${content.sectionTitles.wins}</div>${lines(2)}</div>
           </div>
-        </div>${stdFooter(ctx, p.days > 1 ? `Page ${i + 1}` : '')}`);
+        </div>${stdFooter(ctx, p.days > 1 ? `Page ${i + 1}` : '')}`, '', p.monthTabs ? `d-${i}` : undefined);
     });
     return { pages };
   },
   expectedPageCount: (ctx) => ctx.params.days,
+  expectedLinks: (ctx) => (ctx.params.monthTabs ? dayTabs(ctx.params).tabs.length * ctx.params.days : undefined),
   consistencyChecks(ctx, content) {
     const datedOk = !ctx.params.dated || !!ctx.params.startDate;
     return [
@@ -268,7 +333,7 @@ Return coverSubtitle, focusPrompts (exactly ${ctx.params.days} distinct one-line
   },
   qaText: (c) => [c.coverSubtitle, ...c.focusPrompts, ...Object.values(c.sectionTitles)],
   listingHints: (ctx) => baseHints(ctx, ['daily planner', 'time blocking', 'to do list', 'daily schedule'],
-    [`Hourly schedule ${ctx.params.startHour}:00 to ${ctx.params.endHour}:00`, `${ctx.params.priorities} top-priority slots`, 'To-do, notes and daily wins sections', ctx.params.dated ? 'Dated pages' : 'Undated — reuse every day'], [`1 PDF (${ctx.params.days} page${ctx.params.days > 1 ? 's' : ''})`], PRINT_USAGE),
+    [`Hourly schedule ${ctx.params.startHour}:00 to ${ctx.params.endHour}:00`, `${ctx.params.priorities} top-priority slots`, 'To-do, notes and daily wins sections', ctx.params.dated ? 'Dated pages' : 'Undated — reuse every day', ...(ctx.params.monthTabs && dayTabs(ctx.params).tabs.length ? ['Clickable month tabs on every page: tap a month to jump to it'] : [])], [`1 PDF (${ctx.params.days} page${ctx.params.days > 1 ? 's' : ''})`], PRINT_USAGE),
 };
 
 export function _testVerifyMonth(year: number, month0: number, weekStart: 0 | 1): string | null {

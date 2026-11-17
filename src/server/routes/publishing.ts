@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import type { ServerDeps } from '../app.ts';
 import { getListing, mapListing } from '../../db/repos.ts';
-import { updateListing, prepareListings, isMarketplace } from '../../engine/listing/service.ts';
+import { updateListing, prepareListings, isMarketplace, withProfit } from '../../engine/listing/service.ts';
 import { prepareExport, publishListing, recordManualPublication, reconcileListing, publicationStatus, activeApproval } from '../../engine/publishing/service.ts';
 import { adapters } from '../../engine/publishing/adapters.ts';
 import { adapterForApp, gumroadClientFor, syncGumroadSales } from '../../engine/publishing/gumroad.ts';
@@ -41,10 +41,13 @@ export function registerPublishingRoutes(s: FastifyInstance, { app }: ServerDeps
       FROM listings l JOIN products p ON p.id = l.product_id JOIN product_versions v ON v.id = l.version_id ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY l.updated_at DESC LIMIT ?`, ...args, int(q.limit, 200, 1, LIST_MAX));
     return rows.map((r) => {
       const l = mapListing(r);
-      return { ...l, product_title: r.product_title, version_no: r.version_no, version_status: r.version_status, is_current: !!r.is_current, external_url: r.external_url, verification: r.verification, approved: !!activeApproval(app, l) };
+      return { ...withProfit(app, l), product_title: r.product_title, version_no: r.version_no, version_status: r.version_status, is_current: !!r.is_current, external_url: r.external_url, verification: r.verification, approved: !!activeApproval(app, l) };
     });
   });
-  s.get('/api/listings/:id', async (req) => publicationStatus(app, (req.params as P).id));
+  s.get('/api/listings/:id', async (req) => {
+    const st = publicationStatus(app, (req.params as P).id);
+    return { ...st, listing: withProfit(app, st.listing) };
+  });
   s.patch('/api/listings/:id', async (req) => {
     const l = updateListing(app, (req.params as P).id, req.body);
     await runReleaseQa(app, l.version_id);

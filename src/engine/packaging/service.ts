@@ -11,11 +11,21 @@ import { pngDataUri } from '../rendering/components.ts';
 import { sha256 } from '../../core/hash.ts';
 import { permanent } from '../../core/errors.ts';
 import { PAPER_SIZES_MM, type DesignTokens } from '../templates/library.ts';
-import type { TypeContext, ListingHints } from '../producttypes/types.ts';
+import type { TypeContext, ListingHints, LicenseTier } from '../producttypes/types.ts';
+import { pinImages, pinterestCopy, launchEmail, socialAndVideo, type MarketingInput } from './marketing.ts';
 
 const ZIP_MTIME = new Date('2000-01-01T00:00:00Z');
 const PACKAGE_KINDS = new Set(['license', 'instructions', 'package_zip']);
 const PAPER_LABEL: Record<keyof typeof PAPER_SIZES_MM, string> = { letter: 'US Letter', a4: 'A4', a5: 'A5', 'half-letter': 'Half Letter', legal: 'US Legal' };
+
+/** The license wording for a tier, from Settings, with the shop name and year filled in. */
+export function licenseTextFor(app: AppContext, tier: LicenseTier): { text: string; settingsKey: string } {
+  const l = app.settings.get('licensing');
+  const g = app.settings.get('general');
+  const raw = tier === 'classroom' ? l.classroomLicenseText : tier === 'commercial' ? l.commercialLicenseText : l.licenseText;
+  const settingsKey = tier === 'classroom' ? 'licensing.classroomLicenseText' : tier === 'commercial' ? 'licensing.commercialLicenseText' : 'licensing.licenseText';
+  return { text: raw.replaceAll('{{shopName}}', g.shopName).replaceAll('{{year}}', String(app.clock.now().getUTCFullYear())), settingsKey };
+}
 
 export function deliverableHash(assets: AssetRecord[]): string {
   return sha256(assets.filter((a) => a.role === 'deliverable').map((a) => `${basename(a.rel_path)}:${a.sha256}`).sort().join('\n'));
@@ -97,10 +107,9 @@ export async function packageVersion(app: AppContext, versionId: string): Promis
   const pdf = existing.find((a) => a.kind === 'pdf');
   if (!pdf) throw permanent('not_rendered', 'Cannot package a version without a rendered PDF');
   const hints = def.listingHints(ctx, version.content);
-  const year = String(app.clock.now().getUTCFullYear());
-  const s = app.settings.all();
-  const licenseText = s.licensing.licenseText.replaceAll('{{shopName}}', s.general.shopName).replaceAll('{{year}}', year);
-  const license = app.assets.write(`${dir}/LICENSE.txt`, licenseText, { productId: product.id, versionId, kind: 'license', role: 'deliverable', mime: 'text/plain', provenance: { generator: 'license-template', settingsKey: 'licensing.licenseText' } });
+  const tier = spec.license_tier;
+  const { text: licenseText, settingsKey } = licenseTextFor(app, tier);
+  const license = app.assets.write(`${dir}/LICENSE.txt`, licenseText, { productId: product.id, versionId, kind: 'license', role: 'deliverable', mime: 'text/plain', provenance: { generator: 'license-template', settingsKey, tier } });
 
   const fileList: { name: string; detail: string; data: Uint8Array; zipPath: string }[] = existing.map((a) => ({
     name: basename(a.rel_path),
@@ -131,13 +140,24 @@ export async function packageVersion(app: AppContext, versionId: string): Promis
   const images = await listingImages(app, ctx, product.title, hints, previews, pdf.page_count ?? 0);
   images.forEach((png, i) => app.assets.write(`${dir}/listing/image-${i + 1}.png`, png, { productId: product.id, versionId, kind: 'listing_png', role: 'listing_image', mime: 'image/png', widthPx: 2000, heightPx: 2000, pageIndex: i, provenance: { generator: 'listing-image@1', chrome: true, source: 'page previews' } }));
 
+  // The marketing kit: pins and text for promoting the product. Kept as internal files, so it is never part of the download.
+  const paperLabel = PAPER_LABEL[ctx.paper.size];
+  const marketing: MarketingInput = { title: product.title, shopName: ctx.shopName, slug: product.slug, features: hints.features, included: hints.included, usage: hints.usage, keywords: hints.keywords, pageCount: pdf.page_count ?? 0, paperLabel, previewCount: previews.length };
+  const [pa, pb] = PAPER_SIZES_MM[ctx.paper.size];
+  const pinRatio = ctx.paper.orientation === 'landscape' ? pa / pb : pb / pa;
+  const pins = await pinImages(app, ctx, product.title, hints, previews, pinRatio, pdf.page_count ?? 0, paperLabel);
+  pins.forEach((png, i) => app.assets.write(`${dir}/marketing/pin-${i + 1}.png`, png, { productId: product.id, versionId, kind: 'marketing_pin', role: 'internal', mime: 'image/png', widthPx: 1000, heightPx: 1500, pageIndex: i, provenance: { generator: 'marketing-pin@1', chrome: true, source: 'page previews' } }));
+  for (const [name, text] of [['pinterest-copy.txt', pinterestCopy(marketing)], ['launch-email.txt', launchEmail(marketing)], ['social-and-video.txt', socialAndVideo(marketing)]] as const) {
+    app.assets.write(`${dir}/marketing/${name}`, text, { productId: product.id, versionId, kind: 'marketing_text', role: 'internal', mime: 'text/plain', provenance: { generator: 'marketing-text@1' } });
+  }
+
   const all = app.assets.forVersion(versionId);
   const dh = deliverableHash(all);
   const runs = app.db.all('SELECT id, purpose, provider, model, input_tokens, output_tokens, image_count, cost_usd, cost_basis, status, started_at FROM generation_runs WHERE version_id = ? ORDER BY started_at', versionId);
   const manifest = {
     product: { id: product.id, slug: product.slug, title: product.title, type: product.product_type },
     version: { id: version.id, number: version.version_no, origin: version.origin, parent: version.parent_version_id, createdAt: version.created_at },
-    specification: { params: spec.params, paper: spec.paper, designSystemId: spec.design_system_id, audienceId: spec.audience_id, themeId: spec.theme_id, seed: spec.seed },
+    specification: { params: spec.params, paper: spec.paper, designSystemId: spec.design_system_id, audienceId: spec.audience_id, themeId: spec.theme_id, seed: spec.seed, licenseTier: spec.license_tier, brief: spec.brief, briefFields: spec.brief_fields },
     contentProvenance: version.content_provenance,
     renderer: (version.render_diagnostics as { chromeVersion?: string } | null)?.chromeVersion ?? null,
     generationRuns: runs,

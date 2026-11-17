@@ -7,6 +7,7 @@ import { ParamsEditor } from './Library.tsx';
 import { PackBuilder } from './PackBuilder.tsx';
 import { ProductTags } from './Packing.tsx';
 import { CompactList, PreviewButton } from '../compact.tsx';
+import { ProfitLine } from '../profit.tsx';
 
 export function ProductDetail() {
   const { id } = useParams();
@@ -32,6 +33,7 @@ export function ProductDetail() {
                 ? <ActionButton confirm="Archive this product? It stays in the library under Archived." onClick={async () => { await api(`/products/${p.product.id}/status`, { method: 'PATCH', body: { status: 'archived' } }); prod.reload(); }}>Archive</ActionButton>
                 : <ActionButton onClick={async () => { await api(`/products/${p.product.id}/status`, { method: 'PATCH', body: { status: 'active' } }); prod.reload(); }}>Restore</ActionButton>}
             </>} />
+          <Lifecycle p={p} reload={prod.reload} />
           {p.product.opportunity && <p className="small muted" style={{ marginTop: -8 }}>From opportunity <Link to={`/research?open=${p.product.opportunity.id}`}>{p.product.opportunity.title}</Link></p>}
           <div className="row" style={{ marginBottom: 12 }}>
             <span className="small muted">Version:</span>
@@ -67,6 +69,26 @@ export function ProductDetail() {
   );
 }
 
+/** Dated products: says when the dates end, offers the next edition, and lets you mark a product as never expiring. */
+function Lifecycle({ p, reload }: { p: any; reload: () => void }) {
+  const nav = useNavigate();
+  const toast = useToast();
+  const lc = p.lifecycle;
+  if (!lc?.dated) return null;
+  const covers = lc.daysLeft < 0 ? `Its dates ended ${fmtDate(lc.periodEnd, false)}.` : `Its dates run to ${fmtDate(lc.periodEnd, false)} (${lc.daysLeft} day${lc.daysLeft === 1 ? '' : 's'} left).`;
+  return (
+    <div className={`banner ${lc.due && !lc.nextEditionId ? 'info' : ''}`} style={{ marginBottom: 12 }}>
+      <div className="spread" style={{ gap: 8 }}>
+        <span>{lc.evergreen ? 'Marked as never expiring, so it is left out of the new-edition reminders.' : lc.nextEditionId ? <>{covers} A next edition was made: <Link to={`/products/${lc.nextEditionId}`}>open it</Link>.</> : lc.due ? `${covers} It is due for a new edition.` : covers}</span>
+        <span className="row">
+          {lc.due && !lc.nextEditionId && !lc.evergreen && <ActionButton className="small primary" onClick={async () => { const r = await api(`/products/${p.product.id}/next-edition`, { body: {} }); toast('Next edition is being made'); nav(`/products/${r.productId}`); }}>Make next edition</ActionButton>}
+          <ActionButton className="small" onClick={async () => { await api(`/products/${p.product.id}/evergreen`, { method: 'PUT', body: { evergreen: !lc.evergreen } }); reload(); }}>{lc.evergreen ? 'Track its end date again' : 'Never expires'}</ActionButton>
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function Overview({ v }: { v: any }) {
   const [showPages, setShowPages] = useState(false);
   const [showListing, setShowListing] = useState(false);
@@ -83,7 +105,7 @@ function Overview({ v }: { v: any }) {
       <div className="grid g2" style={{ marginTop: 14 }}>
         <Card title="Files">
           {files.length ? <table className="t"><tbody>{files.map((a: any) => <tr key={a.id}><td><a href={assetUrl(a.id)} target="_blank" rel="noreferrer">{a.name}</a><div className="small muted">{label(a.kind)}{a.pages ? ` · ${a.pages} pages` : ''}</div></td><td className="right small">{bytes(a.bytes)}</td><td className="right"><a className="btn small" href={assetUrl(a.id, true)}>Download</a></td></tr>)}</tbody></table> : <p className="muted">No files yet.</p>}
-          <div className="kv" style={{ marginTop: 12 }}><span>Design</span><span>{v.spec.designSystem}</span><span>Paper</span><span>{label(v.spec.paper.size)} · {v.spec.paper.orientation}{v.spec.paper.grayscale ? ' · grayscale' : ''}</span><span>Seed</span><span className="mono">{v.spec.seed}</span></div>
+          <div className="kv" style={{ marginTop: 12 }}><span>Design</span><span>{v.spec.designSystem}</span><span>Paper</span><span>{label(v.spec.paper.size)} · {v.spec.paper.orientation}{v.spec.paper.grayscale ? ' · grayscale' : ''}</span><span>Seed</span><span className="mono">{v.spec.seed}</span><span>License</span><span>{label(v.spec.license_tier ?? 'personal')} use</span>{(v.spec.brief_fields?.customer || v.spec.brief_fields?.problem || v.spec.brief_fields?.differentiation) && <><span>Brief</span><span className="small">{[['Who it is for', v.spec.brief_fields.customer], ['Problem it solves', v.spec.brief_fields.problem], ['What makes it different', v.spec.brief_fields.differentiation]].filter(([, x]) => x).map(([k, x]) => <div key={k as string}><b>{k}:</b> {x}</div>)}</span></>}</div>
         </Card>
         <Card title="Production steps">
           <table className="t"><tbody>{v.jobs.map((j: any) => <tr key={j.id}><td>{label(j.type)}</td><td><Pill value={j.status} /></td><td className="small muted">attempt {j.attempts}/{j.max_attempts}{j.last_error ? <div style={{ color: 'var(--bad)' }}>{j.last_error}</div> : null}</td></tr>)}</tbody></table>
@@ -92,7 +114,23 @@ function Overview({ v }: { v: any }) {
       </div>
       {v.product?.id && <div style={{ marginTop: 14 }}><ProductTags productId={v.product.id} /></div>}
       {listingImgs.length > 0 && <Card title="Listing images" className="" actions={<PreviewButton open={showListing} onClick={() => setShowListing(!showListing)} label={`Show ${listingImgs.length} listing image${listingImgs.length === 1 ? '' : 's'}`} />}>{showListing ? <div className="thumbs">{listingImgs.map((a: any) => <a key={a.id} href={assetUrl(a.id)} target="_blank" rel="noreferrer" className="thumb sq"><AssetImg id={a.id} alt="Listing image" /></a>)}</div> : <p className="small muted" style={{ margin: 0 }}>Hidden until you ask for them.</p>}</Card>}
+      <MarketingKit assets={v.assets} />
     </>
+  );
+}
+
+/** Pins and promotion text made with the product. Never part of the customer's download. */
+function MarketingKit({ assets }: { assets: any[] }) {
+  const [show, setShow] = useState(false);
+  const pins = assets.filter((a) => a.kind === 'marketing_pin');
+  const texts = assets.filter((a) => a.kind === 'marketing_text');
+  if (!pins.length && !texts.length) return null;
+  return (
+    <Card title="Marketing kit" actions={pins.length ? <PreviewButton open={show} onClick={() => setShow(!show)} label={`Show ${pins.length} Pinterest pin${pins.length === 1 ? '' : 's'}`} /> : undefined}>
+      <p className="small muted" style={{ marginTop: 0 }}>For promoting this product. None of it goes into the customer's download. Built from the product's real contents; it makes no claims about sales or reviews.</p>
+      {show && <div className="thumbs" style={{ marginBottom: 10 }}>{pins.map((a) => <a key={a.id} href={assetUrl(a.id)} target="_blank" rel="noreferrer" className="thumb"><AssetImg id={a.id} thumb={240} alt="Pinterest pin" /></a>)}</div>}
+      <div className="row" style={{ flexWrap: 'wrap' }}>{[...pins, ...texts].map((a) => <a key={a.id} className="btn small" href={assetUrl(a.id, true)}>{a.name}</a>)}</div>
+    </Card>
   );
 }
 
@@ -105,7 +143,7 @@ function ListingsTab({ v }: { v: any }) {
   if (!v.listings.length) return <Empty title="No listings yet">Listings are drafted after packaging.</Empty>;
   return <>{v.listings.map((l: any) => (
     <Card key={l.id} title={<>{label(l.marketplace)} <Pill value={l.status} /></>} actions={<Link to={`/listings?open=${l.id}`}>Edit listing</Link>}>
-      <div className="kv"><span>Title</span><span>{l.title}</span><span>Price</span><span>{money(l.price_cents, l.currency)}</span><span>Tags</span><span>{l.tags.join(', ')}</span><span>Copy written by</span><span>{generatorLabel(l.provenance.generator, l.provenance.model)}</span></div>
+      <div className="kv"><span>Title</span><span>{l.title}</span><span>Price</span><span>{money(l.price_cents, l.currency)}<ProfitLine profit={l.profit} /></span><span>Tags</span><span>{l.tags.join(', ')}</span><span>Copy written by</span><span>{generatorLabel(l.provenance.generator, l.provenance.model)}</span></div>
       {l.validation.issues.length > 0 && <div className="err" style={{ marginTop: 10 }}>{l.validation.issues.map((i: any) => `${i.field}: ${i.message}`).join('; ')}</div>}
       {l.validation.notes.length > 0 && <p className="small muted">{l.validation.notes.join(' · ')}</p>}
     </Card>
@@ -189,14 +227,14 @@ function VariationEditor({ product, spec, onClose, onDone }: { product: any; spe
   const audiences = useApi<any[]>('/audiences');
   const themes = useApi<any[]>('/themes');
   const types = useApi<any[]>('/product-types');
-  const [f, setF] = useState({ title: '', designSystemId: spec.design_system_id, audienceId: spec.audience_id ?? '', themeId: spec.theme_id ?? '', paper: spec.paper, params: {} as Record<string, any> });
+  const [f, setF] = useState({ title: '', designSystemId: spec.design_system_id, audienceId: spec.audience_id ?? '', themeId: spec.theme_id ?? '', paper: spec.paper, params: {} as Record<string, any>, licenseTier: spec.license_tier ?? 'personal' });
   const type = types.data?.find((t) => t.id === product.product_type);
   return (
     <Modal title="Make a variation" wide onClose={onClose} footer={<><button onClick={onClose}>Cancel</button><ActionButton className="primary" onClick={async () => {
-      const r = await api(`/products/${product.id}/variations`, { body: { title: f.title || undefined, designSystemId: f.designSystemId, audienceId: f.audienceId || null, themeId: f.themeId || null, paper: f.paper, params: Object.keys(f.params).length ? f.params : undefined } });
+      const r = await api(`/products/${product.id}/variations`, { body: { title: f.title || undefined, designSystemId: f.designSystemId, audienceId: f.audienceId || null, themeId: f.themeId || null, paper: f.paper, params: Object.keys(f.params).length ? f.params : undefined, licenseTier: f.licenseTier } });
       onDone(r.productId);
     }}>Create variation</ActionButton></>}>
-      <p className="small muted" style={{ marginTop: 0 }}>A variation is a separate product linked to this one. It must differ in design, audience, theme, paper or settings — a new title alone is not a variation.</p>
+      <p className="small muted" style={{ marginTop: 0 }}>A variation is a separate product linked to this one. It must differ in design, audience, theme, paper, license or settings — a new title alone is not a variation.</p>
       <div className="form">
         <label className="f">Title (optional)<input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} /></label>
         <label className="f">Design system<select value={f.designSystemId} onChange={(e) => setF({ ...f, designSystemId: e.target.value })}>{designs.data?.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
@@ -204,6 +242,7 @@ function VariationEditor({ product, spec, onClose, onDone }: { product: any; spe
         <label className="f">Theme<select value={f.themeId} onChange={(e) => setF({ ...f, themeId: e.target.value })}><option value="">None</option>{themes.data?.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
         <label className="f">Paper<select value={f.paper.size} onChange={(e) => setF({ ...f, paper: { ...f.paper, size: e.target.value } })}>{['letter', 'a4', 'a5', 'half-letter', 'legal'].map((s) => <option key={s} value={s}>{label(s)}</option>)}</select></label>
         <label className="f">Orientation<select value={f.paper.orientation} onChange={(e) => setF({ ...f, paper: { ...f.paper, orientation: e.target.value } })}><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label>
+        <label className="f">License<select value={f.licenseTier} onChange={(e) => setF({ ...f, licenseTier: e.target.value })}><option value="personal">Personal use</option><option value="classroom">Classroom use</option><option value="commercial">Commercial use</option></select></label>
       </div>
       {type && <><h3 style={{ marginTop: 14 }}>Settings (changed values only)</h3><ParamsEditor defaults={spec.params} fields={type.paramFields} value={f.params} onChange={(params) => setF({ ...f, params })} /></>}
     </Modal>

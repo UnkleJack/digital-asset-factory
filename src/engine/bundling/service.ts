@@ -11,7 +11,7 @@ import type { Paper } from '../templates/library.ts';
 import { designSystemWithFonts, type FontChoice } from '../templates/designSystems.ts';
 import { z } from 'zod';
 import { structuredCall, textMode } from '../generation/service.ts';
-import { AI_SYSTEM_BASE } from '../producttypes/types.ts';
+import { AI_SYSTEM_BASE, type LicenseTier } from '../producttypes/types.ts';
 import { ProviderError } from '../../core/errors.ts';
 import { warningsCleared } from '../approval/warnings.ts';
 
@@ -50,9 +50,11 @@ export interface VariationAxes {
   params?: Record<string, unknown>;
   /** A fresh random seed (new mandala patterns, mazes, puzzle layouts). Every variation gets a new seed; this makes it count as the change. */
   newSeed?: boolean;
+  /** A different license for the same product (a classroom or commercial edition). */
+  licenseTier?: LicenseTier;
 }
 
-export function createVariation(app: AppContext, productId: string, input: { axes: VariationAxes; title?: string; marketplaces?: string[]; fonts?: FontChoice }, actor: AuditActor = 'user') {
+export function createVariation(app: AppContext, productId: string, input: { axes: VariationAxes; title?: string; marketplaces?: string[]; fonts?: FontChoice; /** Marks this as the next edition of a dated product (yearly refresh). */ edition?: boolean }, actor: AuditActor = 'user') {
   const src = getProduct(app.db, productId);
   if (src.product_type === 'bundle') throw validation('Create a new bundle instead of a bundle variation');
   const v = getVersion(app.db, src.current_version_id!);
@@ -66,16 +68,19 @@ export function createVariation(app: AppContext, productId: string, input: { axe
   if (ax.themeId !== undefined && ax.themeId !== spec.theme_id) changed.push('theme');
   if (JSON.stringify(paper) !== JSON.stringify(spec.paper)) changed.push('paper');
   if (JSON.stringify(params) !== JSON.stringify(spec.params)) changed.push('parameters');
+  if (ax.licenseTier && ax.licenseTier !== spec.license_tier) changed.push('license');
   if (ax.newSeed) changed.push('seed');
-  if (!changed.length) throw validation('A variation must change at least one of: design, audience, theme, paper, parameters or seed. A title change alone is not a variation.');
+  if (!changed.length) throw validation('A variation must change at least one of: design, audience, theme, paper, parameters, license or seed. A title change alone is not a variation.');
   const { product, version } = createProduct(app, {
     productType: src.product_type, title: input.title, params, paper, designSystemId: ax.designSystemId ?? spec.design_system_id,
     audienceId: ax.audienceId !== undefined ? ax.audienceId : spec.audience_id, themeId: ax.themeId !== undefined ? ax.themeId : spec.theme_id, opportunityId: src.opportunity_id,
+    // The brief and the license carry over, so a variation is written to the same instructions as the product it came from.
+    brief: spec.brief, briefFields: spec.brief_fields, licenseTier: ax.licenseTier ?? spec.license_tier,
   }, actor);
   if (product.title === src.title) {
     app.db.update('products', product.id, { title: `${src.title} (${changed.join(', ')} variation)`.slice(0, 120) });
   }
-  app.db.insert('product_relationships', { id: newId('rel'), from_product_id: product.id, to_product_id: src.id, kind: 'variation_of', details: JSON.stringify({ axes: changed, sourceVersionId: v.id }), created_at: new Date().toISOString() });
+  app.db.insert('product_relationships', { id: newId('rel'), from_product_id: product.id, to_product_id: src.id, kind: 'variation_of', details: JSON.stringify({ axes: changed, sourceVersionId: v.id, ...(input.edition && { edition: true }) }), created_at: new Date().toISOString() });
   startPipeline(app, version.id, { marketplaces: input.marketplaces });
   audit(app.db, actor, 'product.variation_created', 'product', product.id, { from: src.id, axes: changed });
   return { productId: product.id, versionId: version.id, axes: changed };
