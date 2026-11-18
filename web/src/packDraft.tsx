@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { api } from './api.ts';
 
 /**
@@ -63,6 +63,20 @@ export function resumeDraftFor(path: string): PackDraft | null {
   return d?.resume && d.returnTo.split('?')[0] === path ? d : null;
 }
 
+/**
+ * Opens the host page's pack window when the owner is sent back to it. Runs on arrival and also when the page is
+ * already showing (the fix happened on this same page), since then nothing remounts.
+ */
+export function usePackResume(open: () => void) {
+  const loc = useLocation();
+  useEffect(() => {
+    const look = () => { if (resumeDraftFor(loc.pathname)) open(); };
+    look();
+    window.addEventListener(EVENT, look);
+    return () => window.removeEventListener(EVENT, look);
+  }, [loc.pathname]);
+}
+
 /** Where to go to fix a blocked product: its Batch review item when it has one, otherwise its own page. */
 export function fixPath(p: BundleProblem): string {
   return p.batchId && p.itemId ? `/batches/${p.batchId}?item=${p.itemId}` : `/products/${p.productId}`;
@@ -71,8 +85,10 @@ export function fixPath(p: BundleProblem): string {
 export function fixHint(p: BundleProblem): string {
   if (p.reason === 'other') return 'This one cannot be fixed here. Take it out of the pack.';
   if (p.reason === 'qa') return 'Click here to open it and fix what QA found.';
-  if (p.reason === 'warnings') return 'Click here to open it in Batch review and accept or fix its warnings.';
-  return 'Click here to open it in Batch review and approve it.';
+  // Without a batch item the link goes to the product's own page, so say so.
+  const where = p.batchId && p.itemId ? 'in Batch review' : 'on its product page';
+  if (p.reason === 'warnings') return `Click here to open it ${where} and accept or fix its warnings.`;
+  return `Click here to open it ${where} and approve it.`;
 }
 
 /**

@@ -50,6 +50,8 @@ export function PackBuilder({ initial = [], onClose, onDone }: { initial?: strin
   /** Keeps the whole window, then opens the blocked product where it can be fixed. The app brings the owner back when it is. */
   const goFix = (p: BundleProblem) => {
     saveDraft({ picked, title, theme, pitch, titles, markets, returnTo: loc.pathname + loc.search, fixing: { productId: p.productId, title: p.title }, resume: false });
+    // Shut the window without dropping the kept pack, so it can't sit over the page where the fix happens.
+    onClose();
     nav(fixPath(p));
   };
   const dropFromPack = (id: string) => { setPicked((cur) => cur.filter((x) => x !== id)); setProblems((cur) => cur.filter((p) => p.productId !== id)); };
@@ -119,7 +121,7 @@ export function PackBuilder({ initial = [], onClose, onDone }: { initial?: strin
         <div className="row">{['etsy', 'gumroad', 'generic'].map((m) => <label key={m} className="check"><input type="checkbox" checked={markets.includes(m)} onChange={() => setMarkets(markets.includes(m) ? markets.filter((x) => x !== m) : [...markets, m])} />{label(m)}</label>)}</div>
         {fixedNote && !problems.length && <div className="banner info">{fixedNote}</div>}
         {problems.map((p) => (
-          <div key={p.productId} className={`err${p.reason === 'other' ? '' : ' fixable'}`} {...(p.reason === 'other' ? {} : { role: 'button', tabIndex: 0, onClick: () => goFix(p), onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goFix(p); } } })}>
+          <div key={p.productId} className={`err${p.reason === 'other' ? '' : ' fixable'}`} {...(p.reason === 'other' ? {} : { role: 'button', tabIndex: 0, onClick: () => goFix(p), onKeyDown: (e: React.KeyboardEvent) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); goFix(p); } } })}>
             <div className="spread" style={{ alignItems: 'flex-start', gap: 12 }}>
               <span>{p.message}<span className="fix-hint small">{fixHint(p)}</span></span>
               <button className="small" onClick={(e) => { e.stopPropagation(); dropFromPack(p.productId); }}>Take it out of the pack</button>
