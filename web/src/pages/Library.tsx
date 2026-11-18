@@ -166,6 +166,7 @@ function NewProductModal({ onClose, startPreset = '' }: { onClose: () => void; s
   const shownFonts: Fonts | null = fonts ?? baseDesign?.tokens.fonts ?? null;
   const imageKeyMissing = secrets.data && !secrets.data.secrets.find((s: any) => s.name === 'openai_api_key')?.configured;
 
+  const [presetGroup, setPresetGroup] = useState('');
   const categories = [...new Set((types.data ?? []).filter((t) => t.id !== 'bundle' && !t.importOnly).map((t) => t.category as string))];
   const kinds = (types.data ?? []).filter((t) => t.id !== 'bundle' && !t.importOnly && t.category === category);
 
@@ -239,7 +240,9 @@ function NewProductModal({ onClose, startPreset = '' }: { onClose: () => void; s
           {(presets.data ?? []).length > 0 && <>
             <h3>Quick start (optional)</h3>
             <p className="small muted" style={{ margin: 0 }}>One click fills in the kind, audience, design, settings and brief below. Change anything you like before you press Create.</p>
-            <div className="chips">{(presets.data ?? []).map((pr: any) => <button key={pr.id} className="chip" title={`${pr.group}${pr.brief ? ' · ' + pr.brief : ''}`} onClick={() => applyPreset(pr)}>{pr.name}</button>)}</div>
+            {/* Grouped so a long list of starting points stays short: pick a group, or All. */}
+            <div className="chips"><button className={`chip${!presetGroup ? ' on' : ''}`} onClick={() => setPresetGroup('')}>All</button>{[...new Set((presets.data ?? []).map((pr: any) => pr.group as string))].map((g) => <button key={g} className={`chip${g === presetGroup ? ' on' : ''}`} onClick={() => setPresetGroup(g)}>{g}</button>)}</div>
+            <div className="chips">{(presets.data ?? []).filter((pr: any) => !presetGroup || pr.group === presetGroup).map((pr: any) => <button key={pr.id} className="chip" title={`${pr.group}${pr.brief ? ' · ' + pr.brief : ''}`} onClick={() => applyPreset(pr)}>{pr.name}</button>)}</div>
           </>}
           <h3>1. What are you making?</h3>
           <div className="chips">{categories.map((c) => <button key={c} className={`chip${c === category ? ' on' : ''}`} onClick={() => { setCategory(c); setTypeId(''); }}>{c}</button>)}</div>

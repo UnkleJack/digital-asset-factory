@@ -10,7 +10,7 @@ import type { Paper } from './library.ts';
 export interface ProductPreset {
   id: string;
   name: string;
-  group: 'Students' | 'Teachers' | 'Home and family' | 'Work' | 'Everyone';
+  group: 'Students' | 'Teachers' | 'Home and family' | 'Work' | 'Everyone' | 'Kitchen' | 'Small business' | 'Health and fitness';
   productType: string;
   audience?: string;
   theme?: string;
@@ -72,4 +72,17 @@ export const PRESETS: ProductPreset[] = [
     params: { pages: 30, promptsPerPage: 1, focus: 'gratitude' }, brief: 'Gentle, specific prompts about small everyday things. No therapy or medical claims.' },
   { id: 'business-invoice', name: 'Small business invoice', group: 'Work', productType: 'invoice-template', audience: 'Small business owners', designSystem: 'Bold Modern',
     params: { currencySymbol: '$', taxLabel: 'Sales tax', lineRows: 12 }, brief: 'Plain, friendly payment terms. No legal or tax advice.' },
+  // Catalog expansion (2026-11-18): two starting points per new family.
+  { id: 'family-meal-plan', name: 'Family meal planner (4 weeks)', group: 'Kitchen', productType: 'weekly-meal-plan', audience: 'Busy parents', designSystem: 'Botanical Sage',
+    params: { copies: 4 }, brief: `Quick, family-friendly wording about planning and shopping. ${NO_MEDICAL}` },
+  { id: 'family-recipe-book', name: 'Family recipe book', group: 'Kitchen', productType: 'recipe-book', audience: 'General adults', designSystem: 'Warm Neutral',
+    params: { copies: 30 }, brief: 'Warm wording about keeping family recipes together. No health or diet claims.' },
+  { id: 'maker-order-book', name: 'Maker order book', group: 'Small business', productType: 'order-tracker', audience: 'Small business owners', designSystem: 'Bold Modern',
+    params: { pages: 10 }, brief: 'Practical tips for small makers who sell online and at markets. No legal, tax or financial advice.' },
+  { id: 'client-onboarding', name: 'Client intake forms', group: 'Small business', productType: 'client-intake-form', audience: 'Small business owners', designSystem: 'Minimal Mono',
+    params: { copies: 10 }, brief: 'Friendly, professional wording for a service business welcoming a new client. No legal advice.' },
+  { id: 'gym-log', name: 'Gym workout log', group: 'Health and fitness', productType: 'workout-log', audience: 'General adults', designSystem: 'Bold Modern',
+    params: { pages: 12 }, brief: `Plain tips about keeping a consistent log. ${NO_MEDICAL}` },
+  { id: 'wellness-30', name: 'Wellness journal (30 days)', group: 'Health and fitness', productType: 'wellness-journal', audience: 'General adults', designSystem: 'Botanical Sage',
+    params: { copies: 30 }, brief: 'Gentle, everyday wording. No therapy, medical or mental-health claims.' },
 ];

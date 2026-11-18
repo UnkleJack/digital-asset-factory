@@ -170,7 +170,7 @@ export async function prepareListings(app: AppContext, versionId: string, market
   const images = assets.filter((a) => a.role === 'listing_image').sort((a, b) => (a.page_index ?? 0) - (b.page_index ?? 0));
   const s = app.settings.all();
   // Settings saved before a type existed have no price for it; use the type's built-in default, not a flat 499.
-  const price = s.marketplaces.defaultPriceCents[product.product_type] ?? DEFAULT_PRICES[product.product_type] ?? 499;
+  const price = s.marketplaces.defaultPriceCents[product.product_type] ?? DEFAULT_PRICES[product.product_type] ?? productType(product.product_type).defaultPriceCents ?? 499;
   const mode = await textMode(app);
   const out: ListingRow[] = [];
   for (const m of marketplaces) {

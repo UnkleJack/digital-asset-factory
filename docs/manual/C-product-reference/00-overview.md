@@ -21,6 +21,7 @@ One chapter per family, with a section for every type, all in the same order:
 | [School and study](04-school-and-study.md) | Assignment tracker, Class timetable, Reading log |
 | [Money and documents](05-money-and-documents.md) | Budget planner, Invoice template |
 | [Bundle](06-bundle.md) | Bundle (a pack) |
+| [Log sheets and forms](07-sheets-and-forms.md) | 29 kinds from the catalog expansion: Food & Cooking, small business (Finance & Business) and Health & Fitness |
 
 ## The three ways content is made
 Not every type uses AI the same way. This is the most important thing to understand.

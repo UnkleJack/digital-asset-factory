@@ -43,7 +43,7 @@ export function seedBuiltins(db: Db): { inserted: number } {
     for (const type of productTypes().filter((t) => !t.importOnly)) {
       const name = `${type.name} (standard)`;
       if (!db.get('SELECT 1 FROM templates WHERE product_type = ? AND name = ?', type.id, name)) {
-        const ds = db.get<{ id: string }>('SELECT id FROM design_systems WHERE name = ?', DEFAULT_DESIGN[type.id] ?? 'Minimal Mono');
+        const ds = db.get<{ id: string }>('SELECT id FROM design_systems WHERE name = ?', DEFAULT_DESIGN[type.id] ?? type.defaultDesign ?? 'Minimal Mono');
         const defaults = type.id === 'bundle' ? { members: [] } : type.defaultParams(new Date());
         db.insert('templates', { id: newId('tpl'), product_type: type.id, name, description: type.description, default_params: JSON.stringify(defaults), default_design_system_id: ds?.id ?? null, is_builtin: 1, revision: 1, created_at: now, updated_at: now });
         inserted++;

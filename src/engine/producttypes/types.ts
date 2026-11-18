@@ -98,6 +98,10 @@ export interface ProductTypeDefinition<P = any, C = any> {
   variationAxes?: string[];
   /** Made only from the Imports screen (needs your images), never offered for new products, ideas or schedules. */
   importOnly?: boolean;
+  /** Built-in price in cents, used when Settings has none for this type (catalog types carry their own). */
+  defaultPriceCents?: number;
+  /** Name of the built-in design system its standard template starts with. */
+  defaultDesign?: string;
 }
 
 export function pick<T>(rand: () => number, items: readonly T[]): T {
