@@ -90,8 +90,10 @@ export function BatchReview() {
 
 /** Every item as one slim line. Opening a line shows today's full review card; only one is open at a time. */
 function BatchItems({ items, reload }: { items: any[]; reload: () => void }) {
-  const { shown, total, more } = useReveal(items, 50);
   const [params] = useSearchParams();
+  // A link to one item (from the pack window, a warning list or a hold) shows it even past the first 50.
+  const linked = items.findIndex((it: any) => it.item.id === params.get('item'));
+  const { shown, total, more } = useReveal(items, 50, linked + 1);
   const { open, toggle } = usePreview(params.get('item'));
   return (
     <CompactList total={total} shown={shown.length} onMore={more} noun="items" height={open ? 'none' : 640}>

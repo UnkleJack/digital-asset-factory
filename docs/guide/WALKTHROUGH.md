@@ -348,6 +348,8 @@ Press **Create and start production**. If you added variations, the button says 
 
 Press **Create pack (N)**. The pack becomes its own product, with its own review and listings, and the products inside it stay for sale on their own too.
 
+**If a product gets kicked back.** A product ticked from its own page (**Bundle with…**) may not be approved yet. Pressing Create then shows a red box for each product that's in the way, saying why. **Click the red box** to go straight to that product in Batch approval (or to its product page, if it isn't in a batch). A bar across the top says what you're fixing for your pack. As soon as it's fixed (approved, or its warnings accepted), the app takes you back to the pack window by itself, with everything you ticked and typed still there, and tells you it's ready. **Back to my pack now** returns early; **Forget this pack** drops it. **Take it out of the pack** in the red box removes that product instead.
+
 ### The product page
 
 Click any product title anywhere in the app to open its page.

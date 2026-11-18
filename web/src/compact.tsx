@@ -75,8 +75,10 @@ export function ShowDone({ value, onChange, text = 'Show done' }: { value: boole
 }
 
 /** For lists the page already has in full: show the first `size`, then `size` more per press. */
-export function useReveal<T>(items: T[] | null | undefined, size = 50) {
+export function useReveal<T>(items: T[] | null | undefined, size = 50, atLeast = 0) {
   const [n, setN] = useState(size);
   const list = items ?? [];
-  return { shown: list.slice(0, n), total: list.length, more: () => setN((x) => x + size) };
+  // `atLeast` keeps a linked row on screen even when it sits past the first page of rows.
+  const count = Math.max(n, atLeast);
+  return { shown: list.slice(0, count), total: list.length, more: () => setN(count + size) };
 }

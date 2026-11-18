@@ -1,5 +1,7 @@
-import { useMemo, useState } from 'react';
-import { api, errorText, useApi } from '../api.ts';
+import { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router';
+import { ApiError, api, errorText, useApi } from '../api.ts';
+import { clearDraft, fixHint, fixPath, resumeDraftFor, saveDraft, type BundleProblem } from '../packDraft.tsx';
 import { ActionButton, Async, Empty, Modal } from '../ui.tsx';
 import { CompactList, CompactRow, PreviewButton, PreviewPane, usePreview } from '../compact.tsx';
 import { label } from '../format.ts';
@@ -12,15 +14,47 @@ export function PackBuilder({ initial = [], onClose, onDone }: { initial?: strin
   // Every product, not only the newest 200: the rows are text, pictures load only on Preview.
   const list = useApi<any>('/products?limit=5000');
   const preview = usePreview();
-  const [picked, setPicked] = useState<string[]>(initial);
+  const nav = useNavigate();
+  const loc = useLocation();
+  // Back from fixing a blocked product: everything typed before is still here.
+  const [back] = useState(() => resumeDraftFor(loc.pathname));
+  const [picked, setPicked] = useState<string[]>(back?.picked ?? initial);
   const [filter, setFilter] = useState('');
   const [category, setCategory] = useState('');
-  const [title, setTitle] = useState('');
-  const [theme, setTheme] = useState('');
-  const [pitch, setPitch] = useState('');
-  const [titles, setTitles] = useState<string[]>([]);
-  const [markets, setMarkets] = useState<string[]>(['etsy', 'gumroad']);
+  const [title, setTitle] = useState(back?.title ?? '');
+  const [theme, setTheme] = useState(back?.theme ?? '');
+  const [pitch, setPitch] = useState(back?.pitch ?? '');
+  const [titles, setTitles] = useState<string[]>(back?.titles ?? []);
+  const [markets, setMarkets] = useState<string[]>(back?.markets ?? ['etsy', 'gumroad']);
   const [err, setErr] = useState<string | null>(null);
+  // What still blocks the pack, one entry per product, each a link to where it is fixed.
+  const [problems, setProblems] = useState<BundleProblem[]>([]);
+  const [fixedNote, setFixedNote] = useState<string | null>(null);
+
+  const close = () => { clearDraft(); onClose(); };
+  /** Asks the server what blocks the picked products, without making the pack. */
+  const check = async (ids: string[]) => {
+    const r = await api<{ problems: BundleProblem[] }>('/bundles/check', { body: { productIds: ids } });
+    setProblems(r.problems);
+    return r.problems;
+  };
+  useEffect(() => {
+    if (!back) return;
+    // Land on the pack window again and show what is still wrong, or that it is all clear now.
+    const name = back.fixing?.title;
+    clearDraft();
+    check(back.picked).then((left) => {
+      if (!left.length) setFixedNote(name ? `"${name}" is fixed. Everything you picked is ready, so you can create the pack.` : 'Everything you picked is ready, so you can create the pack.');
+    }).catch((e) => setErr(errorText(e)));
+  }, []);
+  /** Keeps the whole window, then opens the blocked product where it can be fixed. The app brings the owner back when it is. */
+  const goFix = (p: BundleProblem) => {
+    saveDraft({ picked, title, theme, pitch, titles, markets, returnTo: loc.pathname + loc.search, fixing: { productId: p.productId, title: p.title }, resume: false });
+    // Shut the window without dropping the kept pack, so it can't sit over the page where the fix happens.
+    onClose();
+    nav(fixPath(p));
+  };
+  const dropFromPack = (id: string) => { setPicked((cur) => cur.filter((x) => x !== id)); setProblems((cur) => cur.filter((p) => p.productId !== id)); };
 
   const eligible = useMemo(() => (list.data?.items ?? []).filter((p: any) => p.product_type !== 'bundle' && p.version_status === 'approved' && ['passed', 'passed_with_warnings'].includes(p.qa_status)), [list.data]);
   const categories = [...new Set(eligible.map((p: any) => p.category).filter(Boolean))] as string[];
@@ -40,16 +74,20 @@ export function PackBuilder({ initial = [], onClose, onDone }: { initial?: strin
   };
   const create = async () => {
     setErr(null);
+    setFixedNote(null);
     try {
       const r = await api('/bundles', { body: { productIds: picked, title: title || undefined, pitch: pitch || undefined, marketplaces: markets } });
+      clearDraft();
       onDone(r.productId);
     } catch (e) {
-      setErr(errorText(e));
+      const list = e instanceof ApiError ? (e.details as { problems?: BundleProblem[] } | null)?.problems : undefined;
+      if (list?.length) setProblems(list);
+      else setErr(errorText(e));
     }
   };
 
   return (
-    <Modal title="Build a pack" wide onClose={onClose} footer={<><span className="small muted" style={{ marginRight: 'auto' }}>{picked.length} picked{picked.length < 2 ? ' — pick at least 2' : ''}</span><button onClick={onClose}>Cancel</button><ActionButton className="primary" disabled={picked.length < 2} onClick={create}>Create pack ({picked.length})</ActionButton></>}>
+    <Modal title="Build a pack" wide onClose={close} footer={<><span className="small muted" style={{ marginRight: 'auto' }}>{picked.length} picked{picked.length < 2 ? ' — pick at least 2' : ''}</span><button onClick={close}>Cancel</button><ActionButton className="primary" disabled={picked.length < 2} onClick={create}>Create pack ({picked.length})</ActionButton></>}>
       <div className="stack">
         <h3>1. Pick what goes in</h3>
         <p className="small muted" style={{ margin: 0 }}>Only products you approved in batch review are shown (any QA warnings must be accepted first). The pack becomes its own product with its own review and listings; the originals stay for sale on their own.</p>
@@ -81,6 +119,15 @@ export function PackBuilder({ initial = [], onClose, onDone }: { initial?: strin
 
         <h3>3. Prepare listings for</h3>
         <div className="row">{['etsy', 'gumroad', 'generic'].map((m) => <label key={m} className="check"><input type="checkbox" checked={markets.includes(m)} onChange={() => setMarkets(markets.includes(m) ? markets.filter((x) => x !== m) : [...markets, m])} />{label(m)}</label>)}</div>
+        {fixedNote && !problems.length && <div className="banner info">{fixedNote}</div>}
+        {problems.map((p) => (
+          <div key={p.productId} className={`err${p.reason === 'other' ? '' : ' fixable'}`} {...(p.reason === 'other' ? {} : { role: 'button', tabIndex: 0, onClick: () => goFix(p), onKeyDown: (e: React.KeyboardEvent) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); goFix(p); } } })}>
+            <div className="spread" style={{ alignItems: 'flex-start', gap: 12 }}>
+              <span>{p.message}<span className="fix-hint small">{fixHint(p)}</span></span>
+              <button className="small" onClick={(e) => { e.stopPropagation(); dropFromPack(p.productId); }}>Take it out of the pack</button>
+            </div>
+          </div>
+        ))}
         {err && <div className="err">{err}</div>}
       </div>
     </Modal>

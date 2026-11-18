@@ -11,7 +11,7 @@ import { createPlan, tick, dueSlots, zonedToUtc, runProductionPlanJob, runPlanNo
 import { createOpportunity, addObservation, importObservationsCsv, updateOpportunity } from '../src/engine/research/service.ts';
 import { scoreOpportunity } from '../src/engine/scoring/service.ts';
 import { importPerformanceCsv, metrics, generateRecommendations, addPerformance } from '../src/engine/analytics/service.ts';
-import { createBundle, createVariation } from '../src/engine/bundling/service.ts';
+import { createBundle, checkBundleMembers, createVariation } from '../src/engine/bundling/service.ts';
 import { recordManualPublication } from '../src/engine/publishing/service.ts';
 import { decide } from '../src/engine/approval/service.ts';
 import { createBatch, addToBatch } from '../src/engine/approval/batches.ts';
@@ -199,8 +199,14 @@ test('bundles include member files; variations must change a real axis', async (
   startPipeline(app, p2.version.id);
   await idle(app);
   assert.throws(() => createBundle(app, { productIds: [p1.product.id, p2.product.id] }), /must be approved/, 'packaging gate: unapproved members are refused');
+  // The refusal lists every blocked product, each with the page item to open to fix it, so the screen can link straight there.
+  const refused = (() => { try { createBundle(app, { productIds: [p1.product.id, p2.product.id] }); return null; } catch (e: any) { return e; } })();
+  const problems = refused?.details?.problems ?? [];
+  assert.deepEqual(problems.map((x: any) => [x.productId, x.reason]), [[p1.product.id, 'not_approved'], [p2.product.id, 'not_approved']]);
+  assert.equal(checkBundleMembers(app, [p1.product.id, p2.product.id]).problems.length, 2, 'the dry-run check reports the same problems without creating anything');
   // Stand-in for approving both in batch review (the approval flow itself is covered in lifecycle tests).
   for (const v of [p1.version.id, p2.version.id]) app.db.update('product_versions', v, { status: 'approved' });
+  assert.equal(checkBundleMembers(app, [p1.product.id, p2.product.id]).problems.length, 0, 'once approved the check comes back clean');
   const b = createBundle(app, { productIds: [p1.product.id, p2.product.id], title: 'Home and Business Bundle', marketplaces: ['etsy'] });
   await idle(app);
   const bv = getVersion(app.db, b.versionId);

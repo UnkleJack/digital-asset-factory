@@ -8,7 +8,7 @@ import { sampleProduct } from '../../engine/specification/sample.ts';
 import { startPipeline } from '../../jobs/pipeline.ts';
 import { createBatch, addToBatch } from '../../engine/approval/batches.ts';
 import { editVersion } from '../../engine/approval/service.ts';
-import { createBundle, suggestBundleCopy, createVariation, relatedProducts, setProductStatus } from '../../engine/bundling/service.ts';
+import { createBundle, checkBundleMembers, suggestBundleCopy, createVariation, relatedProducts, setProductStatus } from '../../engine/bundling/service.ts';
 import { productTypes, describeType, productType } from '../../engine/producttypes/registry.ts';
 import { DesignTokensSchema, AudienceProfileSchema, BUILTIN_DESIGN_SYSTEMS, PaperSchema, FONTS, FONT_IDS, FONT_PAIRINGS, type FontId } from '../../engine/templates/library.ts';
 import { FontChoiceSchema } from '../../engine/templates/designSystems.ts';
@@ -153,6 +153,12 @@ export function registerProductRoutes(s: FastifyInstance, { app }: ServerDeps): 
   });
 
   s.post('/api/bundles/suggest-copy', async (req) => suggestBundleCopy(app, parse(z.object({ productIds: z.array(z.string()).min(2).max(20), theme: z.string().max(200).optional() }), req.body, 'bundle')));
+
+  // Same checks as creating a pack, without creating it: lists what still blocks each picked product.
+  s.post('/api/bundles/check', async (req) => {
+    const b = parse(z.object({ productIds: z.array(z.string()).max(20) }), req.body, 'bundle');
+    return { problems: checkBundleMembers(app, [...new Set(b.productIds)]).problems };
+  });
 
   s.post('/api/bundles', async (req) => {
     const b = parse(z.object({ productIds: z.array(z.string()).min(2).max(20), title: z.string().max(120).optional(), pitch: z.string().max(1200).optional(), designSystemId: z.string().optional(), marketplaces: z.array(z.string()).optional() }), req.body, 'bundle');
