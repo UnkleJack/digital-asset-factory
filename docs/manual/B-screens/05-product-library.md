@@ -68,6 +68,8 @@ Press **Create and start production** (or **Create N products** with variations)
 
 Only products you approved appear, and any QA warnings on them must have been accepted. Tick **2 to 20** products (search or filter by category; **Preview** shows covers). Optional **Theme or angle**, **Pack title** (made for you if blank), **Description**. **Suggest titles & description with AI** needs a key. Choose marketplaces and press **Create pack (N)**. The pack is its own product with its own review; the products inside stay for sale on their own too. Packs cannot be nested.
 
+If a ticked product isn't ready (not approved, warnings not accepted, QA failed), Create shows one red box per product. **Click the red box** to open that product where it's fixed: its Batch approval item, or its product page when it isn't in a batch. A bar at the top of every screen says what you're fixing; the app checks every few seconds and brings you back to the pack window as soon as that product is clear, with your picks, title, theme, description and marketplaces kept. **Back to my pack now** returns early, **Forget this pack** drops it, and **Take it out of the pack** removes the product instead. The kept pack lives only in that browser tab.
+
 ## 6. Step-by-step
 **Make a product:** [Your first product](../A-start-here/03-your-first-product.md).
 **Find a product:** type part of the title in Search, press Search, click the title.

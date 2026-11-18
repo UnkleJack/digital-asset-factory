@@ -5,6 +5,7 @@ import { CompactList, CompactRow, PreviewButton, PreviewPane, usePreview } from 
 import { AssetImg, Async, Empty, Modal, PageHead, Pill, useToast } from '../ui.tsx';
 import { ago, label } from '../format.ts';
 import { PackBuilder } from './PackBuilder.tsx';
+import { resumeDraftFor } from '../packDraft.tsx';
 import { SamplePanel, newSeed } from './SamplePanel.tsx';
 
 export function Library() {
@@ -21,7 +22,7 @@ export function Library() {
   const preview = usePreview();
   const types = useApi<any[]>('/product-types');
   const [creating, setCreating] = useState(sp.get('new') === '1');
-  const [packing, setPacking] = useState(sp.get('pack') === '1');
+  const [packing, setPacking] = useState(sp.get('pack') === '1' || !!resumeDraftFor('/library'));
   const nav = useNavigate();
   const update = (k: string, v: string) => { const n = new URLSearchParams(sp); if (v) n.set(k, v); else n.delete(k); n.delete('new'); n.delete('preset'); setSp(n); };
   return (

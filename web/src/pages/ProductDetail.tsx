@@ -5,6 +5,7 @@ import { ActionButton, AssetImg, Async, Card, CheckList, Empty, Modal, PageHead,
 import { ago, bytes, fmtDate, generatorLabel, label, money, usd } from '../format.ts';
 import { ParamsEditor } from './Library.tsx';
 import { PackBuilder } from './PackBuilder.tsx';
+import { resumeDraftFor } from '../packDraft.tsx';
 import { ProductTags } from './Packing.tsx';
 import { CompactList, PreviewButton } from '../compact.tsx';
 import { ProfitLine } from '../profit.tsx';
@@ -16,7 +17,7 @@ export function ProductDetail() {
   const vid = versionId ?? prod.data?.product.current_version_id ?? null;
   const ver = useApi<any>(vid ? `/versions/${vid}` : null, { poll: 4000 });
   const [tab, setTab] = useState('overview');
-  const [modal, setModal] = useState<null | 'content' | 'design' | 'variation' | 'bundle'>(null);
+  const [modal, setModal] = useState<null | 'content' | 'design' | 'variation' | 'bundle'>(() => (resumeDraftFor(window.location.pathname) ? 'bundle' : null));
   const nav = useNavigate();
   useEffect(() => setVersionId(null), [id]);
   return (

@@ -171,6 +171,11 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--primary); widt
 .empty h3 { color: var(--text); margin-bottom: 8px; font-weight: 500; }
 .loading { padding: 40px; color: var(--muted); text-align: center; }
 .err { background: var(--bad-soft); color: var(--bad); padding: 12px 16px; border-radius: 8px; border: 1px solid var(--bad); }
+.err.fixable { cursor: pointer; }
+.err.fixable:hover, .err.fixable:focus-visible { background: var(--bad); color: #fff; outline: none; }
+.err.fixable:hover button, .err.fixable:focus-visible button { color: var(--bad); }
+.fix-hint { display: block; margin-top: 4px; font-weight: 600; text-decoration: underline; }
+.pack-bar { position: sticky; top: 0; z-index: 20; margin-bottom: 12px; }
 .spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; display: inline-block; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 

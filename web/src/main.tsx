@@ -32,6 +32,7 @@ import { Packing } from './pages/Packing.tsx';
 import { Imports } from './pages/Imports.tsx';
 import { Arcade } from './arcade/Arcade.tsx';
 import { MissionsPage, ScreenInstructions } from './pages/Missions.tsx';
+import { PackReturnBar } from './packDraft.tsx';
 import { ARCADE_GAME_NAME, SUITE_NAME } from '../../src/core/brand.ts';
 
 const NAV_ICONS: Record<string, string> = { '/arcade': '◉', '/missions': '★', '/': '⌂', '/calendar': '⏲', '/digest': '✉', '/research': '⌕', '/library': '▦', '/imports': '⇩', '/packing': '⛭', '/templates': '✎', '/jobs': '⚙', '/qa': '⚖', '/batches': '⚔', '/rework': '↺', '/ai-notes': '✍', '/listings': '☰', '/publishing': '⇪', '/analytics': '◔', '/settings': '⚒' };
@@ -150,6 +151,7 @@ function BackOffice() {
       <Nav />
       <main className="main">
         <ScreenInstructions />
+        <PackReturnBar />
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/calendar" element={<CalendarPage />} />

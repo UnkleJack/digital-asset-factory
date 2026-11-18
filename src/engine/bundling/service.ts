@@ -15,21 +15,47 @@ import { AI_SYSTEM_BASE, type LicenseTier } from '../producttypes/types.ts';
 import { ProviderError } from '../../core/errors.ts';
 import { warningsCleared } from '../approval/warnings.ts';
 
+/** One thing standing between a product and a bundle, with where to go to fix it. */
+export interface BundleProblem {
+  productId: string;
+  title: string;
+  /** Why it can't go in: not_approved and warnings are fixed in Batch review; qa on the product's own page; other can't be fixed here. */
+  reason: 'not_approved' | 'warnings' | 'qa' | 'other';
+  message: string;
+  /** The Batch review item for the product's current version, when it is in a batch. */
+  batchId: string | null;
+  itemId: string | null;
+}
+
+/** Checks every product picked for a bundle and lists everything wrong, so the owner can fix them all, not one per try. */
+export function checkBundleMembers(app: AppContext, productIds: string[]) {
+  const problems: BundleProblem[] = [];
+  const members: { productId: string; versionId: string; title: string; productType: string; pageCount: number; files: string[] }[] = [];
+  for (const id of productIds) {
+    const p = getProduct(app.db, id);
+    const bad = (reason: BundleProblem['reason'], message: string, versionId?: string | null) => {
+      const item = versionId ? app.db.get<{ id: string; batch_id: string }>('SELECT id, batch_id FROM approval_items WHERE version_id = ? ORDER BY added_at DESC LIMIT 1', versionId) : undefined;
+      problems.push({ productId: p.id, title: p.title, reason, message, batchId: item?.batch_id ?? null, itemId: item?.id ?? null });
+    };
+    if (p.product_type === 'bundle') { bad('other', 'Bundles cannot contain other bundles'); continue; }
+    if (!p.current_version_id) { bad('other', `"${p.title}" has no version`); continue; }
+    const v = getVersion(app.db, p.current_version_id);
+    if (!['passed', 'passed_with_warnings'].includes(v.qa_status)) { bad('qa', `"${p.title}" must pass QA before it can be bundled`, v.id); continue; }
+    if (v.status !== 'approved') { bad('not_approved', `"${p.title}" must be approved in batch review before it can be bundled (any QA warnings have to be accepted first)`, v.id); continue; }
+    if (!warningsCleared(app, v.id)) { bad('warnings', `"${p.title}" has QA warnings you haven't accepted yet. Tick "I accept these warnings" in batch review before bundling it.`, v.id); continue; }
+    const files = app.assets.forVersion(v.id, 'deliverable').filter((a) => !['package_zip', 'license', 'instructions'].includes(a.kind));
+    const pdf = files.find((a) => a.kind === 'pdf');
+    members.push({ productId: p.id, versionId: v.id, title: p.title, productType: p.product_type, pageCount: pdf?.page_count ?? 0, files: files.map((f) => f.rel_path.split('/').pop()!) });
+  }
+  return { members, problems };
+}
+
 export function createBundle(app: AppContext, input: { productIds: string[]; title?: string; pitch?: string; designSystemId?: string; marketplaces?: string[] }, actor: AuditActor = 'user') {
   const ids = [...new Set(input.productIds)];
   if (ids.length < 2) throw validation('A bundle needs at least two products');
-  const members = ids.map((id) => {
-    const p = getProduct(app.db, id);
-    if (p.product_type === 'bundle') throw validation('Bundles cannot contain other bundles');
-    if (!p.current_version_id) throw validation(`"${p.title}" has no version`);
-    const v = getVersion(app.db, p.current_version_id);
-    if (!['passed', 'passed_with_warnings'].includes(v.qa_status)) throw validation(`"${p.title}" must pass QA before it can be bundled`);
-    if (v.status !== 'approved') throw validation(`"${p.title}" must be approved in batch review before it can be bundled (any QA warnings have to be accepted first)`);
-    if (!warningsCleared(app, v.id)) throw validation(`"${p.title}" has QA warnings you haven't accepted yet. Tick "I accept these warnings" in batch review before bundling it.`);
-    const files = app.assets.forVersion(v.id, 'deliverable').filter((a) => !['package_zip', 'license', 'instructions'].includes(a.kind));
-    const pdf = files.find((a) => a.kind === 'pdf');
-    return { productId: p.id, versionId: v.id, title: p.title, productType: p.product_type, pageCount: pdf?.page_count ?? 0, files: files.map((f) => f.rel_path.split('/').pop()!) };
-  });
+  const { members, problems } = checkBundleMembers(app, ids);
+  // The message is the first problem's; the details carry all of them so the screen can link each one to where it is fixed.
+  if (problems.length) throw validation(problems[0]!.message, { problems });
   const { product, version } = createProduct(app, { productType: 'bundle', title: input.title, params: { members, ...(input.pitch?.trim() && { pitch: input.pitch.trim().slice(0, 1200) }) }, designSystemId: input.designSystemId }, actor);
   app.db.tx(() => {
     members.forEach((m, i) => {
