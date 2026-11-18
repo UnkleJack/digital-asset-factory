@@ -1,5 +1,7 @@
 # Digital Asset Factory (the engine of Asset Foundry) — Product Specification
 
+> **Historical specification.** Some details below differ from the current app, mainly output formats: mandalas ship as PDF plus SVG (no PNG); maze SVGs are internal and not in the customer ZIP; the invoice template uses AI for three short strings; a bundle ships a two-page contents guide and each member's files, not a combined PDF. The verified, current details for every product type are in [the manual's product reference](manual/C-product-reference/00-overview.md).
+
 ## 1. Purpose
 
 Digital Asset Factory (DAF) is a local-first application that manufactures commercial digital

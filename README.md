@@ -11,9 +11,9 @@ What it does today, honestly:
 
 | Area | Status |
 |---|---|
-| Production of 19 product types (PDF, plus CSV/XLSX or SVG where relevant) and bundles, including geometric pattern art as coloring pages or wall-art prints, and student assignment trackers, timetables and reading logs | Works offline with the built-in content library |
-| AI text — Groq, OpenRouter, Cerebras, Together, NVIDIA, Anthropic, with automatic fallback between them | Built and tested against local stand-in servers; **not yet verified with real keys** |
-| AI images (OpenAI) | Built and tested against mock servers; **not yet verified with real keys** |
+| Production of 21 product types (PDF, plus CSV/XLSX, SVG or PNG where relevant) including bundles, geometric pattern art as coloring pages or wall-art prints, and student assignment trackers, timetables and reading logs | Works offline with the built-in content library, except illustrated coloring (needs an image provider), imported coloring (needs your pictures) and bundles (need approved products) |
+| AI text — 10 providers (NVIDIA first, then Gemini, OpenRouter, Cerebras, Mistral, GitHub Models, Together, Groq, Hugging Face, Anthropic) with automatic fallback between them | Only NVIDIA has worked with a real key; the rest are built and tested against stand-in servers |
+| AI images — 10 providers (OpenAI, Gemini, Together, Hugging Face, Pollinations, Replicate, fal, Grok, OpenRouter, a local server) with automatic fallback | Built and tested against mock servers; **not yet verified with real keys** |
 | QA, packaging, listing drafts, batch approval, export packages | Works |
 | Daily production plans (scheduler) | Works while the app is running |
 | Gumroad **direct** publishing (opt-in) | Built against Gumroad's own CLI source; **not yet run against a live account** |
@@ -25,6 +25,8 @@ What it does today, honestly:
 **New here? Start with [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md)** — every key to get, where to get it, and the daily routine. On Windows, see [docs/WINDOWS.md](docs/WINDOWS.md).
 
 **Want a tour of every screen?** [docs/guide/WALKTHROUGH.md](docs/guide/WALKTHROUGH.md) walks through each back-office page and the HAPPY DAFFY arcade, button by button, with screenshots.
+
+**Want to learn it properly?** The owner's operating manual is in [docs/manual/](docs/manual/README.md): a guided start, a chapter for every screen, every product type, thirteen practice lessons, and a reference and troubleshooting section.
 
 See [docs/ACCEPTANCE_REPORT.md](docs/ACCEPTANCE_REPORT.md) for what was verified and how.
 
@@ -93,7 +95,7 @@ OpenRouter/Groq/NVIDIA/Cerebras/Together entries all speak the same OpenAI-compa
 `/chat/completions` API, so the same code path and model/base-URL settings work for any other
 OpenAI-compatible host too — just point the base URL at it.
 
-AI images (for illustrated coloring pages) use OpenAI only, under **Settings → Generation → Image provider**.
+AI images (for illustrated coloring pages) have ten providers with a backup order, under **Settings → Generation → Image provider**. The default first choice is OpenAI (paid). Pollinations needs no key. See the manual's [providers reference](docs/manual/E-reference/04-providers-and-keys.md).
 
 ## Daily use
 
