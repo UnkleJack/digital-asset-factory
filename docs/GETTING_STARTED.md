@@ -44,7 +44,8 @@ Get **at least two**, so if one hits its daily limit the other takes over automa
 
 | Provider | Where | Notes |
 |---|---|---|
-| **Groq** (start here) | console.groq.com/keys | Free. Around 1,000 requests a day per model at the time of writing. |
+| **NVIDIA** (start here) | build.nvidia.com | Free trial credits. The owner's first choice: Nemotron 3 Ultra, with MiniMax as a backup model on the same key. |
+| Groq | console.groq.com/keys | Free. A late backup, never the first choice. Around 1,000 requests a day per model at the time of writing. |
 | **Google Gemini** | aistudio.google.com/apikey | Free tier on the Flash models (Pro models moved to paid in 2026). |
 | **OpenRouter** | openrouter.ai/keys | Free models, no card. About 50 free calls a day without credit. |
 | Cerebras | cloud.cerebras.ai | May ask for a card to unlock free credit. |
@@ -52,7 +53,6 @@ Get **at least two**, so if one hits its daily limit the other takes over automa
 | GitHub Models | github.com → Settings → Developer settings → Fine-grained tokens, permission **Models: read** | Free daily allowance with any GitHub account. |
 | Hugging Face | huggingface.co/settings/tokens | Small free monthly credit. |
 | Together AI | api.together.ai/settings/api-keys | May now need a small credit purchase. |
-| NVIDIA | build.nvidia.com | Free trial credits. |
 | Anthropic | console.anthropic.com | **Paid.** Never used as an automatic backup unless you turn on "Allow paid fallback". |
 
 The four added in this update (Gemini, Mistral, GitHub Models, Hugging Face) have not been tested with real keys yet: press **Test text provider** after adding each one.

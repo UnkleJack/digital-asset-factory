@@ -142,6 +142,7 @@ Adopted 2026-11-03.
 | Setup and daily use | `README.md`, `docs/GETTING_STARTED.md`, `docs/WINDOWS.md`, `docs/PUBLIC_ACCESS.md` (opening the app at `daf.promptpimps.com`) |
 | Architecture and data model | `docs/ARCHITECTURE.md`, `docs/DATA_MODEL.md` |
 | Arcade UX spec | `docs/ASSET_FOUNDRY_UX_SPEC.md` |
+| Owner's operating manual (start here, every screen, every product type, lessons, reference) | `docs/manual/` (front door `docs/manual/README.md`; its own audit notes are in `docs/manual/_status/`) |
 | Factory task log with evidence | `TASKS.md` |
 | Factory plan from 2026-10-28 (mandala, geometric, ship path) | `docs/plans/2026-10-28-audit-mandala-geometric-ship.md` |
 
@@ -150,7 +151,7 @@ Adopted 2026-11-03.
 As of 2026-11-06: `main` after pull requests #12 (backup AI models), #13 (the Hub, the stats ticker, World Builder drafts, smarter AI help and the test-data cleanup), #15 (sample previews), #16 (the Mac Dock app), #18 (compact lists and Rework) and #19 (warning gate and notes for the AI), plus public access on branch `claude/public-access` (not merged yet).
 
 **Working**
-- All 21 product types produce offline with the built-in content library: QA, packaging, listings, batch approval and export packages.
+- Every product type except illustrated coloring produces offline with the built-in content library, with no AI key: QA, packaging, listings, batch approval and export packages. Two of them need their inputs first: imported coloring needs your pictures from Imports, and a bundle needs approved products to pack. Illustrated coloring needs an image provider for its pictures. The default backup chain includes Pollinations, which needs no key, but that has not been proven live (owner's correction, 2026-11-17).
 - Imports of outside images and text. Readable product folder names.
 - Pack carts and the bundle builder. Production plans, which run while the app is open.
 - Portable copy: `npm run portable`.
@@ -312,3 +313,4 @@ As of 2026-11-06: `main` after pull requests #12 (backup AI models), #13 (the Hu
 | 2026-11-10 | Article 3 corrected, as the owner asked: the 17 back-office screens are now the 17 sidebar pages (Rework and Notes for the AI were missing), with Product detail, Batch review and Missions listed beside them. Article 8 updated for the Arcade settings tab and the Dashboard's provider names. |
 | 2026-11-12 | Article 8 updated for Try it first (sample on New product) and reading a mandala picture. |
 | 2026-11-17 | Articles 7, 8 and 9 updated for the publishing upgrades (migration 020): structured brief, license tiers, yearly refresh, marketing kit, competitors by family, profit after fees, Hold for research and clickable month tabs. |
+| 2026-11-17 | Article 8 corrected, as the owner asked: not every product type produces offline. Illustrated coloring needs an image provider, imported coloring needs the owner's pictures, and bundles need approved products. Article 7 lists the owner's operating manual (`docs/manual/`). |
