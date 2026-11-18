@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { MARKETPLACES } from '../../../src/core/marketplaces.ts';
 import { Link, useNavigate } from 'react-router';
 import { api, useApi } from '../api.ts';
 import { CompactList } from '../compact.tsx';
@@ -174,7 +175,7 @@ function PlanEditor({ plan, onClose, onSaved }: { plan: any; onClose: () => void
       <h3 style={{ marginTop: 16 }}>Days</h3>
       <div className="row">{DOW.map((d, i) => <label key={d} className="check"><input type="checkbox" checked={f.daysOfWeek.includes(i)} onChange={() => toggle('daysOfWeek', i)} />{d}</label>)}</div>
       <h3 style={{ marginTop: 16 }}>Marketplaces for listings</h3>
-      <div className="row">{['etsy', 'gumroad', 'generic'].map((m) => <label key={m} className="check"><input type="checkbox" checked={f.marketplaces.includes(m)} onChange={() => toggle('marketplaces', m)} />{label(m)}</label>)}</div>
+      <div className="row">{MARKETPLACES.map((m) => <label key={m} className="check"><input type="checkbox" checked={f.marketplaces.includes(m)} onChange={() => toggle('marketplaces', m)} />{label(m)}</label>)}</div>
       <h3 style={{ marginTop: 16 }}>Product types <span className="muted small">(none selected = all)</span></h3>
       <Async state={types}>{(list) => <div className="row">{list.filter((t) => t.id !== 'bundle' && !t.importOnly).map((t) => <label key={t.id} className="check"><input type="checkbox" checked={f.productTypes.includes(t.id)} onChange={() => toggle('productTypes', t.id)} />{t.name}</label>)}</div>}</Async>
       <h3 style={{ marginTop: 16 }}>Category rotation <span className="muted small">(none selected = rotate through all; order follows selection)</span></h3>

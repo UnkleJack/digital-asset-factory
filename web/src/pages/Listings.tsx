@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { MARKETPLACES } from '../../../src/core/marketplaces.ts';
 import { Link, useSearchParams } from 'react-router';
 import { api, errorText, useApi, usePagedApi } from '../api.ts';
 import { CompactList } from '../compact.tsx';
@@ -19,7 +20,7 @@ export function Listings() {
     <div className="page">
       <PageHead title="Marketplace listings" sub="Listing drafts per product version and marketplace, checked against each marketplace's rules." />
       <div className="row" style={{ marginBottom: 12 }}>
-        <select value={market} onChange={(e) => setMarket(e.target.value)} aria-label="Marketplace"><option value="">All marketplaces</option>{['etsy', 'gumroad', 'generic'].map((m) => <option key={m} value={m}>{label(m)}</option>)}</select>
+        <select value={market} onChange={(e) => setMarket(e.target.value)} aria-label="Marketplace"><option value="">All marketplaces</option>{MARKETPLACES.map((m) => <option key={m} value={m}>{label(m)}</option>)}</select>
         <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status"><option value="">Any status</option>{['ready', 'invalid', 'export_prepared', 'published_manual', 'published_verified', 'needs_reconciliation', 'retired'].map((s) => <option key={s} value={s}>{label(s)}</option>)}</select>
         <label className="check"><input type="checkbox" checked={current} onChange={(e) => setCurrent(e.target.checked)} />Current versions only</label>
       </div>

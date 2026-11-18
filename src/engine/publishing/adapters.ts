@@ -39,6 +39,10 @@ export interface MarketplaceAdapter {
   notes: string;
   urlHosts: RegExp | null;
   publishingSteps(input: AdapterInput): string[];
+  /** For an adapter not yet confirmed live: true once the owner has switched its direct posting on in Settings. */
+  optedIn?(): boolean;
+  /** True when an approval should post the listing straight away (only ever with optedIn or a verified adapter). */
+  publishOnApproval?(): boolean;
   publish?(input: AdapterInput): Promise<PublishResult>;
   update?(input: AdapterInput, externalId: string): Promise<PublishResult>;
   reconcile?(input: AdapterInput, idempotencyKey: string): Promise<ReconcileResult>;

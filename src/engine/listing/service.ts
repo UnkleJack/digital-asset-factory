@@ -15,12 +15,8 @@ import { TEXT_PROVIDER_IDS, IMAGE_PROVIDER_IDS } from '../generation/providers.t
 import { estimateProfit, profitWarning } from './profit.ts';
 import type { LicenseTier } from '../producttypes/types.ts';
 
-export const MARKETPLACES = ['etsy', 'gumroad', 'generic'] as const;
-export type Marketplace = (typeof MARKETPLACES)[number];
-
-export function isMarketplace(m: string): m is Marketplace {
-  return (MARKETPLACES as readonly string[]).includes(m);
-}
+import { MARKETPLACES, isMarketplace, type Marketplace } from '../../core/marketplaces.ts';
+export { MARKETPLACES, isMarketplace, type Marketplace };
 
 export function rulesFor(app: AppContext, m: Marketplace): ListingRules {
   return app.settings.get('marketplaces')[m].rules;

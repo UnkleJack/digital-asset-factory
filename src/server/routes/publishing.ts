@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import type { ServerDeps } from '../app.ts';
 import { getListing, mapListing } from '../../db/repos.ts';
 import { updateListing, prepareListings, isMarketplace, withProfit } from '../../engine/listing/service.ts';
-import { prepareExport, publishListing, recordManualPublication, reconcileListing, publicationStatus, activeApproval } from '../../engine/publishing/service.ts';
+import { directPublishIsOn, prepareExport, publishListing, recordManualPublication, reconcileListing, publicationStatus, activeApproval } from '../../engine/publishing/service.ts';
 import { adapters } from '../../engine/publishing/adapters.ts';
 import { adapterForApp, gumroadClientFor, syncGumroadSales } from '../../engine/publishing/gumroad.ts';
 import { runReleaseQa } from '../../engine/qa/service.ts';
@@ -13,7 +13,11 @@ import { int, parse, type Q, type P, LIST_MAX, totalHeader } from './util.ts';
 export function registerPublishingRoutes(s: FastifyInstance, { app }: ServerDeps): void {
   s.get('/api/marketplaces', async () => {
     const m = app.settings.get('marketplaces');
-    return adapters().map((x) => adapterForApp(app, x.id)).map((a) => ({ id: a.id, name: a.displayName, verification: a.verification, capabilities: a.capabilities, notes: a.notes, enabled: m[a.id as 'etsy' | 'gumroad' | 'generic'].enabled, directPublishOn: a.id === 'gumroad' ? m.gumroad.autoPublishEnabled : a.verification === 'verified', rules: m[a.id as 'etsy' | 'gumroad' | 'generic'].rules }));
+    return adapters().map((x) => adapterForApp(app, x.id)).map((a) => {
+      // An adapter with no settings of its own (not in the marketplace list yet) shows as switched off, with no rules.
+      const cfg = isMarketplace(a.id) ? m[a.id] : null;
+      return { id: a.id, name: a.displayName, verification: a.verification, capabilities: a.capabilities, notes: a.notes, enabled: cfg?.enabled ?? false, directPublishOn: directPublishIsOn(a), rules: cfg?.rules ?? null };
+    });
   });
 
   // Checks the saved Gumroad token with one read-only call; creates nothing.

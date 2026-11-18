@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { MARKETPLACES } from '../../../src/core/marketplaces.ts';
 import { useLocation, useNavigate } from 'react-router';
 import { ApiError, api, errorText, useApi } from '../api.ts';
 import { clearDraft, fixHint, fixPath, resumeDraftFor, saveDraft, type BundleProblem } from '../packDraft.tsx';
@@ -118,7 +119,7 @@ export function PackBuilder({ initial = [], onClose, onDone }: { initial?: strin
         <label className="f">Description (optional — used in the listings)<textarea rows={3} value={pitch} maxLength={1200} onChange={(e) => setPitch(e.target.value)} placeholder="Who it is for and what the set does together" /></label>
 
         <h3>3. Prepare listings for</h3>
-        <div className="row">{['etsy', 'gumroad', 'generic'].map((m) => <label key={m} className="check"><input type="checkbox" checked={markets.includes(m)} onChange={() => setMarkets(markets.includes(m) ? markets.filter((x) => x !== m) : [...markets, m])} />{label(m)}</label>)}</div>
+        <div className="row">{MARKETPLACES.map((m) => <label key={m} className="check"><input type="checkbox" checked={markets.includes(m)} onChange={() => setMarkets(markets.includes(m) ? markets.filter((x) => x !== m) : [...markets, m])} />{label(m)}</label>)}</div>
         {fixedNote && !problems.length && <div className="banner info">{fixedNote}</div>}
         {problems.map((p) => (
           <div key={p.productId} className={`err${p.reason === 'other' ? '' : ' fixable'}`} {...(p.reason === 'other' ? {} : { role: 'button', tabIndex: 0, onClick: () => goFix(p), onKeyDown: (e: React.KeyboardEvent) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); goFix(p); } } })}>

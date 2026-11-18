@@ -1,4 +1,5 @@
 import type { AppContext } from '../../app/context.ts';
+import { MARKETPLACES, MARKETPLACE_LABELS } from '../../core/marketplaces.ts';
 import { metrics } from '../analytics/service.ts';
 import { CHARACTERS } from './service.ts';
 import { worldsFor } from './worlds.ts';
@@ -38,7 +39,7 @@ type Metrics = ReturnType<typeof metrics>;
 interface Ctx { app: AppContext; m: Metrics; character: string | null }
 interface Def extends TickerStat { read: (c: Ctx) => { value: number | null; note?: string; test?: boolean } }
 
-const MARKETPLACES = [['etsy', 'Etsy'], ['gumroad', 'Gumroad'], ['generic', 'Other shops']] as const;
+const MARKETS = MARKETPLACES.map((m) => [m, MARKETPLACE_LABELS[m]] as const);
 const SOURCES = [['marketplace_api', 'from the shop'], ['csv_import', 'CSV import'], ['manual_entry', 'typed in'], ['estimate', 'estimate']] as const;
 const SALES_METRICS = [['orders', 'Orders', 'count'], ['revenue_cents', 'Revenue', 'cents'], ['units', 'Units sold', 'count'], ['views', 'Views', 'count'], ['favorites', 'Favorites', 'count'], ['refunds', 'Refunds', 'count']] as const;
 
@@ -106,7 +107,7 @@ const DEFS: Def[] = [
   { id: 'ai.calls30', label: 'AI calls, 30 days', group: 'AI', unit: 'count', help: 'AI calls made in the last 30 days.', read: ({ m }) => ({ value: m.production.aiCost30?.runs ?? 0 }) },
 
   // ---------- Listings, per marketplace ----------
-  ...MARKETPLACES.flatMap(([mk, name]): Def[] => [
+  ...MARKETS.flatMap(([mk, name]): Def[] => [
     {
       id: `listings.published.${mk}`, label: `${name} live`, group: 'Listings', unit: 'count',
       help: `Listings recorded as published on ${name}. Only listings published from the factory or recorded in it count; with none recorded it shows NO DATA, not 0.`,

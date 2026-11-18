@@ -1,4 +1,5 @@
 import type { Db } from '../../db/sqlite.ts';
+import { MARKETPLACES, type Marketplace } from '../../core/marketplaces.ts';
 import { newId } from '../../core/ids.ts';
 import { BUILTIN_DESIGN_SYSTEMS, BUILTIN_AUDIENCES, BUILTIN_THEMES, BUILTIN_CATEGORIES } from './library.ts';
 import { productTypes } from '../producttypes/registry.ts';
@@ -48,8 +49,9 @@ export function seedBuiltins(db: Db): { inserted: number } {
         inserted++;
       }
     }
-    const marketplaces: [string, string][] = [['etsy', 'Etsy (export only)'], ['gumroad', 'Gumroad (export only)'], ['generic', 'Generic export']];
-    for (const [m, label] of marketplaces) {
+    const accountName: Record<Marketplace, string> = { etsy: 'Etsy (export only)', gumroad: 'Gumroad (export only)', generic: 'Generic export' };
+    for (const m of MARKETPLACES) {
+      const label = accountName[m];
       if (!db.get('SELECT 1 FROM marketplace_accounts WHERE marketplace = ?', m)) {
         db.insert('marketplace_accounts', { id: newId('mka'), marketplace: m, label, status: 'export_only', created_at: now });
         inserted++;

@@ -13,6 +13,7 @@ import { textMode } from '../../engine/generation/service.ts';
 import { adapters } from '../../engine/publishing/adapters.ts';
 import { json } from '../../db/sqlite.ts';
 import { publishListing } from '../../engine/publishing/service.ts';
+import { adapterForApp } from '../../engine/publishing/gumroad.ts';
 import { errorMessage, validation } from '../../core/errors.ts';
 import { int, parse, LIST_MAX, totalHeader, type Q, type P } from './util.ts';
 import { submitWithReason, listReasonQueue, acknowledgeFailedNote, resendQueuedNote, dropQueuedNote } from '../../engine/approval/reasonQueue.ts';
@@ -216,14 +217,17 @@ export function registerOperationsRoutes(s: FastifyInstance, deps: ServerDeps): 
     const result = decide(app, itemId, { ...b, boxIds });
     // A note was written: once 10 have piled up, the AI reads them all in the background.
     if (b.notes?.trim() || b.warningNote?.trim()) void maybeDigest(app);
-    const g = app.settings.get('marketplaces').gumroad;
-    if (b.decision !== 'approved' || !g.autoPublishEnabled || !g.autoPublishOnApproval) return result;
-    // Post approved Gumroad listings in the background; the outcome shows on the listing (Publishing page) and in the log.
-    const listings = app.db.all<{ id: string }>("SELECT l.id FROM approval_decisions d JOIN listings l ON l.id = d.listing_id WHERE d.id IN (SELECT value FROM json_each(?)) AND l.marketplace = 'gumroad' AND l.status NOT IN ('published_verified','published_manual','needs_reconciliation')", JSON.stringify(result.decisionIds));
+    if (b.decision !== 'approved') return result;
+    // Post approved listings in the background where the marketplace's adapter asks for it (today only Gumroad, when
+    // both of its switches are on); the outcome shows on the listing (Publishing page) and in the log.
+    const approved = app.db.all<{ id: string; marketplace: string }>("SELECT l.id, l.marketplace FROM approval_decisions d JOIN listings l ON l.id = d.listing_id WHERE d.id IN (SELECT value FROM json_each(?)) AND l.status NOT IN ('published_verified','published_manual','needs_reconciliation')", JSON.stringify(result.decisionIds));
+    const listings = approved.filter((l) => adapterForApp(app, l.marketplace).publishOnApproval?.());
+    if (!listings.length) return result;
     for (const l of listings) {
+      const name = adapterForApp(app, l.marketplace).displayName;
       publishListing(app, l.id, 'system').then(
-        (r) => app.log.info('Auto-published to Gumroad after approval', { listingId: l.id, url: r.externalUrl }),
-        (err) => app.log.error('Auto-publish to Gumroad failed', { listingId: l.id, err: errorMessage(err) }),
+        (r) => app.log.info(`Auto-published to ${name} after approval`, { listingId: l.id, url: r.externalUrl }),
+        (err) => app.log.error(`Auto-publish to ${name} failed`, { listingId: l.id, err: errorMessage(err) }),
       );
     }
     return { ...result, autoPublishing: listings.map((l) => l.id) };

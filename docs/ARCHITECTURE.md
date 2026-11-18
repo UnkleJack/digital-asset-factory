@@ -122,8 +122,19 @@ interface MarketplaceAdapter {
   capabilities: { manualExport: true; connect; createDraft; uploadFiles; publish; update; reconcile };
   buildExport(input): Promise<ExportPackage>;            // always available
   publish?/update?/reconcile?                             // only when implemented + verified
+  optedIn?(); publishOnApproval?()                        // an unverified adapter's owner switches (Gumroad today)
 }
 ```
+
+**Adding a marketplace** (one list since 2026-11-18). Add its id to `MARKETPLACES` in `src/core/marketplaces.ts`, then
+let `npm run typecheck` point at what is missing: its label there, its account-row name (`templates/seed.ts`), and its
+`marketplaces.<id>` object in `src/config/settings.ts` (`enabled` plus `rules`, with any guessed limit listed in
+`unverifiedRules`). Write its adapter in `engine/publishing/adapters.ts` and add it to the registry; an adapter that
+needs credentials goes in the `BOUND` map in `publishing/gumroad.ts`. Fee numbers go in `settings.marketplaces.fees`
+plus a branch in `engine/listing/profit.ts`, each read from the marketplace's own page with the date in a comment.
+Without a branch the "what you keep" line says *not available*; it never borrows another shop's numbers. The web
+screens read the same list, so no screen needs editing. `tests/marketplaces.test.ts` checks that every listed
+marketplace has settings, an adapter and an account row.
 
 ## 6. Module specifications
 
