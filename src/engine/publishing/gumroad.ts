@@ -209,6 +209,11 @@ export function boundGumroadAdapter(app: AppContext): MarketplaceAdapter {
     ...gumroadAdapter,
     verification: 'unverified',
     capabilities: { manualExport: true, connect: true, publish: true, update: false, reconcile: false },
+    optedIn: () => app.settings.get('marketplaces').gumroad.autoPublishEnabled,
+    publishOnApproval: () => {
+      const g = app.settings.get('marketplaces').gumroad;
+      return g.autoPublishEnabled && g.autoPublishOnApproval;
+    },
     notes: 'Direct publishing uses the Gumroad API with your access token: files are uploaded, the product is created with your title, price, tags and description, then published (or left as a draft). Cover images are not settable through the API; add one in Gumroad if you want it. Not yet confirmed against a live account.',
     async publish(input: AdapterInput): Promise<PublishResult> {
       const files: { url: string; name: string }[] = [];
@@ -225,8 +230,10 @@ export function boundGumroadAdapter(app: AppContext): MarketplaceAdapter {
 }
 
 /** The adapter for a marketplace, bound to this app where the adapter needs credentials. */
+const BOUND: Record<string, (app: AppContext) => MarketplaceAdapter> = { gumroad: boundGumroadAdapter };
+
 export function adapterForApp(app: AppContext, id: string): MarketplaceAdapter {
-  return id === 'gumroad' ? boundGumroadAdapter(app) : adapterFor(id);
+  return BOUND[id]?.(app) ?? adapterFor(id);
 }
 
 /**

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { MARKETPLACES } from '../../../src/core/marketplaces.ts';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { api, useApi, usePagedApi, errorText } from '../api.ts';
 import { CompactList, CompactRow, PreviewButton, PreviewPane, usePreview } from '../compact.tsx';
@@ -335,7 +336,7 @@ function NewProductModal({ onClose, startPreset = '' }: { onClose: () => void; s
                 )}
               </>}
               <h3>Prepare listings for</h3>
-              <div className="row">{['etsy', 'gumroad', 'generic'].map((m) => <label key={m} className="check"><input type="checkbox" checked={f.marketplaces.includes(m)} onChange={() => setF({ ...f, marketplaces: f.marketplaces.includes(m) ? f.marketplaces.filter((x) => x !== m) : [...f.marketplaces, m] })} />{label(m)}</label>)}</div>
+              <div className="row">{MARKETPLACES.map((m) => <label key={m} className="check"><input type="checkbox" checked={f.marketplaces.includes(m)} onChange={() => setF({ ...f, marketplaces: f.marketplaces.includes(m) ? f.marketplaces.filter((x) => x !== m) : [...f.marketplaces, m] })} />{label(m)}</label>)}</div>
             </>
           )}
           {err && <div className="err">{err}</div>}

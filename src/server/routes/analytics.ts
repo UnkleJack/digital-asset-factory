@@ -4,12 +4,13 @@ import type { ServerDeps } from '../app.ts';
 import { metrics, addPerformance, importPerformanceCsv, generateRecommendations, decideRecommendation } from '../../engine/analytics/service.ts';
 import { json } from '../../db/sqlite.ts';
 import { parse, type Q, type P } from './util.ts';
+import { MARKETPLACES } from '../../core/marketplaces.ts';
 
 export function registerAnalyticsRoutes(s: FastifyInstance, { app }: ServerDeps): void {
   s.get('/api/analytics', async () => metrics(app));
   s.post('/api/analytics/entries', async (req) => ({ id: addPerformance(app, req.body) }));
   s.post('/api/analytics/import', async (req) => {
-    const b = parse(z.object({ filename: z.string().min(1).max(200), content: z.string().min(1).max(20_000_000), marketplace: z.enum(['etsy', 'gumroad', 'generic']) }), req.body, 'import');
+    const b = parse(z.object({ filename: z.string().min(1).max(200), content: z.string().min(1).max(20_000_000), marketplace: z.enum(MARKETPLACES) }), req.body, 'import');
     return importPerformanceCsv(app, b.filename, b.content, b.marketplace);
   });
   s.get('/api/recommendations', async (req) => {

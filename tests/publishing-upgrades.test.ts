@@ -59,9 +59,11 @@ test('profit is unavailable, with a reason, when it would have to be guessed', (
   assert.equal(other.available, false);
   assert.match(other.reason!, /No fee numbers/);
   app.settings.update('marketplaces', { fees: { generic: { known: true, percent: 5, fixedCents: 10 } } } as never);
-  const known = estimateProfit(app, listing('somewhere-else', 1000));
+  const known = estimateProfit(app, listing('generic', 1000));
   assert.equal(known.available, true);
   assert.equal(known.scenarios[0].netCents, 1000 - 50 - 10);
+  // Another marketplace never borrows the generic shop's numbers (Art. 5.2).
+  assert.equal(estimateProfit(app, listing('somewhere-else', 1000)).available, false);
   app.settings.update('marketplaces', { fees: { generic: { known: false, percent: 0, fixedCents: 0 } } } as never);
 });
 

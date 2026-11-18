@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { MARKETPLACES } from '../../../src/core/marketplaces.ts';
 import { Link } from 'react-router';
 import { api, errorText, readFileText, useApi } from '../api.ts';
 import { CompactList } from '../compact.tsx';
@@ -70,7 +71,7 @@ function ImportCard({ onDone }: { onDone: () => void }) {
   return (
     <Card title="Import sales CSV">
       <p className="small muted" style={{ marginTop: 0 }}>Needs a date column and a column identifying the listing (listing ID, URL or title). Quantity, revenue/item total, views and favorites are read when present. Rows are matched to listings you recorded as published.</p>
-      <div className="row"><select value={market} onChange={(e) => setMarket(e.target.value)}>{['etsy', 'gumroad', 'generic'].map((m) => <option key={m} value={m}>{label(m)}</option>)}</select>
+      <div className="row"><select value={market} onChange={(e) => setMarket(e.target.value)}>{MARKETPLACES.map((m) => <option key={m} value={m}>{label(m)}</option>)}</select>
         <input type="file" accept=".csv,text/csv" onChange={async (e) => {
           const file = e.target.files?.[0];
           if (!file) return;

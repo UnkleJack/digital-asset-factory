@@ -72,6 +72,8 @@ export function estimateProfit(app: AppContext, l: ListingLike): ProfitEstimate 
       notes: ["Gumroad's pricing page gives only a percentage for Discover sales, so no fixed amount is added to that line."],
     };
   }
+  // Another shop's numbers are never borrowed: a marketplace without its own fee settings has no estimate (Art. 5.2).
+  if (l.marketplace !== 'generic') return none(`No fee numbers are set up for ${l.marketplace}, so no estimate is made.`);
   const f = fees.generic;
   if (!f.known) return none('No fee numbers are set for this marketplace. Add them in Settings → Marketplaces → fees to see an estimate.');
   return {

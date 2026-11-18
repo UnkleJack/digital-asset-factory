@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { Db } from '../db/sqlite.ts';
 import { validation } from '../core/errors.ts';
 import { SUITE_NAME } from '../core/brand.ts';
+import { MARKETPLACES } from '../core/marketplaces.ts';
 
 /** A web address as typed or pasted ("https://DAF.example.com/", "daf.example.com:443") down to its bare host name. */
 export function normalizeHost(value: string): string {
@@ -449,7 +450,7 @@ export const SettingsSchema = z.object({
     staleHours: z.number().int().min(1).max(24 * 30).default(72),
     // When a cart fills up, build the pack straight away (it still goes through QA and your review).
     autoBuild: z.boolean().default(true),
-    marketplaces: z.array(z.enum(['etsy', 'gumroad', 'generic'])).min(1).default(['etsy', 'gumroad']),
+    marketplaces: z.array(z.enum(MARKETPLACES)).min(1).default(['etsy', 'gumroad']),
   }).prefault({}),
   remote: z.object({
     // Hub mode: other computers on your network (or Tailscale) can open this app with the access token. Restart to apply.

@@ -2,7 +2,7 @@ import { basename } from 'node:path';
 import { zipSync, strToU8 } from 'fflate';
 import type { AppContext } from '../../app/context.ts';
 import { getListing, getVersion, getProduct, type ListingRow } from '../../db/repos.ts';
-import { adapterFor, OutcomeUnknownError, type AdapterInput } from './adapters.ts';
+import { adapterFor, OutcomeUnknownError, type AdapterInput, type MarketplaceAdapter } from './adapters.ts';
 import { adapterForApp } from './gumroad.ts';
 import { sha256 } from '../../core/hash.ts';
 import { newId } from '../../core/ids.ts';
@@ -125,12 +125,17 @@ function notSupported(adapterName: string, notes: string): AppError {
   return new AppError('publishing_not_supported', `${adapterName} direct publishing is not available. ${notes} Use the export package and then record the publication.`, { httpStatus: 409 });
 }
 
+/** Direct posting is available: the adapter can post, and it is verified or the owner switched it on. */
+export function directPublishIsOn(adapter: MarketplaceAdapter): boolean {
+  return !!adapter.capabilities.publish && (adapter.verification === 'verified' || !!adapter.optedIn?.());
+}
+
 export async function publishListing(app: AppContext, listingId: string, actor: AuditActor = 'user'): Promise<{ status: string; externalUrl: string | null }> {
   const listing = getListing(app.db, listingId);
   const adapter = adapterForApp(app, listing.marketplace);
   if (!adapter.capabilities.publish || !adapter.publish) throw notSupported(adapter.displayName, adapter.notes);
   // An adapter not yet confirmed against a live account only runs when the operator has opted in.
-  if (adapter.verification !== 'verified' && !(adapter.id === 'gumroad' && app.settings.get('marketplaces').gumroad.autoPublishEnabled)) {
+  if (adapter.verification !== 'verified' && !adapter.optedIn?.()) {
     throw new AppError('publishing_not_enabled', `${adapter.displayName} direct publishing is off. Turn it on in Settings → Marketplaces → ${adapter.displayName} → "Auto publish enabled", or use the export package and record the publication.`, { httpStatus: 409 });
   }
   if (listing.status === 'needs_reconciliation') throw conflict('Reconcile the previous attempt before publishing again.');
@@ -224,7 +229,7 @@ export function reconcileListing(app: AppContext, listingId: string, resolution:
 export function publicationStatus(app: AppContext, listingId: string) {
   const listing = getListing(app.db, listingId);
   const adapter = adapterForApp(app, listing.marketplace);
-  const directPublishOn = !!adapter.capabilities.publish && (adapter.verification === 'verified' || (adapter.id === 'gumroad' && app.settings.get('marketplaces').gumroad.autoPublishEnabled));
+  const directPublishOn = directPublishIsOn(adapter);
   return {
     listing,
     adapter: { id: adapter.id, name: adapter.displayName, verification: adapter.verification, capabilities: adapter.capabilities, notes: adapter.notes, directPublishOn },
