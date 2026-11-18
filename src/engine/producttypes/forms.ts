@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { html, type SafeHtml } from '../rendering/html.ts';
 import { page, header, table, checklist, lines, ornament, labelLine } from '../rendering/components.ts';
-import { AI_SYSTEM_BASE, audienceLine, themeLine, revisionClause, type ProductTypeDefinition, type QaFinding, type TypeContext } from './types.ts';
+import { AI_SYSTEM_BASE, audienceLine, themeLine, revisionClause, promptLine, type ProductTypeDefinition, type QaFinding, type TypeContext } from './types.ts';
 import { coverPage, stdFooter, baseHints, PRINT_USAGE, audienceSuffix } from './common.ts';
 
 /*
@@ -124,7 +124,7 @@ export function formType(def: FormDef): ProductTypeDefinition<P, C> {
     variationAxes: ['design', 'audience', 'theme', 'paper'],
     contentPrompt: (ctx) => ({
       system: AI_SYSTEM_BASE,
-      user: `Write the short words for a printable ${def.name.toLowerCase()} titled "${ctx.title}". It is ${def.aiTopic}.
+      user: `Write the short words for a printable ${def.name.toLowerCase()} titled "${promptLine(ctx.title)}". It is ${def.aiTopic}.
 Audience: ${audienceLine(ctx)}. Theme: ${themeLine(ctx)}.
 Return coverSubtitle (one cover line under 85 characters), intro (one sentence on how to use it, under 165 characters) and lists: exactly ${expected.length} lists, in this order, each with the same number of entries as the starting list shown, rewritten for this audience and theme (checklist items under 60 characters; prompts are open questions under 100 characters):
 ${expected.map((e, i) => `${i + 1}. ${e.kind}: ${JSON.stringify(e.items)}`).join('\n') || '(none: return an empty array)'}

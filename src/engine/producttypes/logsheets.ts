@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { html, type SafeHtml } from '../rendering/html.ts';
 import { page, header, table, space, ornament, labelLine } from '../rendering/components.ts';
-import { AI_SYSTEM_BASE, audienceLine, themeLine, revisionClause, type ProductTypeDefinition, type QaFinding, type TypeContext } from './types.ts';
+import { AI_SYSTEM_BASE, audienceLine, themeLine, revisionClause, promptLine, type ProductTypeDefinition, type QaFinding, type TypeContext } from './types.ts';
 import { coverPage, stdFooter, baseHints, PRINT_USAGE, audienceSuffix } from './common.ts';
 import { toCsv, newWorkbook, styleHeader, argb, workbookBuffer, sheetName } from './sheets.ts';
 
@@ -129,7 +129,7 @@ export function logSheetType(def: LogSheetDef): ProductTypeDefinition<P, C> {
     variationAxes: ['design', 'audience', 'theme', 'paper'],
     contentPrompt: (ctx) => ({
       system: AI_SYSTEM_BASE,
-      user: `Write the short words for a printable ${def.name.toLowerCase()} titled "${ctx.title}". It is ${def.aiTopic}.
+      user: `Write the short words for a printable ${def.name.toLowerCase()} titled "${promptLine(ctx.title)}". It is ${def.aiTopic}.
 Audience: ${audienceLine(ctx)}. Theme: ${themeLine(ctx)}.
 The log columns are fixed: ${def.columns.map((c) => c.label).join(', ')}.
 Return coverSubtitle (one short line for the cover, under 85 characters), intro (one sentence on how to use the sheet, under 165 characters) and tips (3 short practical tips, each under 90 characters). No medical, legal, financial or safety guarantees, and no invented facts or numbers.${revisionClause(ctx)}`,
