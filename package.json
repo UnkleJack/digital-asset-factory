@@ -29,7 +29,8 @@
     "uninstall:macos": "node --env-file-if-exists=.env scripts/install-macos.ts --uninstall",
     "portable": "node --env-file-if-exists=.env scripts/make-portable.ts",
     "tidy-folders": "node --env-file-if-exists=.env scripts/tidy-folders.ts",
-    "clean-verification": "node scripts/clean-verification.ts"
+    "clean-verification": "node scripts/clean-verification.ts",
+    "prompt-inventory": "node scripts/prompt-inventory.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.1.0",
