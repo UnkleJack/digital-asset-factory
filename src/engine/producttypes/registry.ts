@@ -9,11 +9,16 @@ import { bundleType } from './bundle.ts';
 import { importedColoring } from './imported.ts';
 import { geometricPatternArt } from './patterns.ts';
 import { assignmentTracker, timetable, readingLog } from './students.ts';
+import { FOOD_TYPES } from './catalog/food.ts';
+import { BUSINESS_TYPES } from './catalog/business.ts';
+import { HEALTH_TYPES } from './catalog/health.ts';
 
 const ALL: ProductTypeDefinition[] = [
   monthlyCalendar, weeklyPlanner, dailyPlanner, habitTracker, todoChecklist, cleaningSchedule, homeInventory,
   budgetPlanner, invoiceTemplate, guidedJournal, goalPlanner, mandalaColoring, mazeActivity, wordSearch, illustratedColoring, importedColoring, bundleType,
   geometricPatternArt, assignmentTracker, timetable, readingLog,
+  // Catalog expansion (2026-11-18): log sheets and forms, one type per definition.
+  ...(FOOD_TYPES as ProductTypeDefinition[]), ...(BUSINESS_TYPES as ProductTypeDefinition[]), ...(HEALTH_TYPES as ProductTypeDefinition[]),
 ];
 
 const BY_ID = new Map(ALL.map((t) => [t.id, t]));

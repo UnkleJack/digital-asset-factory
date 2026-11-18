@@ -54,7 +54,11 @@ adding a plugin; the pipeline does not change.
 | School & Study | `timetable` | PDF (one week, or Week A and B) | AI subject key; period times computed from the school day |
 | School & Study | `reading-log` | PDF | AI challenge genres and review questions; numbered book list, minutes and review pages |
 | Geometric patterns | `geometric-pattern-art` | PDF + SVG | Procedural seeded patterns in 8 families (`family`: tessellate, girih, opart, truchet, guilloche, fractal, lace, herringbone); `mode` coloring (black line art) or print (wall art in the design's colors). No AI required |
+| Log sheet (catalog) | 16 types, e.g. `pantry-inventory`, `order-tracker`, `expense-log`, `workout-log`, `water-tracker` | PDF + XLSX + CSV | One engine (`producttypes/logsheets.ts`): fixed columns and row labels per type, writable rows fitted to the paper; AI rewrites cover line, intro and tips |
+| Form (catalog) | 13 types, e.g. `weekly-meal-plan`, `recipe-book`, `client-intake-form`, `business-plan`, `wellness-journal` | PDF | One engine (`producttypes/forms.ts`): fields, writing boxes, checklists, questions and grids; repeating pages by `copies`; AI rewrites checklist and question words, same counts |
 | Bundle | `bundle` | ZIP of member deliverables + combined PDF | Composed from approved/QA-passed members |
+
+The full list of catalog types (Food & Cooking, small business, Health & Fitness, 2026-11-18) is in `docs/manual/C-product-reference/07-sheets-and-forms.md`.
 
 Structured assets (CSV, XLSX, ZIP, license and instruction documents) are produced by the
 packaging module for every product that declares them.

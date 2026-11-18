@@ -45,7 +45,7 @@ Each chapter uses the same twelve parts: what it is, why it exists, when to use 
 
 ## Part C: product reference (all 21 types)
 
-[Overview](C-product-reference/00-overview.md) (AI versus algorithm, defaults, presets) · [Activities and coloring](C-product-reference/01-activities-and-coloring.md) · [Dated planners](C-product-reference/02-dated-planners.md) · [Lists and trackers](C-product-reference/03-lists-and-trackers.md) · [School and study](C-product-reference/04-school-and-study.md) · [Money and documents](C-product-reference/05-money-and-documents.md) · [Bundle](C-product-reference/06-bundle.md)
+[Overview](C-product-reference/00-overview.md) (AI versus algorithm, defaults, presets) · [Activities and coloring](C-product-reference/01-activities-and-coloring.md) · [Dated planners](C-product-reference/02-dated-planners.md) · [Lists and trackers](C-product-reference/03-lists-and-trackers.md) · [School and study](C-product-reference/04-school-and-study.md) · [Money and documents](C-product-reference/05-money-and-documents.md) · [Bundle](C-product-reference/06-bundle.md) · [Log sheets and forms](C-product-reference/07-sheets-and-forms.md)
 
 ## Part D: lessons
 

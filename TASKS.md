@@ -113,3 +113,17 @@ Things to build that aren't in the Factory yet. Each one that teaches a new scre
 | ID | Build | Status | Notes |
 |---|---|---|---|
 | B1 | Student product types | [x] | Built 2026-11-10: `assignment-tracker`, `timetable`, `reading-log` in a new School & Study category (`src/engine/producttypes/students.ts`), with built-in offline words, AI prompts, QA checks (`timetable_times`, `timetable_fits`, `book_rows`, `rows_fit` and more), five Students presets and default prices. Evidence: `tests/students.test.ts` (12 layouts on letter, A4, A5, landscape, kids and large-print designs with no layout faults; times, numbering and checks), `tests/new-types-pipeline.test.ts` (each through the real pipeline, QA passed). Mission #1 "Student product types" is no longer locked as unbuilt: its instructions are guide chapter 19, and it still needs the Product library and Templates missions cleared (`tests/missions.test.ts`). The full list of student types is still the owner's to decide; these are the three named so far. **Not yet printed on paper.** |
+
+## Catalog expansion (owner, 2026-11-18)
+
+Approved plan: one branch and pull request per phase. Owner's rules: every new product builds offline (AI only improves the wording), no placeholder products that can't really be made, old type ids unchanged.
+
+| Phase | Build | Status | Notes |
+|---|---|---|---|
+| 0 | Fix a blocked product from the pack window | [x] | PR #57. |
+| 1 | One marketplace list | [x] | PR #58. No new marketplace yet: the owner names them. |
+| 2a | Log-sheet and form engines, first three families | [x] | 29 types: Food & Cooking (9), small business in Finance & Business (13), Health & Fitness (7); 6 presets in three new groups and group filter chips on Quick start. Evidence: `tests/producttypes.test.ts` (every type renders, no layout faults), `tests/qa.test.ts` (spelling, every theme and audience), `tests/presets-brief.test.ts`, `tests/catalog.test.ts` (one log and one form per family through the pipeline to QA passed). **Not yet printed on paper; AI wording not tried with a real key.** |
+| 2b | The remaining families | [ ] | Weddings & events, travel, pets, gardening, career, holidays, creative and hobby, education and kids additions. |
+| 3 | Sort the owner's existing prompts (read-only inventory) | [ ] | Before any prompt-pack product. |
+| 4+ | Card sheets (flashcards, game pieces), paper crafts, origami, non-PDF deliverables, new marketplaces | [ ] | Each planned on its own. |
+
